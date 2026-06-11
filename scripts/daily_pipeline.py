@@ -32,6 +32,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from app.config import get_settings
+from app.features.tradability import tradable_mask, is_stale
 from app.utils import setup_logging, set_global_seed, get_logger
 
 log = get_logger(__name__)
@@ -580,6 +581,21 @@ def generate_today_signals(model, predict_data, ohlcv, today: str) -> pd.DataFra
         print(f"  ⚠ No data for {latest.date()}")
         return pd.DataFrame()
 
+    # Freshness guard: stale features mean the download failed silently —
+    # never generate signals from old data.
+    if is_stale(latest, today_ts):
+        print(f"  ✗ Features are stale (latest={latest.date()}, today={today_ts.date()}) "
+              f"— skipping signal generation")
+        return pd.DataFrame()
+
+    # Tradability gate: delisted/illiquid tickers stay in OHLCV for training
+    # (anti-survivorship) but must never be SELECTED. Live trading bought
+    # sub-penny zombies (SRNE @ $0.0006) before this filter existed.
+    today_data["_tradable"] = tradable_mask(today_data)
+    n_excluded = int((~today_data["_tradable"]).sum())
+    print(f"  ✓ Tradability gate: {today_data['_tradable'].sum()} tradable, "
+          f"{n_excluded} excluded (price/liquidity)")
+
     # Score all stocks with V2 model (base + EDGAR + meta features)
     available_features = [f for f in V2_FEATURES if f in today_data.columns]
     available_edgar = [f for f in V2_EDGAR_FEATURES if f in today_data.columns]
@@ -592,13 +608,20 @@ def generate_today_signals(model, predict_data, ohlcv, today: str) -> pd.DataFra
     today_data = today_data.sort_values("v2_score", ascending=False)
 
     records = []
-    for rank, (_, row) in enumerate(today_data.iterrows()):
+    n_buys = 0
+    for _, row in today_data.iterrows():
         ticker = str(row.get("ticker", ""))
         dt_str = str(latest.date())
 
-        if rank < V2_TOP_K:
+        rejection = ""
+        if not bool(row["_tradable"]):
+            recommendation = "HOLD"
+            position_size = 0.0
+            rejection = "untradable: below min price/liquidity"
+        elif n_buys < V2_TOP_K:
             recommendation = "BUY"
             position_size = 1.0 / V2_TOP_K  # Equal weight
+            n_buys += 1
         else:
             recommendation = "HOLD"
             position_size = 0.0
@@ -622,7 +645,7 @@ def generate_today_signals(model, predict_data, ohlcv, today: str) -> pd.DataFra
             "position_size_pct": position_size,
             "trailing_stop_pct": adaptive_trail,
             "stop_loss_pct": adaptive_trail,
-            "rejection_reasons": "",
+            "rejection_reasons": rejection,
         })
 
     signals = pd.DataFrame(records)
@@ -660,12 +683,22 @@ def _generate_signals_for_date(model, features: pd.DataFrame, ohlcv: pd.DataFram
     day_data["v2_score"] = model.predict(X)
     day_data = day_data.sort_values("v2_score", ascending=False)
 
+    # Same tradability gate as generate_today_signals (selection only)
+    day_data["_tradable"] = tradable_mask(day_data)
+
     records = []
-    for rank, (_, row) in enumerate(day_data.iterrows()):
+    n_buys = 0
+    for _, row in day_data.iterrows():
         ticker = str(row.get("ticker", ""))
-        if rank < V2_TOP_K:
+        rejection = ""
+        if not bool(row["_tradable"]):
+            recommendation = "HOLD"
+            position_size = 0.0
+            rejection = "untradable: below min price/liquidity"
+        elif n_buys < V2_TOP_K:
             recommendation = "BUY"
             position_size = 1.0 / V2_TOP_K
+            n_buys += 1
         else:
             recommendation = "HOLD"
             position_size = 0.0
@@ -690,7 +723,7 @@ def _generate_signals_for_date(model, features: pd.DataFrame, ohlcv: pd.DataFram
             "position_size_pct": position_size,
             "trailing_stop_pct": adaptive_trail,
             "stop_loss_pct": adaptive_trail,
-            "rejection_reasons": "",
+            "rejection_reasons": rejection,
         })
 
     signals = pd.DataFrame(records)
