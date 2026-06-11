@@ -1,0 +1,8 @@
+{
+  "min_price": 1.5,
+  "min_adv_usd": 500000,
+  "cost_bps": 15.0,
+  "rule": "max tradable-IC s.t. <5% skipped rebalances; stricter wins ties",
+  "anchor_config": "v4_filt_baseline",
+  "decided": "2026-06-11T13:41:52.380645"
+}

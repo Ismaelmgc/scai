@@ -51,3 +51,4 @@ htmlcov/
 
 # Jupyter
 .ipynb_checkpoints/
+data/v3_benchmarks/cache/
