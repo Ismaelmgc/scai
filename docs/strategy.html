@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCAI — Estrategia de Trading Completa</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg: #0f1117;
+            --bg-card: #161b22;
+            --border: #21262d;
+            --text: #e1e4e8;
+            --text-sec: #8b949e;
+            --text-muted: #484f58;
+            --green: #3fb950;
+            --red: #f85149;
+            --blue: #58a6ff;
+            --yellow: #d29922;
+            --purple: #a371f7;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+
+        .container { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+
+        h1 { font-size: 32px; color: var(--blue); margin-bottom: 8px; font-weight: 800; }
+        h2 { font-size: 22px; color: var(--text); margin: 48px 0 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+        h3 { font-size: 16px; color: var(--blue); margin: 24px 0 12px; }
+        h4 { font-size: 14px; color: var(--yellow); margin: 16px 0 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+        p { margin-bottom: 12px; color: var(--text-sec); font-size: 15px; }
+        .subtitle { color: var(--text-sec); font-size: 14px; margin-bottom: 32px; }
+        strong { color: var(--text); }
+
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+        .card-highlight { border-color: var(--blue); border-width: 1px; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 12px 0; }
+        th { text-align: left; padding: 10px 12px; color: var(--text-sec); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); background: rgba(22,27,34,0.5); }
+        td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--text-sec); }
+        tr:hover { background: rgba(88,166,255,0.04); }
+        .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; color: var(--purple); }
+
+        .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0; }
+        .metric { background: var(--bg); border-radius: 8px; padding: 14px; text-align: center; }
+        .metric .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .metric .val { font-size: 22px; font-weight: 700; margin-top: 4px; }
+
+        .flow-diagram { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 20px 0; }
+        .flow-step { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; text-align: center; font-size: 13px; }
+        .flow-step .step-title { color: var(--blue); font-weight: 700; font-size: 11px; text-transform: uppercase; }
+        .flow-step .step-desc { color: var(--text-sec); margin-top: 4px; }
+        .flow-arrow { color: var(--text-muted); font-size: 20px; }
+
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .tag-vol { background: rgba(248,81,73,0.12); color: var(--red); }
+        .tag-mom { background: rgba(63,185,80,0.12); color: var(--green); }
+        .tag-liq { background: rgba(88,166,255,0.12); color: var(--blue); }
+        .tag-micro { background: rgba(163,113,247,0.12); color: var(--purple); }
+        .tag-trend { background: rgba(210,153,34,0.12); color: var(--yellow); }
+        .tag-sector { background: rgba(255,255,255,0.08); color: var(--text-sec); }
+
+        .importance-bar { height: 18px; border-radius: 4px; background: linear-gradient(90deg, var(--blue), var(--purple)); position: relative; }
+        .importance-bar span { position: absolute; right: -40px; top: 0; font-size: 11px; color: var(--text-sec); }
+
+        code { background: var(--bg); padding: 2px 6px; border-radius: 4px; font-family: 'SF Mono', monospace; font-size: 12px; color: var(--purple); }
+
+        .formula { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; font-family: 'SF Mono', monospace; font-size: 13px; color: var(--text); margin: 12px 0; line-height: 1.9; }
+
+        .chart-container { margin: 20px 0; }
+
+        ul { margin: 8px 0 12px 24px; }
+        li { color: var(--text-sec); font-size: 14px; margin-bottom: 6px; }
+        li strong { color: var(--text); }
+
+        .toc { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 28px; margin: 24px 0; }
+        .toc h3 { margin-top: 0; color: var(--text); }
+        .toc ol { margin: 12px 0 0 20px; }
+        .toc li { margin-bottom: 6px; }
+        .toc a { color: var(--blue); text-decoration: none; font-size: 14px; }
+        .toc a:hover { text-decoration: underline; }
+
+        @media (max-width: 768px) {
+            .metric-grid { grid-template-columns: repeat(2, 1fr); }
+            .flow-diagram { flex-direction: column; }
+            .flow-arrow { transform: rotate(90deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>SCAI — Estrategia de Trading</h1>
+        <p class="subtitle">Documentación completa del modelo V3 de trading algorítmico para acciones US small-cap ($50M–$2B market cap)</p>
+
+        <!-- TOC -->
+        <div class="toc">
+            <h3>Índice</h3>
+            <ol>
+                <li><a href="#overview">Visión General</a></li>
+                <li><a href="#universe">Universo de Acciones</a></li>
+                <li><a href="#target">Variable Objetivo (Target)</a></li>
+                <li><a href="#features">Features del Modelo (28)</a></li>
+                <li><a href="#importance">Importancia de Features</a></li>
+                <li><a href="#edgar">Features Fundamentales (EDGAR)</a></li>
+                <li><a href="#model">Modelo de Predicción</a></li>
+                <li><a href="#signals">Generación de Señales</a></li>
+                <li><a href="#execution">Ejecución de Trades</a></li>
+                <li><a href="#risk">Gestión de Riesgo</a></li>
+                <li><a href="#pipeline">Pipeline Diario</a></li>
+                <li><a href="#validation">Validación</a></li>
+            </ol>
+        </div>
+
+        <!-- 1. OVERVIEW -->
+        <h2 id="overview">1. Visión General</h2>
+        <p>SCAI es un sistema de trading algorítmico que usa machine learning para identificar acciones small-cap con alto potencial de subida relativa a su sector en los próximos 20 días de mercado.</p>
+
+        <div class="card card-highlight">
+            <h4>Resumen en una frase</h4>
+            <p style="font-size: 16px; color: var(--text);"><strong>El modelo predice qué acciones small-cap van a subir más que el resto de su sector en las próximas 4 semanas</strong>, y compra las top-8 con trailing stops adaptativos.</p>
+        </div>
+
+        <div class="flow-diagram">
+            <div class="flow-step">
+                <div class="step-title">1. Datos</div>
+                <div class="step-desc">OHLCV diario<br>1,042 tickers</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+                <div class="step-title">2. Features</div>
+                <div class="step-desc">28 indicadores<br>técnicos + sector + EDGAR</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+                <div class="step-title">3. Modelo</div>
+                <div class="step-desc">LightGBM LambdaRank<br>600 árboles</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+                <div class="step-title">4. Ranking</div>
+                <div class="step-desc">Score sector-relativo<br>Top 8 = BUY</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+                <div class="step-title">5. Trading</div>
+                <div class="step-desc">12.5% por posición<br>Trailing stop ATR</div>
+            </div>
+        </div>
+
+        <div class="metric-grid">
+            <div class="metric">
+                <div class="label">Capital</div>
+                <div class="val" style="color: var(--blue);">€1,000</div>
+            </div>
+            <div class="metric">
+                <div class="label">Posiciones máx</div>
+                <div class="val" style="color: var(--green);">8</div>
+            </div>
+            <div class="metric">
+                <div class="label">Holding máx</div>
+                <div class="val" style="color: var(--yellow);">20 días</div>
+            </div>
+            <div class="metric">
+                <div class="label">Reentrenamiento</div>
+                <div class="val" style="color: var(--purple);">7 días</div>
+            </div>
+        </div>
+
+        <!-- 2. UNIVERSE -->
+        <h2 id="universe">2. Universo de Acciones</h2>
+        <p>El modelo opera exclusivamente en acciones <strong>US small-cap</strong>, definidas como empresas con capitalización de mercado entre $50M y $2B.</p>
+
+        <div class="card">
+            <h4>Criterios de inclusión</h4>
+            <table>
+                <tr><td><strong>Market cap</strong></td><td>$50M — $2B</td></tr>
+                <tr><td><strong>Tipo</strong></td><td>Common Stock (CS) — no ETFs, no ADRs, no SPACs</td></tr>
+                <tr><td><strong>Exchange</strong></td><td>NYSE (XNYS) o NASDAQ (XNAS)</td></tr>
+                <tr><td><strong>Estado</strong></td><td>Activas (active=true)</td></tr>
+                <tr><td><strong>Liquidez</strong></td><td>Mínimo 30 días de datos OHLCV válidos</td></tr>
+                <tr><td><strong>Precio mínimo</strong></td><td>>$0.10 (evita penny stocks extremos)</td></tr>
+            </table>
+        </div>
+
+        <div class="metric-grid">
+            <div class="metric">
+                <div class="label">Tickers en universo</div>
+                <div class="val" style="color: var(--blue);">1,042</div>
+            </div>
+            <div class="metric">
+                <div class="label">Datos OHLCV</div>
+                <div class="val" style="color: var(--green);">829,436</div>
+            </div>
+            <div class="metric">
+                <div class="label">Rango temporal</div>
+                <div class="val" style="color: var(--yellow); font-size: 16px;">Ene 2019 → May 2026</div>
+            </div>
+            <div class="metric">
+                <div class="label">Fuente datos</div>
+                <div class="val" style="color: var(--purple); font-size: 16px;">Polygon + Yahoo</div>
+            </div>
+        </div>
+
+        <p><strong>¿Por qué small-cap?</strong> Las acciones de baja capitalización son menos seguidas por analistas institucionales, lo que crea ineficiencias de mercado que un modelo ML puede explotar. Mayor volatilidad = mayor oportunidad (y riesgo).</p>
+
+        <div class="card">
+            <h4>Composición del universo</h4>
+            <table>
+                <tr><td><strong>Activas</strong></td><td>318 tickers (operables diariamente)</td></tr>
+                <tr><td><strong>Delisted</strong></td><td>724 tickers (incluidos para eliminar survivorship bias en training)</td></tr>
+                <tr><td><strong>Total</strong></td><td>1,042 tickers</td></tr>
+            </table>
+            <p style="margin-top: 10px; font-size: 13px;">Los tickers delisted se incluyen en el entrenamiento para que el modelo aprenda también de empresas que fracasaron, evitando el sesgo de solo entrenar con "supervivientes".</p>
+        </div>
+
+        <!-- 3. TARGET -->
+        <h2 id="target">3. Variable Objetivo (Target)</h2>
+        <p>El modelo no predice el retorno absoluto de una acción, sino su <strong>retorno relativo al sector</strong>. Esto es crucial porque elimina el efecto del mercado general y se enfoca en la "alpha" pura de cada acción.</p>
+
+        <div class="formula">
+            <strong>Target:</strong> fwd_ret_20d_sector_rel<br><br>
+            fwd_ret_20d = (close[t+20] / close[t]) - 1<br>
+            sector_ret_20d = media(fwd_ret_20d) de todas las acciones del mismo sector<br><br>
+            <strong style="color: var(--green);">fwd_ret_20d_sector_rel = fwd_ret_20d - sector_ret_20d</strong>
+        </div>
+
+        <div class="card">
+            <h4>¿Por qué sector-relativo?</h4>
+            <ul>
+                <li><strong>Elimina beta del mercado:</strong> Si todo el mercado sube un 5%, no queremos que el modelo diga "compra todo". Queremos saber qué acción SUPERA a las demás.</li>
+                <li><strong>Más estacionario:</strong> Los retornos absolutos dependen del régimen de mercado (bull/bear). Los relativos son más constantes.</li>
+                <li><strong>Enfoque en selección:</strong> El modelo se especializa en SELECCIONAR las mejores acciones, no en hacer market timing.</li>
+            </ul>
+
+            <h4>Horizonte: 20 días de mercado (~4 semanas)</h4>
+            <ul>
+                <li>Suficiente para que la "tesis" del modelo se materialice</li>
+                <li>No tan largo como para que el ruido domine</li>
+                <li>Permite ~12 rotaciones al año (suficiente para estadísticas significativas)</li>
+            </ul>
+        </div>
+
+        <!-- 4. FEATURES -->
+        <h2 id="features">4. Features del Modelo (28)</h2>
+        <p>El modelo usa <strong>28 features</strong>: 26 técnicas (precio y volumen) y 2 fundamentales (EDGAR/SEC). Las 26 features técnicas se agrupan en 6 categorías:</p>
+
+        <!-- Volatility features -->
+        <h3>🔴 Volatilidad (7 features)</h3>
+        <p>Miden la dispersión y riesgo del precio. El modelo aprende que ciertos patrones de volatilidad preceden a movimientos direccionales.</p>
+        <table>
+            <thead>
+                <tr><th>Feature</th><th>Fórmula / Descripción</th><th>Ventana</th><th>Intuición</th></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="mono">max_dd_60d</td>
+                    <td>Máximo drawdown en 60 días</td>
+                    <td>60d</td>
+                    <td>Acciones que ya cayeron mucho pueden tener rebote (mean reversion) o seguir cayendo (momentum negativo). El modelo aprende cuándo aplica cada uno.</td>
+                </tr>
+                <tr>
+                    <td class="mono">vol_of_vol_60d</td>
+                    <td>Desviación estándar de la volatilidad realizada (rolling 5d) en 60 días</td>
+                    <td>60d</td>
+                    <td>Alta "vol de vol" indica inestabilidad del régimen — la acción está cambiando de comportamiento.</td>
+                </tr>
+                <tr>
+                    <td class="mono">downside_vol_60d</td>
+                    <td>Volatilidad calculada solo con retornos negativos</td>
+                    <td>60d</td>
+                    <td>Mide específicamente el riesgo de caída. Alta downside vol sin upside vol = tendencia bajista.</td>
+                </tr>
+                <tr>
+                    <td class="mono">realized_vol_120d</td>
+                    <td>std(retornos diarios) × √252 en ventana de 120 días</td>
+                    <td>120d</td>
+                    <td>Nivel general de riesgo a medio plazo. Small-caps con vol muy alta suelen ser especulativas.</td>
+                </tr>
+                <tr>
+                    <td class="mono">vol_of_vol_ratio</td>
+                    <td>vol_of_vol_20d / vol_of_vol_60d</td>
+                    <td>20/60d</td>
+                    <td>Si la vol reciente es mucho mayor que la histórica → algo está pasando (noticia, activismo, etc.)</td>
+                </tr>
+                <tr>
+                    <td class="mono">vol_regime_change</td>
+                    <td>abs(realized_vol_20d - realized_vol_60d) / realized_vol_60d</td>
+                    <td>20/60d</td>
+                    <td>Detecta cambios bruscos en el régimen de volatilidad — señal de que el mercado está reevaluando la acción.</td>
+                </tr>
+                <tr>
+                    <td class="mono">beta_60d</td>
+                    <td>Covarianza(stock, SPY) / Varianza(SPY) en 60 días</td>
+                    <td>60d</td>
+                    <td>Sensibilidad al mercado general. Beta alto = se mueve con el mercado; beta bajo = más idiosincrático.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Momentum features -->
+        <h3>🟢 Momentum & Tendencia (6 features)</h3>
+        <p>Capturan la dirección y fuerza del movimiento del precio a distintos horizontes.</p>
+        <table>
+            <thead>
+                <tr><th>Feature</th><th>Fórmula / Descripción</th><th>Ventana</th><th>Intuición</th></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="mono">ret_252d</td>
+                    <td>(close[t] / close[t-252]) - 1</td>
+                    <td>252d (~1 año)</td>
+                    <td>Momentum a largo plazo. Acciones que subieron mucho en el último año tienden a seguir subiendo (momentum effect).</td>
+                </tr>
+                <tr>
+                    <td class="mono">macd_hist</td>
+                    <td>MACD line - Signal line (EMA12 - EMA26 - EMA9(MACD))</td>
+                    <td>12/26/9d</td>
+                    <td>Indicador clásico de momentum a corto plazo. MACD positivo y creciente = tendencia alcista acelerando.</td>
+                </tr>
+                <tr>
+                    <td class="mono">macd_signal</td>
+                    <td>EMA(9) de la línea MACD</td>
+                    <td>9d</td>
+                    <td>Versión suavizada del MACD. Cruces MACD vs signal generan señales de trading clásicas.</td>
+                </tr>
+                <tr>
+                    <td class="mono">price_roc_smooth_120d</td>
+                    <td>Rate of change suavizado: EMA(20) del retorno de 120 días</td>
+                    <td>120d</td>
+                    <td>Momentum a medio plazo sin ruido. Detecta tendencias sostenidas vs spikes puntuales.</td>
+                </tr>
+                <tr>
+                    <td class="mono">pct_from_52w_low</td>
+                    <td>(close - min_52w) / min_52w</td>
+                    <td>252d</td>
+                    <td>Cuánto ha subido desde su mínimo anual. Valores altos = momentum fuerte; valores bajos = cerca de mínimos.</td>
+                </tr>
+                <tr>
+                    <td class="mono">reversal_20v60</td>
+                    <td>ret_20d - ret_60d (retorno corto vs medio plazo)</td>
+                    <td>20/60d</td>
+                    <td>Detecta reversiones: si ret_20d >> ret_60d → subió mucho recientemente (posible corrección); si ret_20d << ret_60d → posible rebote.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Liquidity features -->
+        <h3>🔵 Liquidez (4 features)</h3>
+        <p>Acciones con baja liquidez son más difíciles de operar pero también donde hay más alfa. El modelo aprende la relación óptima.</p>
+        <table>
+            <thead>
+                <tr><th>Feature</th><th>Fórmula / Descripción</th><th>Ventana</th><th>Intuición</th></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="mono">adv_60d</td>
+                    <td>Average Daily Volume: media del volumen diario en 60 días</td>
+                    <td>60d</td>
+                    <td>Liquidez base. Volumen alto = más interés institucional; volumen bajo = acción más "escondida" pero más volátil.</td>
+                </tr>
+                <tr>
+                    <td class="mono">amihud_60d</td>
+                    <td>Media de |retorno_diario| / volumen_USD en 60 días (×10⁶)</td>
+                    <td>60d</td>
+                    <td><strong>Iliquidez de Amihud</strong> — cuánto se mueve el precio por cada dólar operado. Muy usado académicamente. Alta iliquidez = más riesgo = más retorno esperado.</td>
+                </tr>
+                <tr>
+                    <td class="mono">avg_trade_size_20d</td>
+                    <td>volume × close / transactions (tamaño medio de trade)</td>
+                    <td>20d</td>
+                    <td>Proxy de participación institucional. Trades grandes sugieren que inversores informados están participando.</td>
+                </tr>
+                <tr>
+                    <td class="mono">spread_proxy_20d</td>
+                    <td>Media de (high - low) / close en 20 días</td>
+                    <td>20d</td>
+                    <td>Proxy del bid-ask spread. Spread amplio = menos liquidez = más costoso operar pero más oportunidad de pricing inefficiency.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Volume/Microstructure features -->
+        <h3>🟣 Microestructura de Volumen (3 features)</h3>
+        <p>Analizan cómo el volumen confirma o contradice el movimiento del precio.</p>
+        <table>
+            <thead>
+                <tr><th>Feature</th><th>Fórmula / Descripción</th><th>Ventana</th><th>Intuición</th></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="mono">obv</td>
+                    <td>On-Balance Volume: ΣVolumen × sign(retorno_diario)</td>
+                    <td>All history</td>
+                    <td>Si el precio sube sin volumen = movimiento débil. Si el OBV sube antes que el precio = acumulación institucional (la "smart money" está comprando).</td>
+                </tr>
+                <tr>
+                    <td class="mono">obv_vs_sma_60d</td>
+                    <td>(OBV - SMA60(OBV)) / SMA60(OBV)</td>
+                    <td>60d</td>
+                    <td>OBV relativo a su media. Valores positivos altos = flujo de volumen inusualmente fuerte → posible breakout inminente.</td>
+                </tr>
+                <tr>
+                    <td class="mono">vwap_dev_avg_20d</td>
+                    <td>Media de (close - VWAP) / VWAP en 20 días</td>
+                    <td>20d</td>
+                    <td>Si el precio cierra consistentemente por encima del VWAP, los compradores están dispuestos a pagar más que el precio medio ponderado → presión compradora.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Trend features -->
+        <h3>🟡 Nivel de Precio / Tendencia (4 features)</h3>
+        <p>Posición del precio respecto a medias móviles clave que definen la tendencia.</p>
+        <table>
+            <thead>
+                <tr><th>Feature</th><th>Fórmula / Descripción</th><th>Ventana</th><th>Intuición</th></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="mono">ema_26</td>
+                    <td>Media Móvil Exponencial de 26 días</td>
+                    <td>26d</td>
+                    <td>Nivel de "soporte/resistencia" dinámico a corto plazo. El precio relativo a la EMA26 indica si estamos en fase alcista o bajista.</td>
+                </tr>
+                <tr>
+                    <td class="mono">sma_200</td>
+                    <td>Media Móvil Simple de 200 días</td>
+                    <td>200d</td>
+                    <td>La frontera clásica entre bull y bear market para una acción. Precio > SMA200 = tendencia alcista a largo plazo.</td>
+                </tr>
+                <tr>
+                    <td class="mono">ret_skew_60d</td>
+                    <td>Skewness (asimetría) de los retornos diarios en 60 días</td>
+                    <td>60d</td>
+                    <td>Skew positivo = la acción tiende a tener "saltos" al alza; skew negativo = riesgo de crash. Valores extremos señalan distribuciones no normales.</td>
+                </tr>
+                <tr>
+                    <td class="mono">ret_kurtosis_60d</td>
+                    <td>Kurtosis (colas pesadas) de los retornos diarios en 60 días</td>
+                    <td>60d</td>
+                    <td>Alta kurtosis = la acción tiene "eventos extremos" frecuentes (gaps, noticias). El modelo aprende qué combinación con otros indicadores predice subidas vs bajadas.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Sector features -->
+        <h3>⚪ Sector / Relativo (2 features)</h3>
+        <p>Comparan el rendimiento de la acción con el de su sector.</p>
+        <table>
+            <thead>
+                <tr><th>Feature</th><th>Fórmula / Descripción</th><th>Ventana</th><th>Intuición</th></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="mono">sector_ret_60d</td>
+                    <td>Retorno medio de todas las acciones del mismo sector en 60 días</td>
+                    <td>60d</td>
+                    <td>Contexto sectorial. Si el sector sube mucho, es más difícil superarlo → el score sector-relativo será menor.</td>
+                </tr>
+                <tr>
+                    <td class="mono">ret_vs_sector_60d</td>
+                    <td>ret_60d(acción) - sector_ret_60d</td>
+                    <td>60d</td>
+                    <td>Performance relativa al sector. Detecta acciones que ya están siendo "líderes" de su sector → momentum sectorial.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- 5. IMPORTANCE -->
+        <h2 id="importance">5. Importancia de Features</h2>
+        <p>La importancia se mide por <strong>gain</strong> — cuánta reducción del error aporta cada feature en los splits de los árboles. Mayor gain = más útil para la predicción.</p>
+
+        <div class="card">
+            <table>
+                <thead>
+                    <tr><th>#</th><th>Feature</th><th>Categoría</th><th>Gain</th><th>% Total</th><th>Importancia</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>1</td><td class="mono">obv_vs_sma_60d</td><td><span class="tag tag-micro">Microestructura</span></td><td>6,119</td><td>9.4%</td><td><div class="importance-bar" style="width: 100%;"></div></td></tr>
+                    <tr><td>2</td><td class="mono">ret_kurtosis_60d</td><td><span class="tag tag-trend">Tendencia</span></td><td>5,254</td><td>8.1%</td><td><div class="importance-bar" style="width: 86%;"></div></td></tr>
+                    <tr><td>3</td><td class="mono">adv_60d</td><td><span class="tag tag-liq">Liquidez</span></td><td>4,516</td><td>6.9%</td><td><div class="importance-bar" style="width: 74%;"></div></td></tr>
+                    <tr><td>4</td><td class="mono">amihud_60d</td><td><span class="tag tag-liq">Liquidez</span></td><td>3,720</td><td>5.7%</td><td><div class="importance-bar" style="width: 61%;"></div></td></tr>
+                    <tr><td>5</td><td class="mono">ema_26</td><td><span class="tag tag-trend">Tendencia</span></td><td>3,696</td><td>5.7%</td><td><div class="importance-bar" style="width: 60%;"></div></td></tr>
+                    <tr><td>6</td><td class="mono">obv</td><td><span class="tag tag-micro">Microestructura</span></td><td>3,650</td><td>5.6%</td><td><div class="importance-bar" style="width: 60%;"></div></td></tr>
+                    <tr><td>7</td><td class="mono">max_dd_60d</td><td><span class="tag tag-vol">Volatilidad</span></td><td>3,560</td><td>5.5%</td><td><div class="importance-bar" style="width: 58%;"></div></td></tr>
+                    <tr><td>8</td><td class="mono">avg_trade_size_20d</td><td><span class="tag tag-liq">Liquidez</span></td><td>3,121</td><td>4.8%</td><td><div class="importance-bar" style="width: 51%;"></div></td></tr>
+                    <tr><td>9</td><td class="mono">macd_hist</td><td><span class="tag tag-mom">Momentum</span></td><td>3,055</td><td>4.7%</td><td><div class="importance-bar" style="width: 50%;"></div></td></tr>
+                    <tr><td>10</td><td class="mono">ret_252d</td><td><span class="tag tag-mom">Momentum</span></td><td>2,956</td><td>4.5%</td><td><div class="importance-bar" style="width: 48%;"></div></td></tr>
+                    <tr><td>11</td><td class="mono">sma_200</td><td><span class="tag tag-trend">Tendencia</span></td><td>2,535</td><td>3.9%</td><td><div class="importance-bar" style="width: 41%;"></div></td></tr>
+                    <tr><td>12</td><td class="mono">ret_vs_sector_60d</td><td><span class="tag tag-sector">Sector</span></td><td>2,479</td><td>3.8%</td><td><div class="importance-bar" style="width: 41%;"></div></td></tr>
+                    <tr><td>13</td><td class="mono">realized_vol_120d</td><td><span class="tag tag-vol">Volatilidad</span></td><td>2,249</td><td>3.5%</td><td><div class="importance-bar" style="width: 37%;"></div></td></tr>
+                    <tr><td>14</td><td class="mono">ret_skew_60d</td><td><span class="tag tag-trend">Tendencia</span></td><td>1,817</td><td>2.8%</td><td><div class="importance-bar" style="width: 30%;"></div></td></tr>
+                    <tr><td>15</td><td class="mono">macd_signal</td><td><span class="tag tag-mom">Momentum</span></td><td>1,664</td><td>2.6%</td><td><div class="importance-bar" style="width: 27%;"></div></td></tr>
+                    <tr><td>16</td><td class="mono">downside_vol_60d</td><td><span class="tag tag-vol">Volatilidad</span></td><td>1,655</td><td>2.5%</td><td><div class="importance-bar" style="width: 27%;"></div></td></tr>
+                    <tr><td>17</td><td class="mono">sector_ret_60d</td><td><span class="tag tag-sector">Sector</span></td><td>1,651</td><td>2.5%</td><td><div class="importance-bar" style="width: 27%;"></div></td></tr>
+                    <tr><td>18</td><td class="mono">vol_of_vol_60d</td><td><span class="tag tag-vol">Volatilidad</span></td><td>1,622</td><td>2.5%</td><td><div class="importance-bar" style="width: 27%;"></div></td></tr>
+                    <tr><td>19</td><td class="mono">vwap_dev_avg_20d</td><td><span class="tag tag-micro">Microestructura</span></td><td>1,527</td><td>2.3%</td><td><div class="importance-bar" style="width: 25%;"></div></td></tr>
+                    <tr><td>20</td><td class="mono">spread_proxy_20d</td><td><span class="tag tag-liq">Liquidez</span></td><td>1,385</td><td>2.1%</td><td><div class="importance-bar" style="width: 23%;"></div></td></tr>
+                    <tr><td>21</td><td class="mono">beta_60d</td><td><span class="tag tag-vol">Volatilidad</span></td><td>1,366</td><td>2.1%</td><td><div class="importance-bar" style="width: 22%;"></div></td></tr>
+                    <tr><td>22</td><td class="mono">price_roc_smooth_120d</td><td><span class="tag tag-mom">Momentum</span></td><td>1,321</td><td>2.0%</td><td><div class="importance-bar" style="width: 22%;"></div></td></tr>
+                    <tr><td>23</td><td class="mono">vol_of_vol_ratio</td><td><span class="tag tag-vol">Volatilidad</span></td><td>1,096</td><td>1.7%</td><td><div class="importance-bar" style="width: 18%;"></div></td></tr>
+                    <tr><td>24</td><td class="mono">pct_from_52w_low</td><td><span class="tag tag-mom">Momentum</span></td><td>1,053</td><td>1.6%</td><td><div class="importance-bar" style="width: 17%;"></div></td></tr>
+                    <tr><td>25</td><td class="mono">vol_regime_change</td><td><span class="tag tag-vol">Volatilidad</span></td><td>1,050</td><td>1.6%</td><td><div class="importance-bar" style="width: 17%;"></div></td></tr>
+                    <tr><td>26</td><td class="mono">reversal_20v60</td><td><span class="tag tag-mom">Momentum</span></td><td>885</td><td>1.4%</td><td><div class="importance-bar" style="width: 14%;"></div></td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h4>Distribución por categoría</h4>
+            <div class="chart-container">
+                <canvas id="categoryChart" height="200"></canvas>
+            </div>
+        </div>
+
+        <!-- EDGAR Features -->
+        <h2 id="edgar">Features Fundamentales (EDGAR/SEC)</h2>
+        <p>Además de las 26 features técnicas, el modelo incluye <strong>2 features fundamentales</strong> extraídas de los filings SEC (EDGAR). Se actualizan trimestralmente con cada 10-Q/10-K.</p>
+
+        <div class="card">
+            <table>
+                <thead>
+                    <tr><th>Feature</th><th>Fórmula / Descripción</th><th>Fuente</th><th>Intuición</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="mono">dilution_pct</td>
+                        <td>Cambio % en shares outstanding entre el filing actual y el anterior</td>
+                        <td>SEC EDGAR (10-Q/10-K)</td>
+                        <td>Dilución alta = la empresa emite acciones para financiarse, señal negativa. Dilución baja/buybacks = señal positiva.</td>
+                    </tr>
+                    <tr>
+                        <td class="mono">current_ratio</td>
+                        <td>Activo corriente / Pasivo corriente</td>
+                        <td>SEC EDGAR (10-Q/10-K)</td>
+                        <td>Mide salud financiera a corto plazo. Ratio < 1 indica riesgo de liquidez. En small-caps es especialmente relevante.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Meta Features (removed) -->
+        <div class="card" style="border-color: var(--yellow);">
+            <h4>⚠️ Meta-Features (eliminadas en V3)</h4>
+            <p>El modelo V2 incluía 5 meta-features (error-aware) que usaban el historial de errores de predicción del modelo. Fueron <strong>eliminadas el 2026-05-22</strong> tras detectar un riesgo de data leakage en su construcción: las meta-features se calculaban usando resultados que podían solaparse temporalmente con el target forward de 20 días.</p>
+            <p>El modelo V3 actual opera exclusivamente con las <strong>28 features</strong> (26 técnicas + 2 EDGAR), validadas como leak-free mediante el gate automático <code>verify_no_leak.py</code>.</p>
+        </div>
+
+        <!-- 6. MODEL -->
+        <h2 id="model">6. Modelo de Predicción</h2>
+
+        <div class="card card-highlight">
+            <h4>LightGBM LambdaRank</h4>
+            <p>LightGBM con objetivo <strong>LambdaRank</strong> — un algoritmo de learning-to-rank que optimiza directamente el ranking relativo de las acciones dentro de cada grupo (fecha). En lugar de minimizar el error de predicción absoluto, aprende a ordenar correctamente las acciones de mejor a peor performance sectorial. Es el estándar para problemas de ranking en datos tabulares financieros.</p>
+        </div>
+
+        <h3>Hiperparámetros</h3>
+        <table>
+            <thead>
+                <tr><th>Parámetro</th><th>Valor</th><th>Explicación</th></tr>
+            </thead>
+            <tbody>
+                <tr><td class="mono">num_iterations</td><td><strong>600</strong></td><td>Número de árboles. Con LambdaRank se necesitan más iteraciones para convergir al ranking óptimo.</td></tr>
+                <tr><td class="mono">num_leaves</td><td><strong>31</strong></td><td>Máximo hojas por árbol. LambdaRank con 28 features se beneficia de árboles algo más complejos que regression.</td></tr>
+                <tr><td class="mono">max_depth</td><td><strong>6</strong></td><td>Profundidad máxima del árbol. Permite capturar interacciones de mayor orden entre features.</td></tr>
+                <tr><td class="mono">learning_rate</td><td><strong>0.05</strong></td><td>Tasa de aprendizaje. Balanceo óptimo con 600 árboles para convergencia estable.</td></tr>
+                <tr><td class="mono">min_child_samples</td><td><strong>30</strong></td><td>Mínimo de muestras por hoja. Suficiente para prevenir overfitting con la regularización L2 fuerte.</td></tr>
+                <tr><td class="mono">subsample</td><td><strong>0.75</strong></td><td>Cada árbol solo ve el 75% de los datos (bagging). Reduce overfitting y varianza.</td></tr>
+                <tr><td class="mono">colsample_bytree</td><td><strong>0.7</strong></td><td>Cada árbol solo usa el 70% de las features. Fuerza diversidad entre árboles.</td></tr>
+                <tr><td class="mono">reg_lambda (L2)</td><td><strong>5.0</strong></td><td>Regularización L2 fuerte — penaliza pesos grandes. Clave para evitar sobreajuste en datos financieros.</td></tr>
+                <tr><td class="mono">objective</td><td><strong>lambdarank</strong></td><td>Optimiza directamente el ranking (NDCG). Cada grupo = 1 fecha, las acciones compiten entre sí.</td></tr>
+                <tr><td class="mono">lambdarank_truncation_level</td><td><strong>8</strong></td><td>Solo optimiza las top-8 posiciones del ranking — alineado con TOP_K=8 señales de trading.</td></tr>
+                <tr><td class="mono">label_gain</td><td><strong>[0..15]</strong></td><td>16 bins de ganancia para el target discretizado (sector-relative binned).</td></tr>
+                <tr><td class="mono">seed</td><td><strong>42</strong></td><td>Semilla fija para reproducibilidad exacta.</td></tr>
+            </tbody>
+        </table>
+
+        <div class="card">
+            <h4>¿Por qué estos parámetros son conservadores?</h4>
+            <p>Los datos financieros son <strong>extremadamente ruidosos</strong> (signal-to-noise ratio ~5%). Un modelo demasiado complejo memorizará el ruido del pasado sin generalizar al futuro. Cada parámetro está diseñado para limitarlo:</p>
+            <ul>
+                <li><strong>Árboles moderados</strong> (depth=6, leaves=31): Captura interacciones útiles sin memorizar ruido</li>
+                <li><strong>Regularización L2 fuerte</strong> (lambda=5.0): Penaliza la complejidad agresivamente</li>
+                <li><strong>Random subsampling</strong> (75% datos, 70% features): Cada árbol es diferente → ensemble más robusto</li>
+                <li><strong>min_child_samples=30</strong>: Suficiente con la regularización L2 alta para prevenir overfitting</li>
+                <li><strong>LambdaRank truncation=8</strong>: Solo optimiza las top-8 posiciones, donde realmente importa el ranking</li>
+            </ul>
+        </div>
+
+        <h3>Training</h3>
+        <div class="metric-grid">
+            <div class="metric">
+                <div class="label">Samples de entrenamiento</div>
+                <div class="val" style="color: var(--green);">~809,000</div>
+            </div>
+            <div class="metric">
+                <div class="label">Features</div>
+                <div class="val" style="color: var(--blue);">28</div>
+            </div>
+            <div class="metric">
+                <div class="label">Árboles</div>
+                <div class="val" style="color: var(--purple);">600</div>
+            </div>
+            <div class="metric">
+                <div class="label">Retraining</div>
+                <div class="val" style="color: var(--yellow);">7d</div>
+            </div>
+        </div>
+        <p>El modelo se reentrena automáticamente cada 7 días con <strong>expanding window</strong> — cada vez usa todo el historial disponible hasta ese momento (sin datos futuros).</p>
+
+        <!-- 7. SIGNALS -->
+        <h2 id="signals">7. Generación de Señales</h2>
+        <p>Cada día de mercado, el modelo genera un ranking de todas las acciones del universo.</p>
+
+        <div class="card">
+            <h4>Proceso paso a paso</h4>
+            <ol style="margin-left: 20px; color: var(--text-sec);">
+                <li style="margin-bottom: 12px;"><strong>Construir features de hoy:</strong> Se calculan las 28 features para cada ticker usando los datos OHLCV más recientes disponibles (26 técnicas + 2 EDGAR).</li>
+                <li style="margin-bottom: 12px;"><strong>Scoring:</strong> El modelo LightGBM predice el <code>fwd_ret_20d_sector_rel</code> para cada ticker. Esto da un "score" que indica cuánto se espera que supere al sector.</li>
+                <li style="margin-bottom: 12px;"><strong>Ranking:</strong> Se ordenan todos los tickers de mayor a menor score.</li>
+                <li style="margin-bottom: 12px;"><strong>Selección top-8:</strong> Las 8 acciones con mayor score predicho reciben señal BUY. Las demás reciben HOLD.</li>
+                <li style="margin-bottom: 12px;"><strong>Asignación de peso:</strong> Cada señal BUY recibe 12.5% del portfolio (equal weight = 1/8).</li>
+                <li style="margin-bottom: 12px;"><strong>Trailing stop adaptativo:</strong> Se calcula un trailing stop personalizado basado en el ATR (Average True Range) de cada acción. Acciones más volátiles → stop más amplio.</li>
+            </ol>
+        </div>
+
+        <div class="formula">
+            <strong>Trailing Stop adaptativo:</strong><br><br>
+            ATR_pct = ATR(20 días) / close<br>
+            median_ATR = mediana del ATR_pct del top-8<br><br>
+            <strong style="color: var(--green);">trailing_stop = clip(0.16 × (ATR_pct / median_ATR), min=10%, max=16%)</strong><br><br>
+            → Acciones menos volátiles: stop más ajustado (10%)<br>
+            → Acciones más volátiles: stop más amplio (16%)<br>
+            → Máximo absoluto: 16% desde el high-water mark
+        </div>
+
+        <!-- 8. EXECUTION -->
+        <h2 id="execution">8. Ejecución de Trades</h2>
+
+        <div class="card">
+            <h4>Reglas de ejecución</h4>
+            <table>
+                <tr><td><strong>Entrada</strong></td><td>Al <strong>open del día siguiente</strong> a la señal. No se compra "al cierre" para evitar look-ahead bias.</td></tr>
+                <tr><td><strong>Slippage</strong></td><td>10 bps (0.10%) — diferencia entre precio deseado y real (típico en small-caps)</td></tr>
+                <tr><td><strong>Comisiones</strong></td><td>5 bps (0.05%) — comisión del broker simulado</td></tr>
+                <tr><td><strong>Coste total</strong></td><td>15 bps por entrada (0.15%)</td></tr>
+                <tr><td><strong>Position sizing</strong></td><td>12.5% del portfolio por posición (max 8 × 12.5% = 100%)</td></tr>
+                <tr><td><strong>Market participation</strong></td><td>Máximo 5% del volumen diario de la acción (para no mover el precio)</td></tr>
+                <tr><td><strong>Signals queuing</strong></td><td>Si no hay slots disponibles, la señal se descarta (no se espera)</td></tr>
+            </table>
+        </div>
+
+        <div class="card">
+            <h4>Reglas de salida</h4>
+            <table>
+                <tr><td><strong>Trailing Stop</strong></td><td>Si el cierre cae X% desde el <strong>máximo histórico</strong> desde la entrada (high-water mark), se vende al día siguiente al open. X ∈ [10%, 16%] según ATR.</td></tr>
+                <tr><td><strong>Expiración</strong></td><td>Máximo 20 días de holding. Si no se ha activado el trailing stop, se cierra por expiración.</td></tr>
+                <tr><td><strong>Cooldown 5d</strong></td><td>Tras una salida por trailing stop, el ticker queda <strong>bloqueado 5 días hábiles</strong>. Evita recomprar inmediatamente una acción en caída (backtest: +42pp de retorno).</td></tr>
+            </table>
+            <p style="margin-top: 12px;">La combinación de trailing stop + expiración a 20 días garantiza que:</p>
+            <ul>
+                <li>Las pérdidas se cortan rápido cuando la tesis falla</li>
+                <li>Las ganancias se dejan correr hasta que revierten</li>
+                <li>El capital rota rápido — alineado con el horizonte de predicción del modelo (20d)</li>
+                <li>Más trades = más oportunidades (menos señales descartadas por slots_full)</li>
+            </ul>
+        </div>
+
+        <!-- 9. RISK -->
+        <h2 id="risk">9. Gestión de Riesgo</h2>
+
+        <div class="card">
+            <h4>Controles de riesgo</h4>
+            <table>
+                <thead>
+                    <tr><th>Control</th><th>Valor</th><th>Propósito</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Máximo posiciones simultáneas</td><td><strong>8</strong></td><td>Diversificación — reduce concentración y drawdown</td></tr>
+                    <tr><td>Peso máximo por posición</td><td><strong>12.5%</strong></td><td>Equal-weight para no sobre-ponderar ninguna idea</td></tr>
+                    <tr><td>Trailing stop</td><td><strong>10-16%</strong></td><td>Limita pérdida máxima por trade</td></tr>
+                    <tr><td>Cooldown post-stop</td><td><strong>5 días</strong></td><td>Evita re-entry inmediato en tickers que acaban de tocar stop</td></tr>
+                    <tr><td>Holding máximo</td><td><strong>20 días</strong></td><td>Alineado con horizonte de predicción (20d), fuerza rotación rápida</td></tr>
+                    <tr><td>Market participation cap</td><td><strong>5%</strong></td><td>Evita impacto de mercado en acciones poco líquidas</td></tr>
+                    <tr><td>Universo filtrado</td><td><strong>Solo $50M-$2B</strong></td><td>Excluye micro-caps extremadamente ilíquidas</td></tr>
+                    <tr><td>Retraining cada 7d</td><td><strong>Expanding window</strong></td><td>El modelo se adapta a cambios de régimen</td></tr>
+                    <tr><td>Idempotencia</td><td><strong>1 ejecución/día</strong></td><td>No ejecuta dos veces el mismo día (guard)</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h4>Riesgos conocidos</h4>
+            <ul>
+                <li><strong>Survivorship bias corregido:</strong> El universo incluye 724 tickers delisted (empresas que dejaron de cotizar) para que el modelo entrene también con los "perdedores". Solo los 318 tickers activos se operan.</li>
+                <li><strong>Régimen dependency:</strong> Tenemos datos desde 2019, pero el período 2019-2021 proviene de Yahoo Finance (sin VWAP). El modelo ha visto un crash (COVID 2020) pero el régimen dominante sigue siendo alcista.</li>
+                <li><strong>Concentración reducida:</strong> Con 8 posiciones, ningún ticker individual domina el P&L.</li>
+                <li><strong>Win rate ~50%:</strong> El modelo acierta la mitad de las veces. La rentabilidad viene de la asimetría: las ganancias (+180% max) compensan las pérdidas (limitadas al -16% por trailing stops).</li>
+            </ul>
+        </div>
+
+        <!-- 10. PIPELINE -->
+        <h2 id="pipeline">10. Pipeline Diario</h2>
+        <p>El pipeline se ejecuta diariamente (manual o automático) y realiza los 5 pasos en secuencia:</p>
+
+        <div class="card">
+            <table>
+                <thead>
+                    <tr><th>Paso</th><th>Acción</th><th>Duración</th><th>Detalle</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>1</strong></td><td>Actualizar datos (OHLCV)</td><td>~7 min (full) / ~2 min (incremental)</td><td>Descarga barras faltantes de Polygon.io. Rate limit: 50 calls/min (plan Starter).</td></tr>
+                    <tr><td><strong>2</strong></td><td>Construir features</td><td>~20 seg</td><td>Calcula las 28 features para todas las fechas y tickers.</td></tr>
+                    <tr><td><strong>3</strong></td><td>Entrenar/cargar modelo</td><td>~30 seg (train) / ~1 seg (load)</td><td>Si pasaron ≥7 días desde el último entreno → reentrena. Si no → carga el .pkl.</td></tr>
+                    <tr><td><strong>4</strong></td><td>Generar señales</td><td>~1 seg</td><td>Scoring de todos los tickers → ranking → top-8 BUY.</td></tr>
+                    <tr><td><strong>5</strong></td><td>Paper trading</td><td>~1 seg</td><td>Ejecuta pendientes, comprueba stops, encola nuevas señales.</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h4>Catch-up inteligente</h4>
+            <p>Si no se ejecuta el pipeline durante varios días (ej: fin de semana + días festivos), al relanzar:</p>
+            <ul>
+                <li>Descarga todos los datos faltantes de golpe</li>
+                <li>Para cada día intermedio: genera señales + ejecuta pendientes + comprueba stops</li>
+                <li>Resultado idéntico a si se hubiera ejecutado cada día individualmente</li>
+            </ul>
+        </div>
+
+        <!-- 11. VALIDATION -->
+        <h2 id="validation">11. Validación</h2>
+
+        <div class="card">
+            <h4>Walk-Forward Cross-Validation (16 folds)</h4>
+            <p>Método gold-standard para validar estrategias de trading. Simula exactamente el uso en producción:</p>
+            <ul>
+                <li>Divide los datos en 16 períodos secuenciales (~3 meses cada uno)</li>
+                <li>Para cada fold: entrena con TODO lo anterior, predice el fold actual</li>
+                <li>Nunca usa datos futuros para predecir (anti-leakage)</li>
+                <li>Validado con gate automático <code>verify_no_leak.py</code></li>
+            </ul>
+            <table>
+                <thead>
+                    <tr><th>Métrica</th><th>Resultado</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>IC medio (Information Coefficient)</td><td style="color: var(--blue); font-weight: 700;">+0.0115</td></tr>
+                    <tr><td>Folds con IC positivo</td><td style="color: var(--green); font-weight: 700;">14 / 16 (87.5%)</td></tr>
+                    <tr><td>Retorno medio por fold (top-8)</td><td style="color: var(--green); font-weight: 700;">+26%</td></tr>
+                    <tr><td>Win Rate</td><td style="color: var(--yellow); font-weight: 700;">~48%</td></tr>
+                    <tr><td>Objetivo optimizado</td><td style="color: var(--purple); font-weight: 700;">NDCG (ranking)</td></tr>
+                    <tr><td>Modelo</td><td style="color: var(--blue); font-weight: 700;">LambdaRank, 28 features, leak-free</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h4>Disclaimer</h4>
+            <p style="color: var(--yellow); font-weight: 600;">Los resultados pasados no garantizan resultados futuros. Este es un sistema experimental con capital simulado de €1,000. Notas importantes:</p>
+            <ul>
+                <li>Survivorship bias corregido (724 delisted tickers en training)</li>
+                <li>Datos desde 2019 pero régimen dominante sigue siendo bull market</li>
+                <li>Win rate ~50%: la rentabilidad depende de la asimetría ganadores/perdedores</li>
+                <li>El modelo necesita al menos 1 ciclo completo (20 días) para evaluar cada señal</li>
+                <li>Estimación realista de alpha con modelo leak-free: <strong>IC +0.01 consistente, edge modesto pero robusto</strong></li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Category distribution chart
+        const catCtx = document.getElementById('categoryChart').getContext('2d');
+        new Chart(catCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Volatilidad (7)', 'Momentum (6)', 'Liquidez (4)', 'Microestructura (3)', 'Tendencia (4)', 'Sector (2)'],
+                datasets: [{
+                    data: [
+                        3560+1622+1655+2249+1096+1050+1366,  // vol
+                        2956+3055+1664+1321+1053+885,        // mom
+                        4516+3720+3121+1385,                  // liq
+                        6119+3650+1527,                       // micro
+                        5254+3696+1817+2535,                  // trend
+                        2479+1651                             // sector
+                    ],
+                    backgroundColor: [
+                        'rgba(248, 81, 73, 0.8)',
+                        'rgba(63, 185, 80, 0.8)',
+                        'rgba(88, 166, 255, 0.8)',
+                        'rgba(163, 113, 247, 0.8)',
+                        'rgba(210, 153, 34, 0.8)',
+                        'rgba(139, 148, 158, 0.8)',
+                    ],
+                    borderColor: '#161b22',
+                    borderWidth: 2,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { color: '#8b949e', font: { size: 12 }, padding: 16 }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                                const pct = (ctx.raw / total * 100).toFixed(1);
+                                return `${ctx.label}: ${pct}% del gain total`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+{
+  "fred": {
+    "rows": 2693,
+    "date_range": "2019-01-01 → 2026-05-18",
+    "series": ["fed_funds_rate", "yield_curve_10y2y", "high_yield_spread", "vix", "dollar_index", "breakeven_inflation_10y", "initial_claims"],
+    "features_ic": {
+      "yield_curve_inverted": {
+        "ic": 0.0314,
+        "pval": 0.0,
+        "n": 156187
+      },
+      "credit_stress_zscore": {
+        "ic": 0.0011,
+        "pval": 0.6599,
+        "n": 156187
+      },
+      "rate_direction_3m": {
+        "ic": 0.008,
+        "pval": 0.0017,
+        "n": 156187
+      }
+    },
+    "status": "ok"
+  },
+  "edgar": {
+    "tickers": 300,
+    "rows": 405377,
+    "features_ic": {
+      "cash_runway_months": {
+        "ic": -0.0065,
+        "pval": 0.0312,
+        "n": 109376
+      },
+      "dilution_pct": {
+        "ic": -0.0292,
+        "pval": 0.0,
+        "n": 118094
+      },
+      "convertible_debt_ratio": {
+        "ic": 0.0878,
+        "pval": 0.0,
+        "n": 4655
+      },
+      "current_ratio": {
+        "ic": -0.0208,
+        "pval": 0.0,
+        "n": 105864
+      },
+      "revenue_growth": {
+        "ic": 0.0037,
+        "pval": 0.3143,
+        "n": 75926
+      }
+    },
+    "status": "ok"
+  },
+  "finra": {
+    "tickers": 318,
+    "rows": 20025,
+    "date_range": "2026-02-18 \u2192 2026-05-18",
+    "features_ic": {
+      "short_volume_ratio": {
+        "ic": -0.0332,
+        "pval": 0.293,
+        "n": 1004
+      },
+      "short_volume_ratio_5d": {
+        "ic": -0.0091,
+        "pval": 0.7755,
+        "n": 978
+      }
+    },
+    "status": "ok"
+  }
+}
