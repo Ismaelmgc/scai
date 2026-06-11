@@ -19,6 +19,7 @@ El repo se desarrolló en **macOS arm64**, pero esta copia corre en **Windows** 
 - LGB **LambdaRank**, target `fwd_ret_20d_sector_rel`, binned a 16 niveles, 600 trees.
 - **28 features** = 26 base + 2 EDGAR (`dilution_pct`, `current_ratio`). **0 meta** (retiradas 2026-05-22 por data leak).
 - TOP_K=8 equal-weight, holding 20d, rebalance 5d, trailing stop ATR clipped [10%, 16%], cooldown 5d tras salida.
+- **Tradability gate (v3.2, 2026-06-11)**: señales solo sobre tickers con `close ≥ $1.50` y `ADV20 ≥ $500K` (`src/app/features/tradability.py`, validado por sweep en `scripts/v3/20_filter_sweep.py`). El filtro aplica SOLO a la selección — el entrenamiento mantiene deslistados (anti-survivorship). Baseline honesto post-filtro: `data/v3_benchmarks/v4_filt_baseline.json`.
 - Dual paper trading: Baseline (trail [10-16%]) + Adaptive Stop (tighten a 6% tras día 5 si profitable). €1,000 c/u desde 2026-05-19.
 - Artefacto: `data/models/smallcap_v3_lambdarank.pkl`.
 

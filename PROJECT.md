@@ -181,6 +181,7 @@ N_ROUNDS = 600
 
 ### 4.4 Señales y Ejecución
 
+- **Tradability gate (v3.2, 2026-06-11)**: antes del ranking se excluyen tickers no operables — `close < $1.50`, `ADV20 < $500K` o datos stale (> 4 días). Módulo compartido `src/app/features/tradability.py`, usado idénticamente por producción (`daily_pipeline.py`) y el harness (`_v3_harness.py`). El filtro aplica SOLO a la selección; el entrenamiento mantiene deslistados (anti-survivorship). Motivo: el paper trading en vivo compró zombies sub-penny (SRNE @ $0.0006, $153/día de volumen) porque nada re-validaba la operabilidad tras el snapshot del universo. Umbrales validados con sweep 3×3 (`scripts/v3/20_filter_sweep.py`); baseline honesto: `data/v3_benchmarks/v4_filt_baseline.json` (+12.7%/fold, Sharpe 2.52, WR 51.3%, 14/16 folds, coste 15bps/lado).
 - **Ranking**: por score LambdaRank (mayor = mejor)
 - **Top-K**: 8 posiciones
 - **Sizing**: equal-weight (12.5% cada una)
