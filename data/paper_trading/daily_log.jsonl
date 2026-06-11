@@ -1,8 +1,0 @@
-{"date": "2026-06-05", "portfolio_value": 990.72, "cash": 544.28, "n_positions": 3, "n_closed": 11}
-{"date": "2026-06-05", "portfolio_value": 990.72, "cash": 544.28, "n_positions": 3, "n_closed": 11, "portfolio_value_adaptive": 1036.82, "retrained": false, "dry_run": false}
-{"date": "2026-06-08", "portfolio_value": 985.74, "cash": 419.78, "n_positions": 4, "n_closed": 11}
-{"date": "2026-06-08", "portfolio_value": 985.74, "cash": 419.78, "n_positions": 4, "n_closed": 11, "portfolio_value_adaptive": 1032.56, "retrained": false, "dry_run": false}
-{"date": "2026-06-10", "portfolio_value": 956.03, "cash": 54.76, "n_positions": 7, "n_closed": 11}
-{"date": "2026-06-10", "portfolio_value": 956.03, "cash": 54.76, "n_positions": 7, "n_closed": 11, "portfolio_value_adaptive": 1009.69, "retrained": false, "dry_run": false}
-{"date": "2026-06-10", "portfolio_value": 956.03, "cash": 54.76, "n_positions": 7, "n_closed": 11}
-{"date": "2026-06-10", "portfolio_value": 956.03, "cash": 54.76, "n_positions": 7, "n_closed": 11, "portfolio_value_adaptive": 1009.69, "retrained": false, "dry_run": false}
