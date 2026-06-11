@@ -14,13 +14,14 @@ El repo se desarrolló en **macOS arm64**, pero esta copia corre en **Windows** 
 - En **Windows**: `DYLD_LIBRARY_PATH` es irrelevante (no hace nada). El CLI `scai` lo setea igual, es inofensivo.
 - Siempre `PYTHONPATH=src` para los imports (`from app...`). El CLI `scai` ya lo gestiona.
 
-## Modelo en producción (V3)
+## Modelo en producción (V4)
 
-- LGB **LambdaRank**, target `fwd_ret_20d_sector_rel`, binned a 16 niveles, 600 trees.
+- LGB **LambdaRank**, target `fwd_ret_20d_sector_rel`, binned a 16 niveles, 600 trees. Modelo idéntico a V3 — V4 cambió la capa de ejecución, no el modelo (todas las variantes de features/modelo fueron rechazadas por el harness, ver `data/v3_benchmarks/v4_*.json`).
 - **28 features** = 26 base + 2 EDGAR (`dilution_pct`, `current_ratio`). **0 meta** (retiradas 2026-05-22 por data leak).
-- TOP_K=8 equal-weight, holding 20d, rebalance 5d, trailing stop ATR clipped [10%, 16%], cooldown 5d tras salida.
-- **Tradability gate (v3.2, 2026-06-11)**: señales solo sobre tickers con `close ≥ $1.50` y `ADV20 ≥ $500K` (`src/app/features/tradability.py`, validado por sweep en `scripts/v3/20_filter_sweep.py`). El filtro aplica SOLO a la selección — el entrenamiento mantiene deslistados (anti-survivorship). Baseline honesto post-filtro: `data/v3_benchmarks/v4_filt_baseline.json`.
-- Dual paper trading: Baseline (trail [10-16%]) + Adaptive Stop (tighten a 6% tras día 5 si profitable). €1,000 c/u desde 2026-05-19.
+- TOP_K=8 equal-weight, holding 20d, rebalance 5d, trailing stop ATR clipped [10%, 16%], cooldown 5d tras salida, **profit target +40%** (v4.0).
+- **Tradability gate (v3.2, 2026-06-11)**: señales solo sobre tickers con `close ≥ $1.50` y `ADV20 ≥ $500K` (`src/app/features/tradability.py`). El filtro aplica SOLO a la selección — el entrenamiento mantiene deslistados (anti-survivorship).
+- Dual paper trading (reset 2026-06-11, €1,000 c/u): Baseline (trail + pt40) + Adaptive (además tighten a 6% tras día 5 si profitable; WR backtest 59.7%, maxDD −15.1%).
+- Métricas honestas (filtro + 15bps/lado, 16 folds): ~+4%/mes, Sharpe ~2.7-2.8, WR 51-60%, α vs SPY +7-9%/fold. Informe: `reports/v4_final_report.md`.
 - Artefacto: `data/models/smallcap_v3_lambdarank.pkl`.
 
 ## Comandos

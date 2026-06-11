@@ -613,3 +613,13 @@ Al implementar una feature nueva en el pipeline:
 | | - Dashboard con tabs por estrategia | Dark theme, dual canvases |
 | | - Intraday monitor via Polygon snapshots | `scripts/intraday_monitor.py` |
 | | - Paper trading activo desde 2026-05-19 | €1,000 por estrategia |
+| v3.2 | **Tradability gate (hotfix producción)** | |
+| | - Root cause de pérdidas live: señales sin filtro compraban zombies sub-penny (SRNE @ $0.0006) | WR live 18-36% → diagnóstico |
+| | - `tradable_mask`: close ≥ $1.50, ADV20 ≥ $500K, solo en selección | `src/app/features/tradability.py` |
+| | - Harness con filtro + IC tradable + costes + caché de predicciones | `scripts/v3/_v3_harness.py` |
+| **v4.0** | **Honest re-baseline + exit engineering (2026-06-11)** | |
+| | - Re-baseline sin meta leak, con filtro y 15bps/lado: +12.7%/fold (~4.1%/mes), Sharpe 2.52, WR 51.3%, 14/16 folds | `v4_filt_baseline.json` |
+| | - Exit sweep (19 políticas sobre caché): pt40 gana (Sharpe 2.79); adaptive6_pt40 para portfolio adaptive (WR 59.7%, maxDD −15.1%) | `scripts/v3/21_exit_sweep.py` |
+| | - Feature batches E/B/A y variantes de modelo (bins8/32, blend) TODAS rechazadas — IC amplio no transfiere a top-8 | `v4_feat_*.json`, `v4_model_*.json` |
+| | - Profit target +40% portado al engine live (ambas estrategias) | `src/app/paper_trading.py` |
+| | - Portfolios reseteados (era V4); informe final con CIs | `reports/v4_final_report.md` |
