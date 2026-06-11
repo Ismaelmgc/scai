@@ -1,0 +1,31 @@
+{
+  "test_date": "2026-05-19",
+  "sources_tested": {
+    "yahoo": {
+      "tickers": 318,
+      "rows": 521304,
+      "date_range": "2019-01-02 \u2192 2026-05-18",
+      "pre_massive_rows": 360469,
+      "quality_score_mean": 0.7231,
+      "survivorship_risk": "high (no delisted coverage)",
+      "has_delisted_coverage": false
+    }
+  },
+  "experiments": {
+    "A_massive": {
+      "train_rows": 57296,
+      "val_rows": 17272,
+      "rmse": 0.240645,
+      "ic": 0.1224,
+      "top8_mean_return": 0.1397
+    },
+    "C_hybrid": {
+      "train_rows": 131957,
+      "val_rows": 17272,
+      "rmse": 0.227096,
+      "ic": 0.0757,
+      "top8_mean_return": 0.1957
+    }
+  },
+  "recommendation": "Hybrid approach is viable but has tradeoffs: +40% top8 return vs -37% IC. Yahoo adds 360K historical rows (2019-2024) but 2 of 26 features (avg_trade_size_20d, vwap_dev_avg_20d) are unavailable from Yahoo. Quality score 0.72 is moderate — 116/318 tickers show >1% close diff due to dividend adjustment methodology. Recommend: (1) Use Yahoo historical for diversification but NOT as primary training source, (2) Investigate adjusting tolerance for dividend-adjusted vs unadjusted comparison, (3) Massive $29 subscription remains higher-value: full feature coverage + delisted tickers + unadjusted prices."
+}

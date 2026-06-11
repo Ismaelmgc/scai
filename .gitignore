@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+.local/
+
+# IDE
+.vscode/
+.idea/
+.claude/
+*.swp
+*.swo
+
+# Data — commit the small bootstrap files (OHLCV, model, portfolios, EDGAR);
+# exclude only the 2.2GB feature matrix, which the pipeline regenerates each run.
+data/raw/
+data/interim/
+data/processed/features_smallcap.parquet
+data/paper_trading/logs/
+data/paper_trading/**/archive_*/
+mlruns/
+
+# Generated static dashboard (published to Pages as a build artifact, not committed)
+site/
+
+# Environment
+.env
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test / coverage
+htmlcov/
+.coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/

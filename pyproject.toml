@@ -1,0 +1,103 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "scai"
+version = "0.1.0"
+description = "Small Cap AI Trading Platform – selection, scoring, and backtesting of US small-cap equities"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [{ name = "SCAI Team" }]
+
+dependencies = [
+    # Core
+    "pydantic>=2.5,<3",
+    "pydantic-settings>=2.1,<3",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0",
+    # Data
+    "pandas>=2.1,<3",
+    "numpy>=1.26,<2",
+    "pyarrow>=14",
+    "duckdb>=0.9",
+    "httpx>=0.25",
+    # ML
+    "scikit-learn>=1.3",
+    "lightgbm>=4.1",
+    "catboost>=1.2",
+    "shap>=0.43",
+    # API
+    "fastapi>=0.104",
+    "uvicorn[standard]>=0.24",
+    "jinja2>=3.1",  # server-side dashboard templating + static renderer
+    # CLI
+    "typer>=0.9",
+    "rich>=13.7",
+    # Logging & monitoring
+    "structlog>=23.2",
+    # Misc
+    "joblib>=1.3",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.1",
+    "mypy>=1.7",
+    "pre-commit>=3.6",
+    "ipykernel>=6.27",
+    "jupyter>=1.0",
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+]
+probabilistic = [
+    "chronos-forecasting>=1.0; python_version>='3.11'",
+]
+
+[project.scripts]
+scai = "app.cli.main:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/app"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "TCH"]
+ignore = ["B008", "B023", "N806", "TC001", "TC002", "TC003"]
+
+[tool.ruff.lint.per-file-ignores]
+"notebooks/*.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+disallow_any_generics = false
+warn_return_any = true
+warn_unused_configs = true
+plugins = ["pydantic.mypy"]
+disable_error_code = ["import-untyped"]
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = ["chronos"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks integration tests requiring external services",
+]

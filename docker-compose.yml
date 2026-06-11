@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  scai-api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./mlruns:/app/mlruns
+    restart: unless-stopped
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.9.2
+    ports:
+      - "5000:5000"
+    command: >
+      mlflow server
+      --backend-store-uri sqlite:///mlruns/mlflow.db
+      --default-artifact-root ./mlruns/artifacts
+      --host 0.0.0.0
+    volumes:
+      - ./mlruns:/mlruns
