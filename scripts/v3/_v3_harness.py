@@ -344,19 +344,19 @@ def run_walkforward(
     cost_bps: float = 0.0,
     use_spread_cost: bool = False,
     cache_dir: str | Path | None = None,
+    n_bins: int = 16,
 ) -> RunResult:
     """Run 16-fold walk-forward; return per-fold + aggregate metrics.
 
     min_price/min_adv_usd filter SELECTION only (training always sees all
     rows, incl. delisted — anti-survivorship). cache_dir persists per-fold
     predictions so replay_walkforward() can re-evaluate filter/exit/cost
-    variants without retraining.
+    variants without retraining. n_bins = LambdaRank relevance levels.
     """
     params = dict(lgb_params or V2_LGB_PARAMS)
     policy = exit_policy or ExitPolicy()
     folds = define_folds(features)
 
-    n_bins = 16
     if objective_lambdarank:
         params = dict(params)
         params["objective"] = "lambdarank"
