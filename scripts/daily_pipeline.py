@@ -775,6 +775,9 @@ def run_paper_trading(signals: pd.DataFrame, ohlcv: pd.DataFrame,
         max_positions=8,
         holding_period_days=20,
         adaptive_stop=adaptive_stop,
+        # V4 exit sweep (2026-06-11): +40% profit target locks runaway
+        # winners; baseline Sharpe 2.52->2.79, adaptive WR 59.7% maxDD -15.1%
+        profit_target=0.40,
     )
 
     # Derive signal tracker and log paths from portfolio path

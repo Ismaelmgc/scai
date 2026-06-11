@@ -84,10 +84,12 @@ class PaperTrader:
     """Paper trading engine with persistent JSON state."""
 
     def __init__(self, state: PortfolioState, state_path: Path, *,
-                 adaptive_stop: bool = False) -> None:
+                 adaptive_stop: bool = False,
+                 profit_target: float | None = None) -> None:
         self.state = state
         self.state_path = state_path
         self._adaptive_stop = adaptive_stop
+        self._profit_target = profit_target
 
     # ── Persistence ─────────────────────────────────────────
 
@@ -99,6 +101,7 @@ class PaperTrader:
         max_positions: int = 8,
         holding_period_days: int = 20,
         adaptive_stop: bool = False,
+        profit_target: float | None = None,
     ) -> PaperTrader:
         """Load existing portfolio or create a new one."""
         p = Path(path)
@@ -116,7 +119,7 @@ class PaperTrader:
                 holding_period_days=holding_period_days,
             )
             log.info("portfolio_created", capital=initial_capital)
-        return cls(state, p, adaptive_stop=adaptive_stop)
+        return cls(state, p, adaptive_stop=adaptive_stop, profit_target=profit_target)
 
     def save(self) -> None:
         """Persist portfolio state to JSON."""
@@ -308,20 +311,27 @@ class PaperTrader:
             if current_price > pos["high_price"]:
                 pos["high_price"] = round(current_price, 4)
 
+            days_held = self.state.current_day_idx - pos["entry_day_idx"]
+
+            # Profit target: lock in runaway winners before they round-trip
+            # (V4 exit sweep 2026-06-11: pt40 -> Sharpe 2.52->2.79, ret intact)
+            if (self._profit_target
+                    and current_price >= pos["entry_price"] * (1 + self._profit_target)):
+                exit_reason = "profit_target"
+
             # Check trailing stop
             trail_pct = pos["trailing_stop_pct"]
-            days_held = self.state.current_day_idx - pos["entry_day_idx"]
             # Adaptive stop: tighten to 6% after day 5 if profitable
             if self._adaptive_stop and trail_pct > 0 and days_held > 5:
                 if current_price > pos["entry_price"]:
                     trail_pct = min(trail_pct, 0.06)
-            if trail_pct > 0:
+            if exit_reason is None and trail_pct > 0:
                 trail_trigger = pos["high_price"] * (1 - trail_pct)
                 if current_price <= trail_trigger:
                     exit_reason = "trailing_stop"
 
             # Check holding period expiry
-            if days_held >= pos["holding_period_days"]:
+            if exit_reason is None and days_held >= pos["holding_period_days"]:
                 exit_reason = "expiry"
 
             if exit_reason:
