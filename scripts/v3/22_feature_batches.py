@@ -79,14 +79,39 @@ def build_batches() -> dict[str, list[str]]:
             "ret_autocorr_60d", "info_ratio_20d", "info_ratio_60d",
             "vol_price_corr_20d", "max_dd_20d", "ret_skew_20d",
         ],
-        # A: EDGAR fundamentals beyond the 2 in production (computed by
-        # fundamentals.compute_edgar_features and merged as-of in pipeline;
-        # included here only if present in the parquet)
+        # A: EDGAR fundamentals beyond the 2 in production. NOT in the
+        # parquet — computed from edgar_facts.parquet and merged as-of by
+        # _merge_edgar_batch() (filing_date + 1 business day lag).
         "A_fundamentals": [
-            "roe", "roa", "leverage", "revenue_growth_yoy",
-            "cash_ratio", "gross_margin", "net_margin", "asset_growth_yoy",
+            "roe", "leverage", "cash_ratio", "revenue_growth",
+            "cash_runway_months",
         ],
     }
+
+
+def _merge_edgar_batch(features: pd.DataFrame, candidates: list[str]) -> pd.DataFrame:
+    """Derive fundamental ratios from EDGAR facts and merge point-in-time.
+
+    merge_asof backward on filing_date + 1 business day (anti-leak rule 4:
+    lag >= 1 day for sources that may publish intraday). Coverage is ~282
+    of 1048 tickers; missing rows stay NaN (LGB fillna(0) downstream).
+    """
+    from app.data.free_sources.sec_edgar import compute_edgar_features
+    facts = pd.read_parquet(ROOT / "data/edgar_facts.parquet")
+    ef = compute_edgar_features(facts)
+    ef["roe"] = ef["net_income"] / ef["equity"].where(ef["equity"].abs() > 1e3)
+    ef["leverage"] = ef["total_liabilities"] / ef["total_assets"].where(ef["total_assets"] > 1e3)
+    ef["cash_ratio"] = ef["cash"] / ef["current_liabilities"].where(ef["current_liabilities"] > 1e3)
+    keep = ["ticker", "filing_date"] + [c for c in candidates if c in ef.columns]
+    ef = ef[keep].dropna(subset=["filing_date"]).copy()
+    ef["filing_date"] = pd.to_datetime(ef["filing_date"]) + pd.tseries.offsets.BusinessDay(1)
+    ef = ef.sort_values("filing_date").reset_index(drop=True)
+    merged = pd.merge_asof(
+        features.sort_values("date").reset_index(drop=True),
+        ef, left_on="date", right_on="filing_date",
+        by="ticker", direction="backward",
+    ).drop(columns=["filing_date"])
+    return merged
 
 
 def run_batch(name: str, candidates: list[str], ohlcv: pd.DataFrame,
@@ -95,20 +120,26 @@ def run_batch(name: str, candidates: list[str], ohlcv: pd.DataFrame,
     import pyarrow.parquet as pq
     schema = set(pq.read_schema(
         str(ROOT / "data/processed/features_smallcap.parquet")).names)
-    available = [c for c in candidates if c in schema]
-    missing = sorted(set(candidates) - set(available))
-    if missing:
-        print(f"  [{name}] not in parquet (skipped cols): {missing}")
+    from_parquet = [c for c in candidates if c in schema]
+    derived = [c for c in candidates if c not in schema]
+    if derived and name != "A_fundamentals":
+        print(f"  [{name}] not in parquet (skipped cols): {derived}")
+        derived = []
+    available = from_parquet + derived
     if not available:
         print(f"  [{name}] NO candidate columns available — batch skipped")
         return
 
     need = ["date", "ticker", V2_TARGET, "atr_pct_20d", "close",
-            "adv_usd_20d", "cs_spread_20d"] + feat_base + available
+            "adv_usd_20d", "cs_spread_20d"] + feat_base + from_parquet
     need = list(dict.fromkeys(need))  # dedupe (cs_spread_20d may be a candidate)
     features = pd.read_parquet(ROOT / "data/processed/features_smallcap.parquet",
                                columns=need)
     features["date"] = pd.to_datetime(features["date"])
+    if derived:
+        features = _merge_edgar_batch(features, derived)
+        derived = [c for c in derived if c in features.columns]
+        available = from_parquet + derived
 
     # ── Leak gate on the NEW columns ──
     train = features.dropna(subset=[V2_TARGET])

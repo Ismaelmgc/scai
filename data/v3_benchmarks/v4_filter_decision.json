@@ -4,5 +4,28 @@
   "cost_bps": 15.0,
   "rule": "max tradable-IC s.t. <5% skipped rebalances; stricter wins ties",
   "anchor_config": "v4_filt_baseline",
-  "decided": "2026-06-11T13:41:52.380645"
+  "decided": "2026-06-11T13:41:52.380645",
+  "exit_policy": {
+    "name": "pt40",
+    "trail_mult": 5.3,
+    "trail_min": 0.1,
+    "trail_max": 0.16,
+    "adaptive_tighten": null,
+    "adaptive_after_days": 5,
+    "profit_target": 0.4,
+    "breakeven_after": null,
+    "time_stop": 20
+  },
+  "exit_policy_adaptive": {
+    "name": "adaptive6_pt40",
+    "trail_mult": 5.3,
+    "trail_min": 0.1,
+    "trail_max": 0.16,
+    "adaptive_tighten": 0.06,
+    "adaptive_after_days": 5,
+    "profit_target": 0.4,
+    "breakeven_after": null,
+    "time_stop": 20,
+    "note": "WR 59.7% / maxDD -15.1% / sharpe 2.73 \u2014 consistency profile for the adaptive portfolio"
+  }
 }
