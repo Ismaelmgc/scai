@@ -205,19 +205,6 @@ def _get_data_freshness(ohlcv: pd.DataFrame) -> dict:
     }
 
 
-def _get_model_info() -> dict:
-    reg_path = PAPER_TRADING_DIR / "model_registry.json"
-    if not reg_path.exists():
-        return {"last_train": "Nunca", "train_count": 0, "rmse": 0}
-    with open(reg_path) as f:
-        reg = json.load(f)
-    return {
-        "last_train": reg.get("last_train_date", "Nunca"),
-        "train_count": reg.get("train_count", 0),
-        "rmse": round(reg.get("last_metrics", {}).get("rmse_val", 0), 4),
-    }
-
-
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     ohlcv = _load_ohlcv()
@@ -226,7 +213,6 @@ async def dashboard(request: Request):
     signals = _load_signal_history(PAPER_TRADING_DIR)
     signals_adaptive = _load_signal_history(PAPER_TRADING_ADAPTIVE_DIR)
     data_info = _get_data_freshness(ohlcv)
-    model_info = _get_model_info()
 
     return templates.TemplateResponse(
         request=request,
@@ -237,7 +223,6 @@ async def dashboard(request: Request):
             "signals": signals,
             "signals_adaptive": signals_adaptive,
             "data_info": data_info,
-            "model_info": model_info,
             "now": datetime.now().strftime("%Y-%m-%d %H:%M"),
         },
     )
