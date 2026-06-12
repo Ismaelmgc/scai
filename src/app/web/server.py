@@ -17,6 +17,8 @@ from fastapi.templating import Jinja2Templates
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
 
+from app.data import supabase_store  # noqa: E402
+
 app = FastAPI(title="SCAI Dashboard")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
@@ -37,12 +39,16 @@ def _load_paper_trading(ohlcv: pd.DataFrame,
                         pt_dir: Path | None = None,
                         adaptive_stop: bool = False) -> dict | None:
     pt_dir = pt_dir or PAPER_TRADING_DIR
-    portfolio_path = pt_dir / "portfolio.json"
-    if not portfolio_path.exists():
-        return None
+    strategy = "adaptive" if pt_dir == PAPER_TRADING_ADAPTIVE_DIR else "baseline"
 
-    with open(portfolio_path) as f:
-        state = json.load(f)
+    # Source of truth is Supabase; fall back to the local JSON (offline/dev).
+    state = supabase_store.read_state(strategy)
+    if state is None:
+        portfolio_path = pt_dir / "portfolio.json"
+        if not portfolio_path.exists():
+            return None
+        with open(portfolio_path) as f:
+            state = json.load(f)
 
     positions = []
     for pos in state.get("positions", []):
@@ -107,22 +113,28 @@ def _load_paper_trading(ohlcv: pd.DataFrame,
                 if (n_closed - n_wins) > 0 else 0)
     total_profit = round(sum(t["pnl_usd"] for t in closed_trades), 2)
 
-    # Portfolio value history from daily_log
+    # Portfolio value history: Supabase nav_history, falling back to daily_log.
     chart_dates = []
     chart_values = []
-    daily_log_path = pt_dir / "daily_log.jsonl"
-    if daily_log_path.exists():
-        with open(daily_log_path) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    entry = json.loads(line)
-                    chart_dates.append(entry["date"])
-                    chart_values.append(round(entry["portfolio_value"], 2))
-                except (json.JSONDecodeError, KeyError):
-                    continue
+    nav = supabase_store.read_nav(strategy)
+    if nav:
+        for e in nav:
+            chart_dates.append(str(e["date"])[:10])
+            chart_values.append(round(float(e["portfolio_value"]), 2))
+    else:
+        daily_log_path = pt_dir / "daily_log.jsonl"
+        if daily_log_path.exists():
+            with open(daily_log_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                        chart_dates.append(entry["date"])
+                        chart_values.append(round(entry["portfolio_value"], 2))
+                    except (json.JSONDecodeError, KeyError):
+                        continue
 
     return {
         "positions": positions,
@@ -147,6 +159,21 @@ def _load_paper_trading(ohlcv: pd.DataFrame,
 
 def _load_signal_history(pt_dir: Path | None = None) -> list[dict]:
     pt_dir = pt_dir or PAPER_TRADING_DIR
+    strategy = "adaptive" if pt_dir == PAPER_TRADING_ADAPTIVE_DIR else "baseline"
+
+    # Source of truth is Supabase; fall back to the local parquet (offline/dev).
+    rows = supabase_store.read_signals(strategy, limit=50)
+    if rows:
+        return [{
+            "ticker": r.get("ticker", ""),
+            "date": str(r.get("signal_date", ""))[:10],
+            "score": round(float(r.get("score") or 0), 4),
+            "was_traded": bool(r.get("was_traded", False)),
+            "skip_reason": r.get("skip_reason") or "",
+            "actual_ret": (round(float(r["actual_ret_20d"]) * 100, 1)
+                           if r.get("actual_ret_20d") is not None else None),
+        } for r in rows]
+
     path = pt_dir / "signal_history.parquet"
     if not path.exists():
         return []

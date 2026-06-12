@@ -27,6 +27,17 @@ data/interim/
 data/processed/features_smallcap.parquet
 data/paper_trading/logs/
 data/paper_trading/**/archive_*/
+# Paper-trading state now lives in Supabase (source of truth), not git.
+# Keep model_registry.json tracked (small, low-churn model metadata).
+data/paper_trading/portfolio.json
+data/paper_trading/adaptive/portfolio.json
+data/paper_trading/trades.parquet
+data/paper_trading/adaptive/trades.parquet
+data/paper_trading/signal_history.parquet
+data/paper_trading/adaptive/signal_history.parquet
+data/paper_trading/daily_log.jsonl
+data/paper_trading/adaptive/daily_log.jsonl
+data/paper_trading/signals_*.parquet
 mlruns/
 
 # Generated static dashboard (published to Pages as a build artifact, not committed)
