@@ -1,0 +1,46 @@
+name: Universe refresh
+
+# Monthly: add new small-cap entrants and refresh active/delisted flags so the
+# tradable universe doesn't erode. 06:00 UTC on the 1st of each month. The 30-day
+# caches (ticker catalog / rejected) expire naturally at this cadence.
+# Manual runs via workflow_dispatch.
+on:
+  schedule:
+    - cron: "0 6 1 * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Refresh universe
+        env:
+          SCAI_POLYGON_API_KEY: ${{ secrets.SCAI_POLYGON_API_KEY }}
+          MASSIVE_CALLS_PER_MINUTE: "50"
+          PYTHONPATH: src
+          PYTHONIOENCODING: utf-8
+        run: python scripts/refresh_universe.py
+
+      - name: Commit updated universe
+        run: |
+          git config user.name "scai-bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A data/processed/
+          if git diff --cached --quiet; then
+            echo "No universe changes to commit."
+          else
+            git commit -m "universe: monthly refresh [skip ci]"
+            git push
+          fi
