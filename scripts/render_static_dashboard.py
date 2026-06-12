@@ -33,7 +33,6 @@ def main() -> None:
     signals = server._load_signal_history(server.PAPER_TRADING_DIR)
     signals_adaptive = server._load_signal_history(server.PAPER_TRADING_ADAPTIVE_DIR)
     data_info = server._get_data_freshness(ohlcv)
-    model_info = server._get_model_info()
 
     # Anon (publishable) creds embedded so the Pages snapshot can poll Supabase
     # live (Phase 2b). Empty when unconfigured → live-refresh script is skipped.
@@ -51,7 +50,6 @@ def main() -> None:
         signals=signals,
         signals_adaptive=signals_adaptive,
         data_info=data_info,
-        model_info=model_info,
         now=datetime.now().strftime("%Y-%m-%d %H:%M"),
         static_mode=True,
         supabase_url=supabase_url,
