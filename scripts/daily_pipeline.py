@@ -32,6 +32,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from app.config import get_settings
+from app.data import supabase_store
 from app.features.tradability import tradable_mask, is_stale
 from app.utils import setup_logging, set_global_seed, get_logger
 
@@ -910,6 +911,34 @@ def run_paper_trading(signals: pd.DataFrame, ohlcv: pd.DataFrame,
         }
         with open(dl, "a") as f:
             f.write(json.dumps(log_entry, default=str) + "\n")
+
+        # Dual-write to Supabase (single source of truth, migrating off git).
+        # Best-effort: a Supabase failure must never break the pipeline.
+        if supabase_store.is_configured():
+            from dataclasses import asdict
+            strat = strategy_label or ("adaptive" if adaptive_stop else "baseline")
+            try:
+                supabase_store.write_state(strat, asdict(pt.state))
+                if all_closed:
+                    supabase_store.append_trades(strat, [asdict(t) for t in all_closed])
+                supabase_store.upsert_nav(strat, today, float(summary["total_value"]))
+                if not signals.empty:
+                    sig_rows = [{
+                        "signal_date": today,
+                        "ticker": r["ticker"],
+                        "score": float(r["ensemble_score"]),
+                        "recommendation": r["recommendation"],
+                        "was_traded": r["ticker"] in traded_tickers,
+                        "skip_reason": (skip_reasons.get(r["ticker"])
+                                        or r.get("rejection_reasons") or None),
+                        "actual_ret_20d": None,
+                    } for _, r in signals.iterrows()]
+                    supabase_store.upsert_signals(strat, sig_rows)
+                print(f"  ✓ Supabase: state + nav + {len(all_closed)} trades "
+                      f"+ {len(signals)} signals ({strat})")
+            except Exception as e:
+                log.warning("supabase_write_failed", strategy=strat, error=str(e))
+                print(f"  ⚠ Supabase write failed ({strat}): {e}")
     else:
         tracker.save()  # Always save signal history, even in dry-run
 

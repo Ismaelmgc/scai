@@ -53,6 +53,8 @@ jobs:
           SCAI_SEED: "42"
           SCAI_ENV: production
           MASSIVE_CALLS_PER_MINUTE: "50"
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           PYTHONPATH: src
           PYTHONIOENCODING: utf-8
         run: python scripts/daily_pipeline.py
