@@ -83,7 +83,8 @@ class FinancialsAPI:
         records = []
         for r in raw:
             records.append(FinancialRecord(
-                ticker=r.get("tickers", [None])[0] if isinstance(r.get("tickers"), list) else r.get("ticker", ""),
+                ticker=(r.get("tickers", [None])[0]
+                        if isinstance(r.get("tickers"), list) else r.get("ticker", "")),
                 cik=r.get("cik"),
                 company_name=r.get("company_name"),
                 fiscal_period=r.get("fiscal_period"),

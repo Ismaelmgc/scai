@@ -105,17 +105,14 @@ def assign_sectors(
     df = ohlcv.copy()
 
     if universe is not None:
-        if isinstance(universe, list):
-            uni_df = pd.DataFrame(universe)
-        else:
-            uni_df = universe.copy()
+        uni_df = pd.DataFrame(universe) if isinstance(universe, list) else universe.copy()
 
         if "sic_code" in uni_df.columns:
             uni_df["sector"] = uni_df["sic_code"].apply(sic_to_sector)
-            sector_map = dict(zip(uni_df["ticker"], uni_df["sector"]))
+            sector_map = dict(zip(uni_df["ticker"], uni_df["sector"], strict=False))
             df["sector"] = df["ticker"].map(sector_map).fillna("Unknown")
         elif "sector" in uni_df.columns:
-            sector_map = dict(zip(uni_df["ticker"], uni_df["sector"]))
+            sector_map = dict(zip(uni_df["ticker"], uni_df["sector"], strict=False))
             df["sector"] = df["ticker"].map(sector_map).fillna("Unknown")
         else:
             df["sector"] = "Unknown"

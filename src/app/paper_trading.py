@@ -14,8 +14,7 @@ Usage from daily_pipeline.py:
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field, asdict
-from datetime import date, datetime
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -192,7 +191,8 @@ class PaperTrader:
             queued += 1
             log.info("signal_queued", ticker=ticker, size=sig.get("position_size_pct"))
 
-        log.info("signals_processed", date=today, queued=queued, pending=len(self.state.pending_signals))
+        log.info("signals_processed", date=today, queued=queued,
+                 pending=len(self.state.pending_signals))
         return traded_tickers, skip_reasons
 
     def execute_pending(self, ohlcv_today: pd.DataFrame, today: str) -> list[str]:
@@ -322,9 +322,9 @@ class PaperTrader:
             # Check trailing stop
             trail_pct = pos["trailing_stop_pct"]
             # Adaptive stop: tighten to 6% after day 5 if profitable
-            if self._adaptive_stop and trail_pct > 0 and days_held > 5:
-                if current_price > pos["entry_price"]:
-                    trail_pct = min(trail_pct, 0.06)
+            if (self._adaptive_stop and trail_pct > 0 and days_held > 5
+                    and current_price > pos["entry_price"]):
+                trail_pct = min(trail_pct, 0.06)
             if exit_reason is None and trail_pct > 0:
                 trail_trigger = pos["high_price"] * (1 - trail_pct)
                 if current_price <= trail_trigger:
@@ -413,9 +413,9 @@ class PaperTrader:
             # Compute effective trail (adaptive tightens to 6% after day 5 if profitable)
             trail_pct = pos["trailing_stop_pct"]
             days_held = self.state.current_day_idx - pos.get("entry_day_idx", 0)
-            if self._adaptive_stop and trail_pct > 0 and days_held > 5:
-                if current > pos["entry_price"]:
-                    trail_pct = min(trail_pct, 0.06)
+            if (self._adaptive_stop and trail_pct > 0 and days_held > 5
+                    and current > pos["entry_price"]):
+                trail_pct = min(trail_pct, 0.06)
             open_positions.append({
                 "ticker": pos["ticker"],
                 "entry_date": pos["entry_date"],

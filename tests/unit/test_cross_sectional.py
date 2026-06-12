@@ -37,4 +37,6 @@ def test_normalise_cross_section():
     })
     result = normalise_cross_section(df, ["val"])
     assert abs(result["val"].mean()) < 1e-10
-    assert abs(result["val"].std(ddof=0) - 1.0) < 0.01
+    # normalise_cross_section uses pandas std (ddof=1), so the normalised
+    # column has unit sample std.
+    assert abs(result["val"].std() - 1.0) < 0.01

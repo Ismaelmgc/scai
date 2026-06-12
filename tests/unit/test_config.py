@@ -1,6 +1,7 @@
 """Tests for configuration system."""
 
 import os
+from pathlib import Path
 from unittest import mock
 
 from app.config import AppMode, Settings
@@ -18,10 +19,12 @@ def test_default_settings():
 
 
 def test_settings_paths():
-    s = Settings(data_dir="/tmp/scai_test")
-    assert str(s.raw_dir) == "/tmp/scai_test/raw"
-    assert str(s.interim_dir) == "/tmp/scai_test/interim"
-    assert str(s.processed_dir) == "/tmp/scai_test/processed"
+    # Compare Path objects (not strings) so the test is OS-independent.
+    base = Path("/tmp/scai_test")
+    s = Settings(data_dir=base)
+    assert s.raw_dir == base / "raw"
+    assert s.interim_dir == base / "interim"
+    assert s.processed_dir == base / "processed"
 
 
 def test_settings_from_env():

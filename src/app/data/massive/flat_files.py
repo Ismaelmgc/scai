@@ -15,11 +15,9 @@ IMPORTANT: Flat Files are UNADJUSTED. Apply corporate actions before using in ba
 from __future__ import annotations
 
 import gzip
-import io
 import os
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Iterator
 
 import pandas as pd
 
@@ -54,7 +52,8 @@ class FlatFilesAPI:
         self._data_dir = Path(data_dir)
         self._data_dir.mkdir(parents=True, exist_ok=True)
 
-        self._key = api_key or os.environ.get("MASSIVE_API_KEY") or os.environ.get("SCAI_POLYGON_API_KEY", "")
+        self._key = (api_key or os.environ.get("MASSIVE_API_KEY")
+                     or os.environ.get("SCAI_POLYGON_API_KEY", ""))
         if not self._key:
             log.warning("flat_files_no_key", msg="No API key configured for flat files")
 
@@ -106,7 +105,8 @@ class FlatFilesAPI:
                     log.info("flat_file_not_found", dataset=dataset, date=file_date.isoformat())
                     return None
                 if resp.status_code == 403:
-                    log.warning("flat_file_forbidden", dataset=dataset, msg="Plan may not include flat files")
+                    log.warning("flat_file_forbidden", dataset=dataset,
+                                msg="Plan may not include flat files")
                     return None
                 resp.raise_for_status()
 
@@ -118,13 +118,15 @@ class FlatFilesAPI:
             if df is not None and not df.empty:
                 parquet_path.parent.mkdir(parents=True, exist_ok=True)
                 df.to_parquet(parquet_path, index=False, engine="pyarrow")
-                log.info("flat_file_converted", dataset=dataset, date=file_date.isoformat(), rows=len(df))
+                log.info("flat_file_converted", dataset=dataset,
+                         date=file_date.isoformat(), rows=len(df))
                 # Remove compressed file to save space
                 csv_path.unlink(missing_ok=True)
                 return parquet_path
 
         except Exception as e:
-            log.error("flat_file_download_failed", dataset=dataset, date=file_date.isoformat(), error=str(e))
+            log.error("flat_file_download_failed", dataset=dataset,
+                      date=file_date.isoformat(), error=str(e))
 
         return None
 

@@ -7,6 +7,7 @@ from datetime import date
 import numpy as np
 import pandas as pd
 
+from app.features.alpha_features import compute_alpha_features
 from app.features.cross_sectional import compute_cross_sectional_features
 from app.features.liquidity import compute_liquidity_features
 from app.features.microstructure import compute_microstructure_features
@@ -14,7 +15,6 @@ from app.features.momentum import compute_momentum_features
 from app.features.price_action import compute_price_action_features
 from app.features.sector import assign_sectors, compute_sector_features
 from app.features.volatility import compute_volatility_features
-from app.features.alpha_features import compute_alpha_features
 from app.utils import get_logger
 from app.utils.point_in_time import as_of
 
@@ -52,7 +52,7 @@ def _triple_barrier_labels(
     labels = np.full(len(df), np.nan)
     barrier_types = np.full(len(df), "", dtype=object)
 
-    for ticker, gdf in df.groupby("ticker"):
+    for _ticker, gdf in df.groupby("ticker"):
         closes = gdf["close"].values
         vols = gdf["_daily_vol"].values
         n = len(closes)
@@ -109,7 +109,6 @@ def _build_risk_adjusted_targets(df: pd.DataFrame, horizons: list[int]) -> pd.Da
     - ``fwd_ret_{h}d_sector_rel``: forward return minus sector average
     - ``fwd_ret_{h}d_risk_adj_positive``: binary from risk-adjusted return
     """
-    grouped = df.groupby("ticker")
     for h in horizons:
         fwd_col = f"fwd_ret_{h}d"
         if fwd_col not in df.columns:
@@ -266,10 +265,12 @@ def build_feature_matrix(
 
     # 12. Multi-horizon agreement features (consensus across timeframes)
     if len(horizons) >= 2:
-        fwd_pos_cols = [f"fwd_ret_{h}d_positive" for h in horizons if f"fwd_ret_{h}d_positive" in df.columns]
+        fwd_pos_cols = [f"fwd_ret_{h}d_positive" for h in horizons
+                        if f"fwd_ret_{h}d_positive" in df.columns]
         if len(fwd_pos_cols) >= 2:
             df["multi_horizon_agreement"] = df[fwd_pos_cols].mean(axis=1)
-            df["multi_horizon_unanimous_up"] = (df[fwd_pos_cols].sum(axis=1) == len(fwd_pos_cols)).astype(int)
+            df["multi_horizon_unanimous_up"] = (
+                df[fwd_pos_cols].sum(axis=1) == len(fwd_pos_cols)).astype(int)
 
     log.info("features_built", rows=len(df), columns=len(df.columns))
     return df

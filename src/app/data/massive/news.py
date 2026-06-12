@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import date
 from typing import Any
 
 from app.data.massive.client import MassiveClient
@@ -63,7 +62,8 @@ class NewsAPI:
         for r in raw:
             articles.append(NewsArticle(
                 id=r.get("id", ""),
-                publisher=r.get("publisher", {}).get("name") if isinstance(r.get("publisher"), dict) else r.get("publisher"),
+                publisher=(r.get("publisher", {}).get("name")
+                           if isinstance(r.get("publisher"), dict) else r.get("publisher")),
                 title=r.get("title", ""),
                 author=r.get("author"),
                 article_url=r.get("article_url"),
@@ -107,9 +107,10 @@ class NewsAPI:
 
         IMPORTANT: Only uses news published BEFORE as_of to prevent look-ahead bias.
         """
-        from datetime import datetime, timedelta, timezone as tz
+        from datetime import datetime, timedelta
 
-        end_dt = datetime.fromisoformat(as_of.replace("Z", "+00:00")) if isinstance(as_of, str) else as_of
+        end_dt = (datetime.fromisoformat(as_of.replace("Z", "+00:00"))
+                  if isinstance(as_of, str) else as_of)
         start_dt = end_dt - timedelta(days=lookback_days)
 
         articles = self.get_news(

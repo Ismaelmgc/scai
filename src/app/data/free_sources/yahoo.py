@@ -68,7 +68,8 @@ def download_yahoo_ohlcv(
             df["source"] = "yahoo"
             df["adjusted"] = True
 
-            df = df[["date", "ticker", "open", "high", "low", "close", "volume", "source", "adjusted"]]
+            df = df[["date", "ticker", "open", "high", "low", "close",
+                     "volume", "source", "adjusted"]]
             all_rows.append(df)
 
             if (i + 1) % 20 == 0:

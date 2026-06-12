@@ -5,8 +5,8 @@ import json
 import os
 import subprocess
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -48,7 +48,8 @@ def _load_paper_trading(ohlcv: pd.DataFrame,
     for pos in state.get("positions", []):
         ticker = pos["ticker"]
         ticker_data = ohlcv[ohlcv["ticker"] == ticker].sort_values("date")
-        current_price = float(ticker_data.iloc[-1]["close"]) if not ticker_data.empty else pos["entry_price"]
+        current_price = (float(ticker_data.iloc[-1]["close"])
+                         if not ticker_data.empty else pos["entry_price"])
         pnl_pct = (current_price / pos["entry_price"] - 1) * 100
         invested = pos["shares"] * pos["entry_price"]
         current_value = pos["shares"] * current_price
@@ -56,9 +57,9 @@ def _load_paper_trading(ohlcv: pd.DataFrame,
         # Compute effective trail pct (adaptive tightens to 6% after day 5 if profitable)
         effective_trail_pct = pos["trailing_stop_pct"]
         days_held = state.get("current_day_idx", 0) - pos.get("entry_day_idx", 0)
-        if adaptive_stop and effective_trail_pct > 0 and days_held > 5:
-            if current_price > pos["entry_price"]:
-                effective_trail_pct = min(effective_trail_pct, 0.06)
+        if (adaptive_stop and effective_trail_pct > 0 and days_held > 5
+                and current_price > pos["entry_price"]):
+            effective_trail_pct = min(effective_trail_pct, 0.06)
         trail_trigger = pos["high_price"] * (1 - effective_trail_pct)
         positions.append({
             "ticker": ticker,
@@ -100,8 +101,10 @@ def _load_paper_trading(ohlcv: pd.DataFrame,
     n_closed = len(closed_trades)
     n_wins = sum(1 for t in closed_trades if t["pnl_pct"] > 0)
     win_rate = round(n_wins / n_closed * 100, 0) if n_closed > 0 else 0
-    avg_win = round(np.mean([t["pnl_pct"] for t in closed_trades if t["pnl_pct"] > 0]), 1) if n_wins > 0 else 0
-    avg_loss = round(np.mean([t["pnl_pct"] for t in closed_trades if t["pnl_pct"] <= 0]), 1) if (n_closed - n_wins) > 0 else 0
+    avg_win = (round(np.mean([t["pnl_pct"] for t in closed_trades if t["pnl_pct"] > 0]), 1)
+               if n_wins > 0 else 0)
+    avg_loss = (round(np.mean([t["pnl_pct"] for t in closed_trades if t["pnl_pct"] <= 0]), 1)
+                if (n_closed - n_wins) > 0 else 0)
     total_profit = round(sum(t["pnl_usd"] for t in closed_trades), 2)
 
     # Portfolio value history from daily_log
@@ -160,7 +163,8 @@ def _load_signal_history(pt_dir: Path | None = None) -> list[dict]:
             "score": round(float(r.get(score_col, 0)), 4),
             "was_traded": bool(r.get("was_traded", False)),
             "skip_reason": r.get("skip_reason", "") or "",
-            "actual_ret": round(float(r["actual_ret_20d"]) * 100, 1) if pd.notna(r.get("actual_ret_20d")) else None,
+            "actual_ret": (round(float(r["actual_ret_20d"]) * 100, 1)
+                           if pd.notna(r.get("actual_ret_20d")) else None),
         })
     return result
 
@@ -242,8 +246,9 @@ async def run_pipeline():
                 key, _, val = line.partition("=")
                 env[key.strip()] = val.strip()
 
-    stdout_log = open(log_path / "web_pipeline_stdout.log", "w")
-    stderr_log = open(log_path / "web_pipeline_stderr.log", "w")
+    # Kept open intentionally: handed to Popen for the subprocess lifetime.
+    stdout_log = open(log_path / "web_pipeline_stdout.log", "w")  # noqa: SIM115
+    stderr_log = open(log_path / "web_pipeline_stderr.log", "w")  # noqa: SIM115
 
     _pipeline_proc = subprocess.Popen(
         [python, script],

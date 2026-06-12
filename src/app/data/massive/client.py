@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import os
 import time
-from datetime import datetime, timezone
+from collections.abc import Iterator
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import httpx
 
@@ -161,13 +162,14 @@ class MassiveClient:
                     log.warning("rate_limited", attempt=attempt, wait_s=wait)
                     time.sleep(wait)
                     last_error = httpx.HTTPStatusError(
-                        f"429 Too Many Requests", request=resp.request, response=resp
+                        "429 Too Many Requests", request=resp.request, response=resp
                     )
                     continue
 
                 if resp.status_code in (500, 502, 503, 504):
                     wait = min(2 ** attempt * 5, 60)
-                    log.warning("server_error", status=resp.status_code, attempt=attempt, wait_s=wait)
+                    log.warning("server_error", status=resp.status_code,
+                                attempt=attempt, wait_s=wait)
                     time.sleep(wait)
                     last_error = httpx.HTTPStatusError(
                         f"{resp.status_code}", request=resp.request, response=resp
@@ -256,7 +258,7 @@ class MassiveClient:
         if not self._raw_dir:
             return
         import json
-        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
         safe_path = path.replace("/", "_").strip("_")[:80]
         out = self._raw_dir / f"{ts}_{safe_path}.json"
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -273,7 +275,7 @@ class MassiveClient:
     def close(self) -> None:
         self._client.close()
 
-    def __enter__(self) -> "MassiveClient":
+    def __enter__(self) -> MassiveClient:
         return self
 
     def __exit__(self, *args: Any) -> None:

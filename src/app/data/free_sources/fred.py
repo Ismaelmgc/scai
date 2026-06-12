@@ -62,7 +62,8 @@ def download_fred_macro(
     series_data: dict[str, pd.Series] = {}
     for series_id, name in MACRO_SERIES.items():
         try:
-            data = fred.get_series(series_id, observation_start=start_date, observation_end=end_date)
+            data = fred.get_series(
+                series_id, observation_start=start_date, observation_end=end_date)
             series_data[name] = data
             log.info("fred_series_ok", series=series_id, name=name, rows=len(data))
         except Exception as e:
@@ -111,7 +112,8 @@ def compute_macro_features(macro_df: pd.DataFrame) -> pd.DataFrame:
     if "high_yield_spread" in df.columns:
         rolling_mean = df["high_yield_spread"].rolling(252, min_periods=60).mean()
         rolling_std = df["high_yield_spread"].rolling(252, min_periods=60).std()
-        df["credit_stress_zscore"] = (df["high_yield_spread"] - rolling_mean) / rolling_std.replace(0, float("nan"))
+        df["credit_stress_zscore"] = (
+            (df["high_yield_spread"] - rolling_mean) / rolling_std.replace(0, float("nan")))
 
     if "fed_funds_rate" in df.columns:
         df["rate_direction_3m"] = df["fed_funds_rate"].diff(63)  # ~3 months of trading days

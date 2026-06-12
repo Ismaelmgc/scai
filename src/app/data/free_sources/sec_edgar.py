@@ -12,13 +12,11 @@ Key features for small-cap analysis:
 """
 from __future__ import annotations
 
+import os
 import time
-from datetime import date
 
 import httpx
 import pandas as pd
-
-import os
 
 from app.utils import get_logger
 
@@ -196,10 +194,12 @@ def compute_edgar_features(facts_df: pd.DataFrame) -> pd.DataFrame:
         pivot["dilution_pct"] = pivot.groupby("ticker")["shares_outstanding"].pct_change()
 
     if "convertible_debt" in pivot.columns and "total_assets" in pivot.columns:
-        pivot["convertible_debt_ratio"] = pivot["convertible_debt"] / pivot["total_assets"].replace(0, float("nan"))
+        pivot["convertible_debt_ratio"] = (
+            pivot["convertible_debt"] / pivot["total_assets"].replace(0, float("nan")))
 
     if "current_assets" in pivot.columns and "current_liabilities" in pivot.columns:
-        pivot["current_ratio"] = pivot["current_assets"] / pivot["current_liabilities"].replace(0, float("nan"))
+        pivot["current_ratio"] = (
+            pivot["current_assets"] / pivot["current_liabilities"].replace(0, float("nan")))
 
     if "revenue" in pivot.columns:
         pivot["revenue_growth"] = pivot.groupby("ticker")["revenue"].pct_change()

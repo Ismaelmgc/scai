@@ -29,7 +29,7 @@ from sklearn.ensemble import (
 )
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression, Ridge
-from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV
+from sklearn.model_selection import RandomizedSearchCV, TimeSeriesSplit
 from sklearn.pipeline import Pipeline
 
 # Try to import LightGBM; if unavailable, fall back to sklearn
@@ -405,7 +405,8 @@ class TabularModel:
             log.warning("calibration_failed", error=str(e))
             return model
 
-    def _compute_metrics(self, model: Any, X_val: np.ndarray, y_val: np.ndarray) -> dict[str, float]:
+    def _compute_metrics(self, model: Any, X_val: np.ndarray,
+                         y_val: np.ndarray) -> dict[str, float]:
         metrics: dict[str, float] = {}
         if self.task == "classification":
             from sklearn.metrics import log_loss, roc_auc_score
@@ -500,11 +501,8 @@ class TabularModel:
     def _stacking_feature_importance(self, model: Any) -> np.ndarray:
         """Average feature importances from stacking base estimators."""
         all_imp = []
-        for name, est in model.estimators_:
-            if hasattr(est, "named_steps"):
-                inner = est.named_steps.get("model", est)
-            else:
-                inner = est
+        for _name, est in model.estimators_:
+            inner = est.named_steps.get("model", est) if hasattr(est, "named_steps") else est
             if hasattr(inner, "feature_importances_"):
                 all_imp.append(inner.feature_importances_)
         if all_imp:
