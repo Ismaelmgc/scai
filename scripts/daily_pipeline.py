@@ -177,14 +177,18 @@ def update_ohlcv(cfg, predict_to: str) -> pd.DataFrame:
 
     ohlcv["date"] = pd.to_datetime(ohlcv["date"])
     last_date = ohlcv["date"].max().date()
-    today = date.today()
+    predict_to_date = pd.Timestamp(predict_to).date()
 
     # Check for tickers lagging behind the global max date
     last_per_ticker = ohlcv.groupby("ticker")["date"].max()
     stale_tickers = last_per_ticker[last_per_ticker < ohlcv["date"].max() - pd.Timedelta(days=2)]
     n_stale = len(stale_tickers)
 
-    if last_date >= today - timedelta(days=1) and n_stale == 0:
+    # Skip the download only if we already hold the target day's bar. Comparing
+    # against (today - 1) meant a run holding yesterday's bar short-circuited and
+    # never fetched today's — the cron captured no data for the day (fixed
+    # 2026-06-12). predict_to already encodes weekend/holiday handling.
+    if last_date >= predict_to_date and n_stale == 0:
         print(f"  OHLCV already current ({last_date})")
         return ohlcv
 

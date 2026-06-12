@@ -615,9 +615,12 @@ def download_ohlcv(aggs, tickers, train_start, predict_to, existing_ohlcv=None):
     for i, ticker in enumerate(tickers):
         last = last_dates.get(ticker)
 
-        # Already up-to-date? Skip entirely
-        # Use 1-day tolerance: skip only if last bar is within 1 day of target
-        if last is not None and last >= target_end - pd.Timedelta(days=1):
+        # Already up-to-date? Skip only if we already have the target day's bar.
+        # A 1-day tolerance here meant a run holding yesterday's bar would never
+        # fetch today's — the daily cron silently captured no new data for the
+        # most recent trading day (bug fixed 2026-06-12). predict_to already
+        # encodes weekend/holiday handling, so an exact compare is safe.
+        if last is not None and last >= target_end:
             skipped += 1
             continue
 
