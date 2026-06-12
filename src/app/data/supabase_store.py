@@ -132,3 +132,33 @@ def upsert_nav(strategy: str, date: str, portfolio_value: float) -> None:
     _post("nav_history",
           [{"strategy": strategy, "date": date, "portfolio_value": portfolio_value}],
           on_conflict="strategy,date")
+
+
+def _get(table: str, params: dict) -> list[dict]:
+    r = httpx.get(f"{_base_url()}/rest/v1/{table}", params=params,
+                  headers=_headers(), timeout=_TIMEOUT)
+    r.raise_for_status()
+    return r.json()
+
+
+def read_nav(strategy: str) -> list[dict]:
+    """Daily NAV points (date, portfolio_value) ascending, for the equity chart."""
+    if not is_configured():
+        return []
+    return _get("nav_history", {
+        "strategy": f"eq.{strategy}",
+        "select": "date,portfolio_value",
+        "order": "date.asc",
+    })
+
+
+def read_signals(strategy: str, limit: int = 50) -> list[dict]:
+    """Most recent signals for a strategy (newest first)."""
+    if not is_configured():
+        return []
+    return _get("signals", {
+        "strategy": f"eq.{strategy}",
+        "select": "signal_date,ticker,score,recommendation,was_traded,skip_reason,actual_ret_20d",
+        "order": "signal_date.desc,score.desc",
+        "limit": str(limit),
+    })

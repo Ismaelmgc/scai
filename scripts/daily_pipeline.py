@@ -781,6 +781,19 @@ def run_paper_trading(signals: pd.DataFrame, ohlcv: pd.DataFrame,
     from app.signal_tracker import SignalTracker
 
     p_path = portfolio_path or PORTFOLIO_PATH
+
+    # State lives in Supabase (source of truth). Hydrate the local JSON from it
+    # so the run continues the real portfolio even on a fresh checkout (no state
+    # committed to git). If Supabase is unreachable the read raises and the run
+    # fails loudly — preferable to silently resetting the portfolio.
+    strat = strategy_label or ("adaptive" if adaptive_stop else "baseline")
+    if supabase_store.is_configured():
+        remote = supabase_store.read_state(strat)
+        if remote is not None:
+            Path(p_path).parent.mkdir(parents=True, exist_ok=True)
+            Path(p_path).write_text(json.dumps(remote))
+            print(f"  ↻ Hydrated {strat} portfolio from Supabase")
+
     pt = PaperTrader.load_or_create(
         p_path,
         initial_capital=capital,
@@ -916,7 +929,6 @@ def run_paper_trading(signals: pd.DataFrame, ohlcv: pd.DataFrame,
         # Best-effort: a Supabase failure must never break the pipeline.
         if supabase_store.is_configured():
             from dataclasses import asdict
-            strat = strategy_label or ("adaptive" if adaptive_stop else "baseline")
             try:
                 supabase_store.write_state(strat, asdict(pt.state))
                 if all_closed:
