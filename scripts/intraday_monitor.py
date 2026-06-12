@@ -1,24 +1,22 @@
-"""Intraday trailing stop monitor via Polygon snapshots (15-min delay).
+"""Intraday trailing stop monitor via Finnhub real-time quotes (free).
 
-Uses get_full_market_snapshot() to check current prices of open positions
-against their trailing stops. If a stop is hit, marks position for exit.
+Fetches a live quote per open position to check current prices against their
+trailing stops. If a stop is hit, marks the position for exit.
 
 Designed to run via cron every 30 min during market hours (9:45–15:45 ET):
-    */30 10-15 * * 1-5  cd /path/to/SCAI && DYLD_LIBRARY_PATH=.local/lib PYTHONPATH=src .venv/bin/python scripts/intraday_monitor.py
+    */30 10-15 * * 1-5  cd /path/to/SCAI && PYTHONPATH=src .venv/bin/python scripts/intraday_monitor.py
 
-Uses 1 Polygon API call per run (full market snapshot filtered to open tickers).
+Uses 1 Finnhub /quote call per open ticker (free tier: 60 calls/min).
 """
 from __future__ import annotations
 
 import json
 import sys
-from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from app.data.massive.client import MassiveClient
-from app.data.massive.snapshots import SnapshotsAPI
+from app.data.free_sources import finnhub
 from app.paper_trading import PaperTrader
 from app.utils import get_logger
 
@@ -64,12 +62,9 @@ def run_intraday_check(force: bool = False) -> None:
     tickers = [p["ticker"] for p in positions]
     print(f"Checking {len(tickers)} positions: {', '.join(tickers)}")
 
-    # 1 API call: snapshot for all open tickers
-    client = MassiveClient()
-    snaps_api = SnapshotsAPI(client)
-    snapshots = snaps_api.get_full_market_snapshot(tickers=tickers)
+    # One Finnhub /quote per open ticker (free real-time)
+    quotes = finnhub.get_quotes(tickers)
 
-    snap_map = {s.ticker: s for s in snapshots}
     now_str = datetime.now(timezone.utc).isoformat()
 
     alerts = []
@@ -77,12 +72,12 @@ def run_intraday_check(force: bool = False) -> None:
 
     for pos in positions:
         ticker = pos["ticker"]
-        snap = snap_map.get(ticker)
-        if not snap or not snap.last_trade_price:
-            print(f"  {ticker}: no snapshot data — skipping")
+        quote = quotes.get(ticker)
+        if not quote or not quote.get("price"):
+            print(f"  {ticker}: no quote data — skipping")
             continue
 
-        price = snap.last_trade_price
+        price = quote["price"]
         high = pos["high_price"]
         trail_pct = pos["trailing_stop_pct"]
         entry = pos["entry_price"]

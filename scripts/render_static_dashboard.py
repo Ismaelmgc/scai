@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from jinja2 import Environment, FileSystemLoader, select_autoescape  # noqa: E402
 
 from app.data import supabase_store  # noqa: E402
+from app.data.free_sources import finnhub  # noqa: E402
 from app.web import server  # noqa: E402
 
 
@@ -38,6 +39,10 @@ def main() -> None:
     # live (Phase 2b). Empty when unconfigured → live-refresh script is skipped.
     supabase_url, supabase_anon_key = supabase_store.public_config()
 
+    # Finnhub token embedded so the snapshot can stream live prices over the
+    # Finnhub WebSocket (WebSockets aren't subject to CORS). Empty → no live prices.
+    finnhub_token = finnhub.public_token()
+
     tpl_dir = ROOT / "src" / "app" / "web" / "templates"
     env = Environment(
         loader=FileSystemLoader(str(tpl_dir)),
@@ -54,11 +59,16 @@ def main() -> None:
         static_mode=True,
         supabase_url=supabase_url,
         supabase_anon_key=supabase_anon_key,
+        finnhub_token=finnhub_token,
     )
     if supabase_url and supabase_anon_key:
         print("  Live refresh enabled (Supabase anon key embedded)")
     else:
         print("  Live refresh disabled (no Supabase anon config)")
+    if finnhub_token:
+        print("  Live prices enabled (Finnhub token embedded)")
+    else:
+        print("  Live prices disabled (no FINNHUB_TOKEN)")
 
     out_dir = ROOT / "site"
     out_dir.mkdir(exist_ok=True)

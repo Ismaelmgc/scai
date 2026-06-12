@@ -66,6 +66,9 @@ jobs:
           # poll Supabase live (Phase 2b). RLS keeps the anon key read-only.
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          # Finnhub token embedded so the snapshot streams live prices over the
+          # Finnhub WebSocket (free, real-time, no CORS issue for WebSockets).
+          FINNHUB_TOKEN: ${{ secrets.FINNHUB_TOKEN }}
         run: python scripts/render_static_dashboard.py
 
       - name: Commit updated market data & model

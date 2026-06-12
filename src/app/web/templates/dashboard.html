@@ -96,15 +96,7 @@
         .btn-pipeline:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
         .btn-pipeline.running { background: linear-gradient(135deg, #1a5c2c, #1a5c2c); }
 
-        .btn-refresh {
-            padding: 8px 18px; border: none; border-radius: 8px;
-            background: linear-gradient(135deg, #c79331, #e7bd47); color: #1a1206;
-            font-size: 13px; font-weight: 700; letter-spacing: 0.3px;
-            cursor: pointer; transition: all 0.2s;
-            box-shadow: 0 2px 8px rgba(231, 189, 71, 0.32);
-        }
-        .btn-refresh:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(231, 189, 71, 0.5); }
-        .btn-refresh:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
+        .live-badge { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
 
         .spinner { width: 16px; height: 16px; border: 2px solid transparent; border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; display: none; }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -403,10 +395,10 @@
         <div class="card">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
                 <h2 style="margin-bottom: 0;">Posiciones Abiertas <span class="badge">{{ p.n_open }}</span></h2>
-                {% if not static_mode %}
-                <button class="btn-refresh" onclick="refreshPrices()" id="btnRefresh-{{ strat_id }}" title="Precios con 15 min delay (Polygon)">
-                    ↻ Live Prices
-                </button>
+                {% if finnhub_token %}
+                <span class="live-badge" id="liveBadge-{{ strat_id }}" title="Precio en vivo vía Finnhub (WebSocket, tiempo real)">
+                    <span class="status-dot stale"></span><span class="live-label">Conectando…</span>
+                </span>
                 {% endif %}
             </div>
             {% if p.positions %}
@@ -786,53 +778,88 @@
             btnText.textContent = 'Actualizar datos';
         }
 
-        function refreshPrices() {
-            document.querySelectorAll('.btn-refresh').forEach(b => {
-                b.disabled = true;
-                b.textContent = '↻ Cargando...';
-            });
-            fetch('/api/refresh-prices')
-                .then(r => r.json())
-                .then(data => {
-                    const prices = data.prices || {};
-                    const tickers = Object.keys(prices);
-                    if (tickers.length === 0) {
-                        throw new Error('No prices returned');
-                    }
-                    document.querySelectorAll('.positions-table tbody tr').forEach(row => {
-                        const ticker = row.dataset.ticker;
-                        const entry = parseFloat(row.dataset.entry);
-                        const shares = parseFloat(row.dataset.shares);
-                        if (prices[ticker]) {
-                            const p = prices[ticker].price;
-                            const pnlVsEntry = ((p / entry) - 1) * 100;
-                            // $ Live column
-                            const liveCell = row.querySelector('.td-live');
-                            liveCell.textContent = '$' + p.toFixed(2);
-                            liveCell.style.color = '#22d3ee';
-                            liveCell.style.fontWeight = '600';
-                            // % Live column (vs entry price)
-                            const livePctCell = row.querySelector('.td-live-pct');
-                            const sign = pnlVsEntry >= 0 ? '+' : '';
-                            livePctCell.textContent = sign + pnlVsEntry.toFixed(1) + '%';
-                            livePctCell.className = 'text-right td-live-pct ' + (pnlVsEntry >= 0 ? 'profit' : 'loss');
-                            livePctCell.style.fontWeight = '600';
-                        }
-                    });
-                    document.querySelectorAll('.btn-refresh').forEach(b => {
-                        b.disabled = false;
-                        b.textContent = '✓ ' + data.timestamp.substring(11, 16);
-                        setTimeout(() => { b.textContent = '↻ Live Prices'; }, 8000);
-                    });
-                })
-                .catch(err => {
-                    document.querySelectorAll('.btn-refresh').forEach(b => {
-                        b.disabled = false;
-                        b.textContent = '✗ ' + (err.message || 'Error');
-                        setTimeout(() => { b.textContent = '↻ Live Prices'; }, 5000);
-                    });
+        {% if finnhub_token %}
+        // ── Live prices via Finnhub WebSocket (free, real-time, no proxy) ──
+        // Streams trades for open-position tickers straight into the page (works
+        // on the static Pages snapshot too: WebSockets aren't subject to CORS, so
+        // the token is embedded like the Supabase anon key). Updates the existing
+        // .td-live / .td-live-pct cells across both strategy tables.
+        (function () {
+            const TOKEN = {{ finnhub_token | tojson }};
+
+            function positionTickers() {
+                const set = new Set();
+                document.querySelectorAll('.positions-table tbody tr[data-ticker]').forEach(r => {
+                    if (r.dataset.ticker) set.add(r.dataset.ticker);
                 });
-        }
+                return [...set];
+            }
+            function setBadges(text, ok) {
+                document.querySelectorAll('[id^="liveBadge-"]').forEach(b => {
+                    const dot = b.querySelector('.status-dot');
+                    if (dot) { dot.classList.toggle('ok', ok); dot.classList.toggle('stale', !ok); }
+                    const lbl = b.querySelector('.live-label');
+                    if (lbl) lbl.textContent = text;
+                });
+            }
+            function applyPrice(ticker, price) {
+                document.querySelectorAll('.positions-table tbody tr[data-ticker="' + ticker + '"]').forEach(row => {
+                    const entry = parseFloat(row.dataset.entry);
+                    const liveCell = row.querySelector('.td-live');
+                    if (liveCell) {
+                        liveCell.textContent = '$' + price.toFixed(2);
+                        liveCell.style.color = '#e8c456';
+                        liveCell.style.fontWeight = '600';
+                    }
+                    const pctCell = row.querySelector('.td-live-pct');
+                    if (pctCell && entry) {
+                        const pnl = (price / entry - 1) * 100;
+                        pctCell.textContent = (pnl >= 0 ? '+' : '') + pnl.toFixed(1) + '%';
+                        pctCell.className = 'text-right td-live-pct ' + (pnl >= 0 ? 'profit' : 'loss');
+                        pctCell.style.fontWeight = '600';
+                    }
+                });
+            }
+            function marketOpenET() {
+                const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+                const day = et.getDay();
+                if (day === 0 || day === 6) return false;
+                const mins = et.getHours() * 60 + et.getMinutes();
+                return mins >= 9 * 60 + 30 && mins <= 16 * 60;
+            }
+
+            const tickers = positionTickers();
+            if (tickers.length === 0) { setBadges('Sin posiciones', false); return; }
+            if (!marketOpenET()) { setBadges('Mercado cerrado', false); }
+
+            let ws, reconnectDelay = 2000, closedByUs = false;
+            function connect() {
+                ws = new WebSocket('wss://ws.finnhub.io?token=' + encodeURIComponent(TOKEN));
+                ws.onopen = () => {
+                    reconnectDelay = 2000;
+                    setBadges(marketOpenET() ? 'En vivo' : 'Conectado · cerrado', marketOpenET());
+                    tickers.forEach(t => ws.send(JSON.stringify({ type: 'subscribe', symbol: t })));
+                };
+                ws.onmessage = (ev) => {
+                    let msg; try { msg = JSON.parse(ev.data); } catch { return; }
+                    if (msg.type !== 'trade' || !msg.data) return;
+                    const latest = {};
+                    for (const tr of msg.data) latest[tr.s] = tr.p;
+                    for (const sym in latest) applyPrice(sym, latest[sym]);
+                    setBadges('En vivo', true);
+                };
+                ws.onclose = () => {
+                    if (closedByUs) return;
+                    setBadges('Reconectando…', false);
+                    setTimeout(connect, reconnectDelay);
+                    reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+                };
+                ws.onerror = () => { try { ws.close(); } catch (e) {} };
+            }
+            connect();
+            window.addEventListener('beforeunload', () => { closedByUs = true; try { ws && ws.close(); } catch (e) {} });
+        })();
+        {% endif %}
 
         {% if static_mode and supabase_url and supabase_anon_key %}
         // ── Phase 2b: live refresh from Supabase (anon key, RLS read-only) ──
