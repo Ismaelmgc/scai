@@ -7,42 +7,75 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         :root {
-            --bg-primary: #0f1117;
-            --bg-card: #161b22;
-            --bg-hover: #1c2128;
-            --border: #21262d;
-            --border-light: #30363d;
-            --text-primary: #e1e4e8;
-            --text-secondary: #8b949e;
-            --text-muted: #484f58;
-            --green: #3fb950;
-            --green-bg: rgba(63, 185, 80, 0.12);
-            --red: #f85149;
-            --red-bg: rgba(248, 81, 73, 0.12);
-            --blue: #58a6ff;
-            --blue-bg: rgba(88, 166, 255, 0.12);
-            --yellow: #d29922;
-            --yellow-bg: rgba(210, 153, 34, 0.12);
+            --bg-primary: #0a0c12;
+            --bg-elevated: #0f131b;
+            --bg-card: rgba(255, 255, 255, 0.028);
+            --bg-hover: rgba(255, 255, 255, 0.055);
+            --border: rgba(255, 255, 255, 0.07);
+            --border-light: rgba(255, 255, 255, 0.14);
+            --text-primary: #f4f6fb;
+            --text-secondary: #98a2b3;
+            --text-muted: #5b6472;
+            --green: #34d399;
+            --green-bg: rgba(52, 211, 153, 0.13);
+            --red: #f87171;
+            --red-bg: rgba(248, 113, 113, 0.13);
+            --blue: #e8c456;
+            --blue-bg: rgba(232, 196, 86, 0.14);
+            --yellow: #fbbf24;
+            --yellow-bg: rgba(251, 191, 36, 0.13);
+            --accent-grad: linear-gradient(135deg, #fdeaa0 0%, #e7bd47 52%, #c79331 100%);
+            --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 12px 32px rgba(0, 0, 0, 0.28);
+            --radius: 16px;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg-primary); color: var(--text-primary); line-height: 1.5; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            min-height: 100vh;
+            background-image:
+                radial-gradient(820px circle at 12% -8%, rgba(232, 196, 86, 0.10), transparent 50%),
+                radial-gradient(720px circle at 96% 0%, rgba(199, 147, 49, 0.08), transparent 46%);
+            background-attachment: fixed;
+        }
 
         /* Header */
         .header {
-            background: linear-gradient(135deg, #1a1f2e 0%, #0d1117 100%);
-            padding: 20px 32px;
+            background: rgba(10, 12, 18, 0.55);
+            backdrop-filter: saturate(160%) blur(14px);
+            -webkit-backdrop-filter: saturate(160%) blur(14px);
+            padding: 16px 32px;
             border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 50;
         }
-        .header h1 { font-size: 22px; color: var(--blue); font-weight: 700; letter-spacing: -0.3px; }
-        .header .subtitle { color: var(--text-secondary); font-size: 12px; margin-top: 2px; }
+        .brand { display: flex; align-items: center; gap: 14px; }
+        .logo-mark {
+            width: 46px; height: 46px; flex-shrink: 0;
+            filter: drop-shadow(0 0 10px rgba(231, 189, 71, 0.42));
+            transition: transform 0.25s ease;
+        }
+        .brand:hover .logo-mark { transform: translateY(-1px) scale(1.04); }
+        .brand-text { display: flex; flex-direction: column; line-height: 1.12; }
+        .brand-name {
+            font-size: 23px; font-weight: 800; letter-spacing: -0.6px;
+            background: var(--accent-grad);
+            -webkit-background-clip: text; background-clip: text;
+            color: transparent;
+        }
+        .brand-tag { font-size: 11px; color: var(--text-secondary); font-weight: 500; letter-spacing: 0.2px; margin-top: 1px; }
         .header-right { display: flex; align-items: center; gap: 16px; }
         .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-        .status-dot.ok { background: var(--green); box-shadow: 0 0 6px var(--green); }
-        .status-dot.stale { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
-        .data-info { color: var(--text-secondary); font-size: 12px; }
+        .status-dot.ok { background: var(--green); box-shadow: 0 0 8px var(--green); }
+        .status-dot.stale { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+        .data-info { color: var(--text-secondary); font-size: 12px; display: flex; align-items: center; gap: 6px; }
 
         /* Pipeline button */
         .btn-pipeline {
@@ -65,12 +98,12 @@
 
         .btn-refresh {
             padding: 8px 18px; border: none; border-radius: 8px;
-            background: linear-gradient(135deg, #0e7490, #06b6d4); color: #fff;
+            background: linear-gradient(135deg, #c79331, #e7bd47); color: #1a1206;
             font-size: 13px; font-weight: 700; letter-spacing: 0.3px;
             cursor: pointer; transition: all 0.2s;
-            box-shadow: 0 2px 8px rgba(6, 182, 212, 0.3);
+            box-shadow: 0 2px 8px rgba(231, 189, 71, 0.32);
         }
-        .btn-refresh:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(6, 182, 212, 0.5); }
+        .btn-refresh:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(231, 189, 71, 0.5); }
         .btn-refresh:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
 
         .spinner { width: 16px; height: 16px; border: 2px solid transparent; border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; display: none; }
@@ -112,19 +145,21 @@
         .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
 
         /* KPI Cards */
-        .kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 24px; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 26px; }
         .kpi-card {
             background: var(--bg-card);
             border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 18px 16px;
+            border-radius: var(--radius);
+            padding: 20px 16px;
             text-align: center;
-            transition: border-color 0.2s;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            transition: transform 0.2s ease, border-color 0.2s, background 0.2s;
         }
-        .kpi-card:hover { border-color: var(--border-light); }
-        .kpi-card .label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; }
-        .kpi-card .value { font-size: 26px; font-weight: 700; }
-        .kpi-card .detail { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+        .kpi-card:hover { transform: translateY(-2px); border-color: var(--border-light); background: var(--bg-hover); }
+        .kpi-card .label { font-size: 10.5px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.9px; margin-bottom: 8px; }
+        .kpi-card .value { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+        .kpi-card .detail { font-size: 11px; color: var(--text-muted); margin-top: 5px; }
         .green { color: var(--green); }
         .red { color: var(--red); }
         .blue { color: var(--blue); }
@@ -134,18 +169,22 @@
         .card {
             background: var(--bg-card);
             border: 1px solid var(--border);
-            border-radius: 12px;
+            border-radius: 18px;
             padding: 24px;
-            margin-bottom: 20px;
+            margin-bottom: 18px;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            box-shadow: var(--shadow-card);
         }
         .card h2 {
-            font-size: 15px;
+            font-size: 14px;
             color: var(--text-primary);
             margin-bottom: 16px;
             display: flex;
             align-items: center;
             gap: 10px;
             font-weight: 600;
+            letter-spacing: -0.2px;
         }
         .badge {
             background: var(--border);
@@ -189,47 +228,34 @@
 
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 
-        /* System info bar */
-        .system-bar {
-            display: flex;
-            gap: 24px;
-            padding: 14px 20px;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            margin-bottom: 24px;
-            font-size: 12px;
-            color: var(--text-secondary);
-            flex-wrap: wrap;
-        }
-        .system-bar .item { display: flex; align-items: center; gap: 6px; }
-        .system-bar .item strong { color: var(--text-primary); font-weight: 600; }
-
         .footer { text-align: center; padding: 24px; color: var(--text-muted); font-size: 11px; letter-spacing: 0.3px; }
 
-        /* Strategy Tabs */
+        /* Strategy Tabs — pill segmented control */
         .strategy-tabs {
-            display: flex;
-            gap: 0;
-            margin-bottom: 24px;
-            border-bottom: 2px solid var(--border);
+            display: inline-flex;
+            gap: 4px;
+            margin-bottom: 26px;
+            padding: 5px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
         }
         .strategy-tab {
-            padding: 12px 28px;
-            font-size: 14px;
+            padding: 9px 22px;
+            font-size: 13.5px;
             font-weight: 600;
             color: var(--text-secondary);
             cursor: pointer;
             border: none;
             background: none;
-            border-bottom: 2px solid transparent;
-            margin-bottom: -2px;
+            border-radius: 8px;
             transition: all 0.2s;
         }
         .strategy-tab:hover { color: var(--text-primary); }
         .strategy-tab.active {
-            color: var(--blue);
-            border-bottom-color: var(--blue);
+            color: #fdeaa0;
+            background: rgba(232, 196, 86, 0.15);
+            box-shadow: inset 0 0 0 1px rgba(232, 196, 86, 0.38);
         }
         .strategy-tab .tab-badge {
             font-size: 11px;
@@ -255,9 +281,26 @@
 </head>
 <body>
     <div class="header">
-        <div>
-            <h1>SCAI Paper Trading</h1>
-            <div class="subtitle">Small Cap AI — V3 LambdaRank · Dual Strategy Paper Trading</div>
+        <div class="brand">
+            <svg class="logo-mark" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SCAI">
+                <defs>
+                    <linearGradient id="scaiStroke" x1="9" y1="12" x2="39" y2="33" gradientUnits="userSpaceOnUse">
+                        <stop stop-color="#fdeaa0"/>
+                        <stop offset="0.5" stop-color="#e7bd47"/>
+                        <stop offset="1" stop-color="#c79331"/>
+                    </linearGradient>
+                </defs>
+                <g stroke="url(#scaiStroke)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+                    <!-- bull horns -->
+                    <path d="M9.5 12 C 10.5 19.5, 16.5 24, 24 24 C 31.5 24, 37.5 19.5, 38.5 12"/>
+                    <!-- head -->
+                    <circle cx="24" cy="33" r="8"/>
+                </g>
+            </svg>
+            <div class="brand-text">
+                <span class="brand-name">SCAI</span>
+                <span class="brand-tag">Small-Cap AI · Paper Trading</span>
+            </div>
         </div>
         <div class="header-right">
             <div class="data-info">
@@ -265,6 +308,12 @@
                 Datos: {{ data_info.latest_date }} · {{ data_info.n_tickers }} tickers
             </div>
             {% if static_mode %}
+            {% if supabase_url and supabase_anon_key %}
+            <div class="data-info" id="liveStatus" title="Se actualiza solo desde Supabase (anon, solo lectura)">
+                <span class="status-dot stale" id="liveDot"></span>
+                <span id="liveLabel">Conectando…</span>
+            </div>
+            {% endif %}
             <div class="data-info" title="Snapshot estático publicado en GitHub Pages">
                 Snapshot: {{ now }}
             </div>
@@ -290,26 +339,18 @@
 
     <div class="container">
         {% if paper or paper_adaptive %}
-        <!-- System info bar -->
-        <div class="system-bar">
-            <div class="item">Modelo: <strong>LGB V3 LambdaRank · {{ model_info.train_count }} entrenamientos</strong></div>
-            <div class="item">Último entreno: <strong>{{ model_info.last_train }}</strong></div>
-            <div class="item">Datos: <strong>{{ data_info.earliest_date }} → {{ data_info.latest_date }}</strong></div>
-            <div class="item">Actualizado: <strong>{{ (paper or paper_adaptive).last_update }}</strong></div>
-        </div>
-
         <!-- Strategy tabs -->
         <div class="strategy-tabs">
             {% if paper %}
             <button class="strategy-tab active" onclick="switchTab('baseline')">
                 Baseline
-                <span class="tab-badge {% if paper.total_return >= 0 %}green{% else %}red{% endif %}">{{ "%+.1f"|format(paper.total_return) }}%</span>
+                <span class="tab-badge {% if paper.total_return >= 0 %}green{% else %}red{% endif %}" data-live="badge-baseline">{{ "%+.1f"|format(paper.total_return) }}%</span>
             </button>
             {% endif %}
             {% if paper_adaptive %}
             <button class="strategy-tab" onclick="switchTab('adaptive')">
                 Adaptive Stop
-                <span class="tab-badge {% if paper_adaptive.total_return >= 0 %}green{% else %}red{% endif %}">{{ "%+.1f"|format(paper_adaptive.total_return) }}%</span>
+                <span class="tab-badge {% if paper_adaptive.total_return >= 0 %}green{% else %}red{% endif %}" data-live="badge-adaptive">{{ "%+.1f"|format(paper_adaptive.total_return) }}%</span>
             </button>
             {% endif %}
         </div>
@@ -320,13 +361,13 @@
         <div class="kpi-grid">
             <div class="kpi-card">
                 <div class="label">Valor Portfolio</div>
-                <div class="value {% if p.total_return >= 0 %}green{% else %}red{% endif %}">€{{ "%.2f"|format(p.total_value) }}</div>
+                <div class="value {% if p.total_return >= 0 %}green{% else %}red{% endif %}" data-live="value-{{ strat_id }}">€{{ "%.2f"|format(p.total_value) }}</div>
                 <div class="detail">Capital inicial: €{{ "%.0f"|format(p.initial_capital) }}</div>
             </div>
             <div class="kpi-card">
                 <div class="label">Retorno Total</div>
-                <div class="value {% if p.total_return >= 0 %}green{% else %}red{% endif %}">{{ "%+.1f"|format(p.total_return) }}%</div>
-                <div class="detail">{{ "%+.2f"|format(p.total_value - p.initial_capital) }}€ beneficio</div>
+                <div class="value {% if p.total_return >= 0 %}green{% else %}red{% endif %}" data-live="return-{{ strat_id }}">{{ "%+.1f"|format(p.total_return) }}%</div>
+                <div class="detail" data-live="profit-{{ strat_id }}">{{ "%+.2f"|format(p.total_value - p.initial_capital) }}€ beneficio</div>
             </div>
             <div class="kpi-card">
                 <div class="label">Cash Disponible</div>
@@ -584,7 +625,9 @@
     </div>
 
     <script>
-        // Portfolio charts — one per strategy
+        // Portfolio charts — one per strategy. Instances kept so the live
+        // refresh (Phase 2b) can push new Supabase data into them.
+        window.scaiCharts = {};
         function createPortfolioChart(canvasId, dates, values, initialCapital) {
             const el = document.getElementById(canvasId);
             if (!el) return;
@@ -592,35 +635,35 @@
             const gradient = ctx.createLinearGradient(0, 0, 0, 280);
             const lastVal = values[values.length - 1];
             if (lastVal >= initialCapital) {
-                gradient.addColorStop(0, 'rgba(63, 185, 80, 0.25)');
-                gradient.addColorStop(1, 'rgba(63, 185, 80, 0.0)');
+                gradient.addColorStop(0, 'rgba(52, 211, 153, 0.28)');
+                gradient.addColorStop(1, 'rgba(52, 211, 153, 0.0)');
             } else {
-                gradient.addColorStop(0, 'rgba(248, 81, 73, 0.25)');
-                gradient.addColorStop(1, 'rgba(248, 81, 73, 0.0)');
+                gradient.addColorStop(0, 'rgba(248, 113, 113, 0.28)');
+                gradient.addColorStop(1, 'rgba(248, 113, 113, 0.0)');
             }
-            new Chart(ctx, {
+            window.scaiCharts[canvasId] = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: dates,
                     datasets: [{
                         label: 'Portfolio (€)',
                         data: values,
-                        borderColor: lastVal >= initialCapital ? '#3fb950' : '#f85149',
+                        borderColor: lastVal >= initialCapital ? '#34d399' : '#f87171',
                         backgroundColor: gradient,
                         fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 5, borderWidth: 2,
                     }, {
                         label: 'Capital inicial',
                         data: Array(dates.length).fill(initialCapital),
-                        borderColor: '#30363d', borderDash: [5, 5], borderWidth: 1, pointRadius: 0, fill: false,
+                        borderColor: 'rgba(255, 255, 255, 0.14)', borderDash: [5, 5], borderWidth: 1, pointRadius: 0, fill: false,
                     }]
                 },
                 options: {
                     responsive: true,
                     interaction: { mode: 'index', intersect: false },
                     plugins: {
-                        legend: { display: true, labels: { color: '#8b949e', font: { size: 11 }, usePointStyle: true, pointStyle: 'circle' } },
+                        legend: { display: true, labels: { color: '#98a2b3', font: { size: 11 }, usePointStyle: true, pointStyle: 'circle' } },
                         tooltip: {
-                            backgroundColor: '#161b22', borderColor: '#30363d', borderWidth: 1,
+                            backgroundColor: '#0f131b', borderColor: 'rgba(255, 255, 255, 0.14)', borderWidth: 1,
                             titleColor: '#c9d1d9', bodyColor: '#e1e4e8', padding: 10,
                             callbacks: {
                                 label: function(c) {
@@ -634,8 +677,8 @@
                         }
                     },
                     scales: {
-                        x: { ticks: { color: '#484f58', maxTicksLimit: 10, font: { size: 11 } }, grid: { color: '#21262d' } },
-                        y: { ticks: { color: '#484f58', callback: v => '€' + v.toFixed(0), font: { size: 11 } }, grid: { color: '#21262d' } }
+                        x: { ticks: { color: '#5b6472', maxTicksLimit: 10, font: { size: 11 } }, grid: { color: 'rgba(255, 255, 255, 0.05)' } },
+                        y: { ticks: { color: '#5b6472', callback: v => '€' + v.toFixed(0), font: { size: 11 } }, grid: { color: 'rgba(255, 255, 255, 0.05)' } }
                     }
                 }
             });
@@ -790,6 +833,99 @@
                     });
                 });
         }
+
+        {% if static_mode and supabase_url and supabase_anon_key %}
+        // ── Phase 2b: live refresh from Supabase (anon key, RLS read-only) ──
+        // The Pages snapshot is static, but paper-trading state in Supabase keeps
+        // moving. Poll nav_history and push fresh equity/return into the page so a
+        // phone left open (or reopened) updates without a re-render.
+        (function () {
+            const SB_URL = {{ supabase_url | tojson }};
+            const SB_ANON = {{ supabase_anon_key | tojson }};
+            const INITIAL = {
+                {% if paper %}'baseline': {{ paper.initial_capital }},{% endif %}
+                {% if paper_adaptive %}'adaptive': {{ paper_adaptive.initial_capital }},{% endif %}
+            };
+            const STRATS = Object.keys(INITIAL);
+            const REFRESH_MS = 60000;
+
+            function sbGet(path) {
+                return fetch(SB_URL + '/rest/v1/' + path, {
+                    headers: { apikey: SB_ANON, Authorization: 'Bearer ' + SB_ANON },
+                    cache: 'no-store',
+                }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+            }
+
+            function signClass(el, positive) {
+                if (!el) return;
+                el.classList.remove('green', 'red');
+                el.classList.add(positive ? 'green' : 'red');
+            }
+
+            function updateStrategy(strat, nav) {
+                if (!nav || !nav.length) return;
+                const dates = nav.map(e => String(e.date).slice(0, 10));
+                const values = nav.map(e => Math.round(e.portfolio_value * 100) / 100);
+                const initial = INITIAL[strat];
+                const last = values[values.length - 1];
+                const ret = (last / initial - 1) * 100;
+                const profit = last - initial;
+                const up = ret >= 0;
+
+                const chart = window.scaiCharts['portfolioChart-' + strat];
+                if (chart) {
+                    chart.data.labels = dates;
+                    chart.data.datasets[0].data = values;
+                    chart.data.datasets[0].borderColor = up ? '#34d399' : '#f87171';
+                    if (chart.data.datasets[1]) {
+                        chart.data.datasets[1].data = new Array(dates.length).fill(initial);
+                    }
+                    chart.update('none');
+                }
+
+                const valEl = document.querySelector('[data-live="value-' + strat + '"]');
+                if (valEl) { valEl.textContent = '€' + last.toFixed(2); signClass(valEl, up); }
+                const retEl = document.querySelector('[data-live="return-' + strat + '"]');
+                if (retEl) { retEl.textContent = (ret >= 0 ? '+' : '') + ret.toFixed(1) + '%'; signClass(retEl, up); }
+                const profEl = document.querySelector('[data-live="profit-' + strat + '"]');
+                if (profEl) { profEl.textContent = (profit >= 0 ? '+' : '') + profit.toFixed(2) + '€ beneficio'; }
+                const badgeEl = document.querySelector('[data-live="badge-' + strat + '"]');
+                if (badgeEl) { badgeEl.textContent = (ret >= 0 ? '+' : '') + ret.toFixed(1) + '%'; signClass(badgeEl, up); }
+            }
+
+            function setLive(ok) {
+                const dot = document.getElementById('liveDot');
+                const label = document.getElementById('liveLabel');
+                if (dot) { dot.classList.toggle('ok', ok); dot.classList.toggle('stale', !ok); }
+                if (label) {
+                    const t = new Date().toLocaleTimeString('es-ES',
+                        { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    label.textContent = ok ? ('En vivo · ' + t) : 'Sin conexión · reintentando';
+                }
+            }
+
+            function refresh() {
+                sbGet('nav_history?select=strategy,date,portfolio_value&order=date.asc')
+                    .then(all => {
+                        const byStrat = {};
+                        for (const row of all) {
+                            if (!byStrat[row.strategy]) byStrat[row.strategy] = [];
+                            byStrat[row.strategy].push(row);
+                        }
+                        STRATS.forEach(s => updateStrategy(s, byStrat[s]));
+                        setLive(true);
+                    })
+                    .catch(() => setLive(false));
+            }
+
+            refresh();
+            setInterval(refresh, REFRESH_MS);
+            // Instant update when the tab/phone returns to the foreground.
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') refresh();
+            });
+        })();
+        {% endif %}
     </script>
 </body>
 </html>

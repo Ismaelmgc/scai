@@ -55,6 +55,16 @@ def is_configured() -> bool:
     return bool(_base_url() and _service_key())
 
 
+def public_config() -> tuple[str, str]:
+    """URL + anon (publishable) key for the client-side dashboard.
+
+    The anon key is safe to embed in the public Pages HTML: RLS grants it
+    read-only access. Returns ``("", "")`` when either is unset, so callers
+    can skip emitting the live-refresh script.
+    """
+    return _base_url(), _env("SUPABASE_ANON_KEY")
+
+
 def _headers(extra: dict[str, str] | None = None) -> dict[str, str]:
     key = _service_key()
     h = {

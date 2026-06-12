@@ -20,6 +20,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape  # noqa: E402
 
+from app.data import supabase_store  # noqa: E402
 from app.web import server  # noqa: E402
 
 
@@ -32,7 +33,10 @@ def main() -> None:
     signals = server._load_signal_history(server.PAPER_TRADING_DIR)
     signals_adaptive = server._load_signal_history(server.PAPER_TRADING_ADAPTIVE_DIR)
     data_info = server._get_data_freshness(ohlcv)
-    model_info = server._get_model_info()
+
+    # Anon (publishable) creds embedded so the Pages snapshot can poll Supabase
+    # live (Phase 2b). Empty when unconfigured → live-refresh script is skipped.
+    supabase_url, supabase_anon_key = supabase_store.public_config()
 
     tpl_dir = ROOT / "src" / "app" / "web" / "templates"
     env = Environment(
@@ -46,10 +50,15 @@ def main() -> None:
         signals=signals,
         signals_adaptive=signals_adaptive,
         data_info=data_info,
-        model_info=model_info,
         now=datetime.now().strftime("%Y-%m-%d %H:%M"),
         static_mode=True,
+        supabase_url=supabase_url,
+        supabase_anon_key=supabase_anon_key,
     )
+    if supabase_url and supabase_anon_key:
+        print("  Live refresh enabled (Supabase anon key embedded)")
+    else:
+        print("  Live refresh disabled (no Supabase anon config)")
 
     out_dir = ROOT / "site"
     out_dir.mkdir(exist_ok=True)
