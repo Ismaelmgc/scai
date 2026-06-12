@@ -742,9 +742,16 @@ def _get_missed_trading_days(ohlcv: pd.DataFrame, last_update: str, today: str) 
     missed day to correctly execute pending signals, check trailing stops,
     and count holding periods.
     """
-    ohlcv_dates = sorted(ohlcv["date"].dt.date.unique())
-    last_dt = date.fromisoformat(last_update) if last_update else ohlcv_dates[0]
     today_dt = date.fromisoformat(today)
+    # A freshly created/reset portfolio has no last_update. It must start
+    # trading TODAY — never replay the full OHLCV history (which begins in
+    # 2021). Replaying history into a "live" portfolio fabricated thousands
+    # of backtest trades dated 2021+ after the V4 reset (bug fixed 2026-06-12).
+    if not last_update:
+        return [today]
+
+    ohlcv_dates = sorted(ohlcv["date"].dt.date.unique())
+    last_dt = date.fromisoformat(last_update)
 
     # Return all trading days after last_update up to and including today
     missed = [str(d) for d in ohlcv_dates if last_dt < d <= today_dt]
