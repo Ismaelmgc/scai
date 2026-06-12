@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
-"""Monthly small-cap universe refresh.
+"""Monthly small-cap universe refresh (fixed-size replacement model).
 
-The daily pipeline only *reads* the universe — it never adds new names or
-re-checks delistings, so the tradable set slowly erodes and misses new
-entrants. This job, run monthly, keeps the universe current:
+The daily pipeline only *reads* the universe — it never re-checks delistings or
+adds new names, so the tradable set slowly erodes. This job, run monthly, keeps
+it current WITHOUT growing the active set (the active count drives the daily
+OHLCV API calls, which are rate-limited — especially on a free Polygon plan):
 
-  1. Reuses every existing ticker (delisted ones stay for anti-survivorship —
-     they are NEVER dropped; the OHLCV history must keep them).
-  2. Adds up to MAX_NEW_PER_REFRESH new entrants that are now in the
-     $50M-$2B band (via `discover_universe`, point-in-time market caps).
-  3. Refreshes the `active`/delisted flag of every ticker from Polygon's
-     current listing, so newly delisted names stop being downloaded/selected.
+  1. Reuses every existing ticker. Delisted ones are KEPT (marked inactive) for
+     anti-survivorship — they are never dropped, and being inactive they are not
+     downloaded daily, so they cost no API calls.
+  2. Refreshes the active/delisted flag of every ticker from Polygon's current
+     listing.
+  3. Refills the ACTIVE set back up to TARGET_ACTIVE by adding only as many new
+     entrants ($50M-$2B band) as were lost to delisting. The active set stays
+     ~constant, so daily API usage stays bounded.
 
 New entrants have no OHLCV yet; the next daily run backfills their full history
-automatically (download_ohlcv does a full pull for tickers with no bars).
+(download_ohlcv full-pulls tickers with no bars).
 
-Writes data/processed/smallcap_universe.parquet (+ refreshes the cached
-ticker catalog). Run via the monthly Actions workflow or:
+Writes data/processed/smallcap_universe.parquet. Run via the monthly Actions
+workflow or:
 
     PYTHONPATH=src python scripts/refresh_universe.py
 """
@@ -37,8 +40,10 @@ from app.config import get_settings  # noqa: E402
 from app.data.massive import MassiveClient, ReferenceAPI  # noqa: E402
 from app.data.store.parquet_store import ParquetStore  # noqa: E402
 
-# How many new tickers to add per monthly run (bounds API calls / runtime).
-MAX_NEW_PER_REFRESH = 100
+# Cap on the ACTIVE (daily-downloaded) set. This bounds daily API calls — lower
+# it if you move to a rate-limited / free plan. The active set is refilled up to
+# this number but never grown beyond it.
+TARGET_ACTIVE = 320
 TRAIN_START = "2021-01-01"  # delisted candidates eligible if they left after this
 
 
@@ -66,16 +71,24 @@ def main() -> None:
     client = MassiveClient(calls_per_minute=50)
     ref = ReferenceAPI(client)
 
-    # 1+2. Reuse existing + add up to MAX_NEW_PER_REFRESH new entrants.
-    target = n_before + MAX_NEW_PER_REFRESH
+    # Current active listing — drives both the flag refresh and the refill budget.
+    active_now = _current_active_tickers(ref)
+    print(f"  Polygon reports {len(active_now)} active CS/ADR tickers")
+
+    existing_tickers = set(existing["ticker"]) if existing is not None else set()
+    still_active = len(existing_tickers & active_now)
+    needed = max(0, TARGET_ACTIVE - still_active)
+    print(f"  {still_active} existing still active; refilling {needed} to reach "
+          f"TARGET_ACTIVE={TARGET_ACTIVE}")
+
+    # Add exactly `needed` new entrants (reusing existing, delisted included).
+    target_total = n_before + needed
     verified = discover_universe(
-        ref, cfg, max_tickers=target, store=store,
+        ref, cfg, max_tickers=target_total, store=store,
         existing_universe=existing, train_start=TRAIN_START,
     )
 
-    # 3. Refresh active/delisted flags from the current listing.
-    active_now = _current_active_tickers(ref)
-    print(f"  Polygon reports {len(active_now)} active CS/ADR tickers")
+    # Refresh active/delisted flags from the current listing.
     newly_delisted = 0
     for v in verified:
         was_active = bool(v.get("active", True))
@@ -90,8 +103,7 @@ def main() -> None:
 
     n_after = len(uni_df)
     active_after = int((uni_df["active"] == True).sum())  # noqa: E712
-    existing_set = set(existing["ticker"]) if existing is not None else set()
-    n_new = len([t for t in uni_df["ticker"] if t not in existing_set])
+    n_new = len([t for t in uni_df["ticker"] if t not in existing_tickers])
     print(
         f"Universe after:  {n_after} tickers ({active_after} active) | "
         f"+{n_new} new entrants | {newly_delisted} newly delisted"
