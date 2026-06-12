@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
 
 from app.data import supabase_store  # noqa: E402
+from app.data.free_sources import finnhub  # noqa: E402
 
 app = FastAPI(title="SCAI Dashboard")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -224,6 +225,9 @@ async def dashboard(request: Request):
             "signals_adaptive": signals_adaptive,
             "data_info": data_info,
             "now": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            # Live prices stream client-side via the Finnhub WebSocket (works on
+            # the static Pages snapshot too, since WebSockets bypass CORS).
+            "finnhub_token": finnhub.public_token(),
         },
     )
 
@@ -298,38 +302,3 @@ async def pipeline_status():
 
     _pipeline_proc = None
     return {"status": "finished", "exit_code": rc, "log_tail": tail}
-
-
-@app.get("/api/refresh-prices", response_class=JSONResponse)
-async def refresh_prices():
-    """Fetch live prices (15-min delay) from Polygon snapshots for open positions."""
-    from app.data.massive.client import MassiveClient
-    from app.data.massive.snapshots import SnapshotsAPI
-
-    # Gather tickers from both portfolios
-    tickers = set()
-    for pt_dir in [PAPER_TRADING_DIR, PAPER_TRADING_ADAPTIVE_DIR]:
-        port_path = pt_dir / "portfolio.json"
-        if port_path.exists():
-            with open(port_path) as f:
-                state = json.load(f)
-            for pos in state.get("positions", []):
-                tickers.add(pos["ticker"])
-
-    if not tickers:
-        return {"prices": {}, "timestamp": datetime.now().isoformat()}
-
-    client = MassiveClient()
-    snaps_api = SnapshotsAPI(client)
-    snapshots = snaps_api.get_full_market_snapshot(tickers=sorted(tickers))
-
-    prices = {}
-    for snap in snapshots:
-        price = snap.last_trade_price or snap.day_close
-        if price:
-            prices[snap.ticker] = {
-                "price": round(price, 4),
-                "change_pct": round(snap.change_percent, 2) if snap.change_percent else 0,
-            }
-
-    return {"prices": prices, "timestamp": datetime.now().isoformat()}

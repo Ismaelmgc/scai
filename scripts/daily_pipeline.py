@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
@@ -198,7 +199,12 @@ def update_ohlcv(cfg, predict_to: str) -> pd.DataFrame:
 
     print(f"  Updating OHLCV: {last_date} → {predict_to} ({len(tickers)} tickers)")
 
-    client = MassiveClient(calls_per_minute=50)
+    # Rate from MASSIVE_CALLS_PER_MINUTE (default 50, paid plan). When the
+    # Polygon plan is downgraded to free, set this env to 5 — no code change
+    # needed; the daily download just paces slower (~12s/ticker, job still
+    # completes within the Actions 6h limit).
+    cpm = int(os.environ.get("MASSIVE_CALLS_PER_MINUTE", "50"))
+    client = MassiveClient(calls_per_minute=cpm)
     aggs = AggregatesAPI(client)
 
     # Import download_ohlcv from main pipeline

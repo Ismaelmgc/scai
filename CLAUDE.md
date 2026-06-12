@@ -53,4 +53,9 @@ PYTHONPATH=src pytest tests/unit -v --tb=short
 ## Datos y entorno
 
 - Universo OHLCV ~1.000 tickers (activos + deslistados), ~830K filas, histórico ~2021→presente. Cifras exactas: consultar el parquet, no fiarse de números hardcodeados (envejecen).
-- `.env`: `SCAI_POLYGON_API_KEY` (plan de pago, `MASSIVE_CALLS_PER_MINUTE=50`), `SCAI_SEED=42`, `SCAI_ENV`.
+- `.env`: `SCAI_POLYGON_API_KEY` (plan de pago, `MASSIVE_CALLS_PER_MINUTE=50`), `SCAI_SEED=42`, `SCAI_ENV`, `FINNHUB_TOKEN` (precios en vivo, free).
+
+## Fuentes de datos (Polygon de pago → free)
+
+- **Barras diarias** (entrenamiento/señales): Polygon (`massive`). El histórico 5 años ya está en el parquet de git (con deslistados → anti-survivorship). Al **cancelar el plan de pago**, poner `MASSIVE_CALLS_PER_MINUTE=5` (env del step en `daily.yml`): el job diario NO falla, solo tarda ~1 h (1 llamada/ticker, espaciadas 12s) y la barra end-of-day está disponible tras el cierre. Sin cambios de código (lo lee `daily_pipeline.update_ohlcv`).
+- **Precio en vivo** (dashboard + monitor): **Finnhub free** (60 req/min, WebSocket real-time 50 símbolos). El dashboard hace streaming client-side vía `wss://ws.finnhub.io` (WebSocket no sufre CORS → token embebido en el HTML, como la anon key de Supabase). El monitor usa REST `/quote` server-side (`app.data.free_sources.finnhub`). Reemplaza los snapshots de Polygon (que en free no dan tiempo real). Requiere secret/`.env` `FINNHUB_TOKEN`.
