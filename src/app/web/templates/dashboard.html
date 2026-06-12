@@ -265,6 +265,12 @@
                 Datos: {{ data_info.latest_date }} · {{ data_info.n_tickers }} tickers
             </div>
             {% if static_mode %}
+            {% if supabase_url and supabase_anon_key %}
+            <div class="data-info" id="liveStatus" title="Se actualiza solo desde Supabase (anon, solo lectura)">
+                <span class="status-dot stale" id="liveDot"></span>
+                <span id="liveLabel">Conectando…</span>
+            </div>
+            {% endif %}
             <div class="data-info" title="Snapshot estático publicado en GitHub Pages">
                 Snapshot: {{ now }}
             </div>
@@ -303,13 +309,13 @@
             {% if paper %}
             <button class="strategy-tab active" onclick="switchTab('baseline')">
                 Baseline
-                <span class="tab-badge {% if paper.total_return >= 0 %}green{% else %}red{% endif %}">{{ "%+.1f"|format(paper.total_return) }}%</span>
+                <span class="tab-badge {% if paper.total_return >= 0 %}green{% else %}red{% endif %}" data-live="badge-baseline">{{ "%+.1f"|format(paper.total_return) }}%</span>
             </button>
             {% endif %}
             {% if paper_adaptive %}
             <button class="strategy-tab" onclick="switchTab('adaptive')">
                 Adaptive Stop
-                <span class="tab-badge {% if paper_adaptive.total_return >= 0 %}green{% else %}red{% endif %}">{{ "%+.1f"|format(paper_adaptive.total_return) }}%</span>
+                <span class="tab-badge {% if paper_adaptive.total_return >= 0 %}green{% else %}red{% endif %}" data-live="badge-adaptive">{{ "%+.1f"|format(paper_adaptive.total_return) }}%</span>
             </button>
             {% endif %}
         </div>
@@ -320,13 +326,13 @@
         <div class="kpi-grid">
             <div class="kpi-card">
                 <div class="label">Valor Portfolio</div>
-                <div class="value {% if p.total_return >= 0 %}green{% else %}red{% endif %}">€{{ "%.2f"|format(p.total_value) }}</div>
+                <div class="value {% if p.total_return >= 0 %}green{% else %}red{% endif %}" data-live="value-{{ strat_id }}">€{{ "%.2f"|format(p.total_value) }}</div>
                 <div class="detail">Capital inicial: €{{ "%.0f"|format(p.initial_capital) }}</div>
             </div>
             <div class="kpi-card">
                 <div class="label">Retorno Total</div>
-                <div class="value {% if p.total_return >= 0 %}green{% else %}red{% endif %}">{{ "%+.1f"|format(p.total_return) }}%</div>
-                <div class="detail">{{ "%+.2f"|format(p.total_value - p.initial_capital) }}€ beneficio</div>
+                <div class="value {% if p.total_return >= 0 %}green{% else %}red{% endif %}" data-live="return-{{ strat_id }}">{{ "%+.1f"|format(p.total_return) }}%</div>
+                <div class="detail" data-live="profit-{{ strat_id }}">{{ "%+.2f"|format(p.total_value - p.initial_capital) }}€ beneficio</div>
             </div>
             <div class="kpi-card">
                 <div class="label">Cash Disponible</div>
@@ -584,7 +590,9 @@
     </div>
 
     <script>
-        // Portfolio charts — one per strategy
+        // Portfolio charts — one per strategy. Instances kept so the live
+        // refresh (Phase 2b) can push new Supabase data into them.
+        window.scaiCharts = {};
         function createPortfolioChart(canvasId, dates, values, initialCapital) {
             const el = document.getElementById(canvasId);
             if (!el) return;
@@ -598,7 +606,7 @@
                 gradient.addColorStop(0, 'rgba(248, 81, 73, 0.25)');
                 gradient.addColorStop(1, 'rgba(248, 81, 73, 0.0)');
             }
-            new Chart(ctx, {
+            window.scaiCharts[canvasId] = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: dates,
@@ -790,6 +798,99 @@
                     });
                 });
         }
+
+        {% if static_mode and supabase_url and supabase_anon_key %}
+        // ── Phase 2b: live refresh from Supabase (anon key, RLS read-only) ──
+        // The Pages snapshot is static, but paper-trading state in Supabase keeps
+        // moving. Poll nav_history and push fresh equity/return into the page so a
+        // phone left open (or reopened) updates without a re-render.
+        (function () {
+            const SB_URL = {{ supabase_url | tojson }};
+            const SB_ANON = {{ supabase_anon_key | tojson }};
+            const INITIAL = {
+                {% if paper %}'baseline': {{ paper.initial_capital }},{% endif %}
+                {% if paper_adaptive %}'adaptive': {{ paper_adaptive.initial_capital }},{% endif %}
+            };
+            const STRATS = Object.keys(INITIAL);
+            const REFRESH_MS = 60000;
+
+            function sbGet(path) {
+                return fetch(SB_URL + '/rest/v1/' + path, {
+                    headers: { apikey: SB_ANON, Authorization: 'Bearer ' + SB_ANON },
+                    cache: 'no-store',
+                }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+            }
+
+            function signClass(el, positive) {
+                if (!el) return;
+                el.classList.remove('green', 'red');
+                el.classList.add(positive ? 'green' : 'red');
+            }
+
+            function updateStrategy(strat, nav) {
+                if (!nav || !nav.length) return;
+                const dates = nav.map(e => String(e.date).slice(0, 10));
+                const values = nav.map(e => Math.round(e.portfolio_value * 100) / 100);
+                const initial = INITIAL[strat];
+                const last = values[values.length - 1];
+                const ret = (last / initial - 1) * 100;
+                const profit = last - initial;
+                const up = ret >= 0;
+
+                const chart = window.scaiCharts['portfolioChart-' + strat];
+                if (chart) {
+                    chart.data.labels = dates;
+                    chart.data.datasets[0].data = values;
+                    chart.data.datasets[0].borderColor = up ? '#3fb950' : '#f85149';
+                    if (chart.data.datasets[1]) {
+                        chart.data.datasets[1].data = new Array(dates.length).fill(initial);
+                    }
+                    chart.update('none');
+                }
+
+                const valEl = document.querySelector('[data-live="value-' + strat + '"]');
+                if (valEl) { valEl.textContent = '€' + last.toFixed(2); signClass(valEl, up); }
+                const retEl = document.querySelector('[data-live="return-' + strat + '"]');
+                if (retEl) { retEl.textContent = (ret >= 0 ? '+' : '') + ret.toFixed(1) + '%'; signClass(retEl, up); }
+                const profEl = document.querySelector('[data-live="profit-' + strat + '"]');
+                if (profEl) { profEl.textContent = (profit >= 0 ? '+' : '') + profit.toFixed(2) + '€ beneficio'; }
+                const badgeEl = document.querySelector('[data-live="badge-' + strat + '"]');
+                if (badgeEl) { badgeEl.textContent = (ret >= 0 ? '+' : '') + ret.toFixed(1) + '%'; signClass(badgeEl, up); }
+            }
+
+            function setLive(ok) {
+                const dot = document.getElementById('liveDot');
+                const label = document.getElementById('liveLabel');
+                if (dot) { dot.classList.toggle('ok', ok); dot.classList.toggle('stale', !ok); }
+                if (label) {
+                    const t = new Date().toLocaleTimeString('es-ES',
+                        { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    label.textContent = ok ? ('En vivo · ' + t) : 'Sin conexión · reintentando';
+                }
+            }
+
+            function refresh() {
+                sbGet('nav_history?select=strategy,date,portfolio_value&order=date.asc')
+                    .then(all => {
+                        const byStrat = {};
+                        for (const row of all) {
+                            if (!byStrat[row.strategy]) byStrat[row.strategy] = [];
+                            byStrat[row.strategy].push(row);
+                        }
+                        STRATS.forEach(s => updateStrategy(s, byStrat[s]));
+                        setLive(true);
+                    })
+                    .catch(() => setLive(false));
+            }
+
+            refresh();
+            setInterval(refresh, REFRESH_MS);
+            // Instant update when the tab/phone returns to the foreground.
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') refresh();
+            });
+        })();
+        {% endif %}
     </script>
 </body>
 </html>
