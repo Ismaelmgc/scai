@@ -64,7 +64,9 @@ jobs:
           PYTHONPATH: src
         run: python scripts/render_static_dashboard.py
 
-      - name: Commit updated paper-trading state
+      - name: Commit updated market data & model
+        # Paper-trading state lives in Supabase (gitignored). This only persists
+        # the OHLCV/SPY/EDGAR caches and the retrained model across runs.
         run: |
           git config user.name "scai-bot"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -72,7 +74,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No data changes to commit."
           else
-            git commit -m "daily: update paper-trading state [skip ci]"
+            git commit -m "daily: update market data & model [skip ci]"
             git push
           fi
 
