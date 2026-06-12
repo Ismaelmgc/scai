@@ -62,6 +62,10 @@ jobs:
       - name: Render static dashboard
         env:
           PYTHONPATH: src
+          # Anon (publishable) key + URL embedded in the Pages snapshot so it can
+          # poll Supabase live (Phase 2b). RLS keeps the anon key read-only.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: python scripts/render_static_dashboard.py
 
       - name: Commit updated market data & model
