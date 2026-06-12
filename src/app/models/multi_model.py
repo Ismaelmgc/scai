@@ -195,10 +195,10 @@ class MultiModelEnsemble:
         tscv = TimeSeriesSplit(n_splits=n_splits)
         oof_meta = np.zeros((len(X_train), len(self._models)))
 
-        for fold_idx, (tr_idx, val_idx) in enumerate(tscv.split(X_train)):
+        for _fold_idx, (tr_idx, val_idx) in enumerate(tscv.split(X_train)):
             X_f_tr, y_f_tr = X_train[tr_idx], y_train[tr_idx]
             X_f_val = X_train[val_idx]
-            for col_idx, (name, model) in enumerate(self._models.items()):
+            for col_idx, (name, _model) in enumerate(self._models.items()):
                 clone = self._clone_model(name)
                 clone.fit(X_f_tr, y_f_tr)
                 oof_meta[val_idx, col_idx] = self._get_preds(clone, X_f_val)
@@ -249,7 +249,8 @@ class MultiModelEnsemble:
 
     # ── Predict ─────────────────────────────────────────────
     def predict_raw(self, X: np.ndarray) -> np.ndarray:
-        """Predict using ensemble: Ridge meta-learner for regression, simple average for classification."""
+        """Predict using the ensemble: Ridge meta-learner for regression,
+        simple average for classification."""
         base_preds = np.column_stack([
             self._get_preds(m, X) for m in self._models.values()
         ])
@@ -270,7 +271,7 @@ class MultiModelEnsemble:
     def feature_importance(self) -> pd.DataFrame:
         """Average feature importance across all base models."""
         all_imp = []
-        for name, m in self._models.items():
+        for _name, m in self._models.items():
             if hasattr(m, "feature_importances_"):
                 imp = m.feature_importances_
             elif hasattr(m, "get_feature_importance"):
@@ -280,7 +281,8 @@ class MultiModelEnsemble:
             if len(imp) == len(self.feature_cols):
                 all_imp.append(imp / (imp.sum() + 1e-8))
         if not all_imp:
-            return pd.DataFrame({"feature": self.feature_cols, "importance": 0, "importance_pct": 0})
+            return pd.DataFrame(
+                {"feature": self.feature_cols, "importance": 0, "importance_pct": 0})
         avg = np.mean(all_imp, axis=0)
         fi = pd.DataFrame({"feature": self.feature_cols, "importance": avg})
         fi = fi.sort_values("importance", ascending=False)
@@ -291,7 +293,7 @@ class MultiModelEnsemble:
     def _compute_metrics(self, preds, y_val):
         metrics: dict[str, float] = {}
         if self.task == "classification":
-            from sklearn.metrics import roc_auc_score, log_loss
+            from sklearn.metrics import log_loss, roc_auc_score
             try:
                 metrics["val_auc"] = float(roc_auc_score(y_val, preds))
                 metrics["val_logloss"] = float(log_loss(y_val, np.clip(preds, 1e-7, 1 - 1e-7)))

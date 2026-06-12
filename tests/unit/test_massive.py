@@ -5,7 +5,7 @@ All tests run without an API key using httpx_mock or monkeypatched responses.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,13 +13,10 @@ import pytest
 from app.data.massive.client import MassiveClient, RateLimiter
 from app.data.massive.schemas import (
     DailyBar,
-    DividendRecord,
     QuoteRecord,
     SnapshotTicker,
     SplitRecord,
-    TickerDetail,
     TickerRecord,
-    TradeRecord,
 )
 
 
@@ -69,10 +66,10 @@ class TestMassiveClient:
         assert client._base_url == "https://api.polygon.io"
 
     def test_init_no_key_raises(self):
-        with patch.dict("os.environ", {}, clear=True):
-            with patch("app.data.massive.client.MassiveClient._load_from_settings", return_value=""):
-                with pytest.raises(ValueError, match="API key required"):
-                    MassiveClient(api_key="")
+        with patch.dict("os.environ", {}, clear=True), \
+             patch("app.data.massive.client.MassiveClient._load_from_settings", return_value=""), \
+             pytest.raises(ValueError, match="API key required"):
+            MassiveClient(api_key="")
 
     def test_request_count_increments(self, client, mock_response):
         with patch.object(client._client, "get", return_value=mock_response({"results": []})):
@@ -163,8 +160,10 @@ class TestReferenceAPI:
         api = ReferenceAPI(client)
         fake_resp = mock_response({
             "results": [
-                {"ticker": "SOFI", "name": "SoFi", "active": True, "market": "stocks", "locale": "us"},
-                {"ticker": "HOOD", "name": "Robinhood", "active": True, "market": "stocks", "locale": "us"},
+                {"ticker": "SOFI", "name": "SoFi", "active": True,
+                 "market": "stocks", "locale": "us"},
+                {"ticker": "HOOD", "name": "Robinhood", "active": True,
+                 "market": "stocks", "locale": "us"},
             ]
         })
         with patch.object(client._client, "get", return_value=fake_resp):
@@ -201,12 +200,15 @@ class TestAggregatesAPI:
         api = AggregatesAPI(client)
         fake_resp = mock_response({
             "results": [
-                {"o": 10.0, "h": 11.0, "l": 9.5, "c": 10.5, "v": 500000, "vw": 10.3, "n": 1000, "t": 1705363200000},
-                {"o": 10.5, "h": 12.0, "l": 10.0, "c": 11.5, "v": 600000, "vw": 11.0, "n": 1200, "t": 1705449600000},
+                {"o": 10.0, "h": 11.0, "l": 9.5, "c": 10.5, "v": 500000,
+                 "vw": 10.3, "n": 1000, "t": 1705363200000},
+                {"o": 10.5, "h": 12.0, "l": 10.0, "c": 11.5, "v": 600000,
+                 "vw": 11.0, "n": 1200, "t": 1705449600000},
             ]
         })
         with patch.object(client._client, "get", return_value=fake_resp):
-            bars = api.get_custom_bars("SOFI", from_date=date(2024, 1, 1), to_date=date(2024, 1, 31))
+            bars = api.get_custom_bars(
+                "SOFI", from_date=date(2024, 1, 1), to_date=date(2024, 1, 31))
             assert len(bars) == 2
             assert bars[0].vwap == 10.3
             assert bars[0].transactions == 1000
@@ -217,8 +219,10 @@ class TestAggregatesAPI:
         api = AggregatesAPI(client)
         fake_resp = mock_response({
             "results": [
-                {"T": "SOFI", "o": 10.0, "h": 11.0, "l": 9.5, "c": 10.5, "v": 500000, "vw": 10.3, "n": 1000},
-                {"T": "HOOD", "o": 20.0, "h": 21.0, "l": 19.0, "c": 20.5, "v": 800000, "vw": 20.1, "n": 2000},
+                {"T": "SOFI", "o": 10.0, "h": 11.0, "l": 9.5, "c": 10.5,
+                 "v": 500000, "vw": 10.3, "n": 1000},
+                {"T": "HOOD", "o": 20.0, "h": 21.0, "l": 19.0, "c": 20.5,
+                 "v": 800000, "vw": 20.1, "n": 2000},
             ]
         })
         with patch.object(client._client, "get", return_value=fake_resp):
@@ -250,7 +254,8 @@ class TestCorporateActionsAPI:
         api = CorporateActionsAPI(client)
         fake_resp = mock_response({
             "results": [
-                {"ticker": "AAPL", "ex_dividend_date": "2024-02-09", "cash_amount": 0.24, "frequency": 4},
+                {"ticker": "AAPL", "ex_dividend_date": "2024-02-09",
+                 "cash_amount": 0.24, "frequency": 4},
             ]
         })
         with patch.object(client._client, "get", return_value=fake_resp):

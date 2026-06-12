@@ -2,7 +2,7 @@
 import pandas as pd
 import pytest
 
-from app.features.tradability import tradable_mask, is_stale, MIN_PRICE, MIN_ADV_USD
+from app.features.tradability import MIN_ADV_USD, MIN_PRICE, is_stale, tradable_mask
 
 
 def _df(**cols):

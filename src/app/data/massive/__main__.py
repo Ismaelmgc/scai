@@ -3,7 +3,8 @@
 Usage:
     python -m app.data.massive audit
     python -m app.data.massive backfill-reference
-    python -m app.data.massive backfill-daily-bars --start 2020-01-01 --end 2026-01-01 --adjusted true
+    python -m app.data.massive backfill-daily-bars \
+        --start 2020-01-01 --end 2026-01-01 --adjusted true
     python -m app.data.massive backfill-corporate-actions --start 2010-01-01
     python -m app.data.massive update-daily
     python -m app.data.massive update-snapshots
@@ -94,7 +95,8 @@ def main() -> None:
     sub.add_parser("audit", help="Show current data inventory")
 
     # backfill-reference
-    p = sub.add_parser("backfill-reference", help="Backfill reference data (tickers, exchanges, etc.)")
+    p = sub.add_parser("backfill-reference",
+                       help="Backfill reference data (tickers, exchanges, etc.)")
     p.add_argument("--start", type=_parse_date, default=None)
     p.add_argument("--end", type=_parse_date, default=None)
 
@@ -111,7 +113,8 @@ def main() -> None:
     p.add_argument("--end", type=_parse_date, default=None)
 
     # update-daily
-    sub.add_parser("update-daily", help="Incremental daily update (bars + snapshots + corporate actions)")
+    sub.add_parser("update-daily",
+                   help="Incremental daily update (bars + snapshots + corporate actions)")
 
     # update-snapshots
     sub.add_parser("update-snapshots", help="Fetch current market snapshots")

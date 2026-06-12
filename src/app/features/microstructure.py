@@ -101,7 +101,8 @@ def compute_microstructure_features(
     gamma_cs = log_hl_2d ** 2
     alpha_cs = (np.sqrt(2 * beta_cs) - np.sqrt(beta_cs)) / (3 - 2 * np.sqrt(2))
     alpha_cs = alpha_cs - np.sqrt(gamma_cs / (3 - 2 * np.sqrt(2)))
-    df["cs_spread"] = 2 * (np.exp(alpha_cs.clip(lower=0)) - 1) / (1 + np.exp(alpha_cs.clip(lower=0)))
+    df["cs_spread"] = (2 * (np.exp(alpha_cs.clip(lower=0)) - 1)
+                       / (1 + np.exp(alpha_cs.clip(lower=0))))
     df["cs_spread"] = df["cs_spread"].clip(lower=0, upper=0.2)  # cap at 20%
 
     for w in [20]:

@@ -67,8 +67,6 @@ def compute_meta_features(
     past["error"] = past["v2_score"] - past["actual_ret_20d"]
     past = past.sort_values("signal_date")
 
-    results = {}
-
     # ── 1. Per-ticker rolling error (last 5 signals for that ticker) ──
     ticker_errors = {}
     for ticker, grp in past.groupby("ticker"):
@@ -98,14 +96,9 @@ def compute_meta_features(
     cutoff_30d = outcome_cutoff - pd.Timedelta(days=45)  # ~30 trading days
     recent_30d = past[past["signal_date"] >= cutoff_30d]
     # Consider only top-ranked signals (rank < 8)
-    if "rank" in recent_30d.columns:
-        top_signals = recent_30d[recent_30d["rank"] < 8]
-    else:
-        top_signals = recent_30d
-    if len(top_signals) > 0:
-        hit_rate = (top_signals["actual_ret_20d"] > 0).mean()
-    else:
-        hit_rate = np.nan
+    top_signals = (recent_30d[recent_30d["rank"] < 8]
+                   if "rank" in recent_30d.columns else recent_30d)
+    hit_rate = (top_signals["actual_ret_20d"] > 0).mean() if len(top_signals) > 0 else np.nan
     ticker_df["model_hit_rate_30d"] = hit_rate  # same for all tickers (global)
 
     # ── 4. Rolling IC (rank correlation, last 20 days) ──
@@ -120,10 +113,7 @@ def compute_meta_features(
     ticker_df["model_ic_rolling_20d"] = ic_val  # same for all tickers (global)
 
     # ── 5. Error volatility (last 20 days) ──
-    if len(recent_ic) >= 5:
-        error_vol = recent_ic["error"].std()
-    else:
-        error_vol = np.nan
+    error_vol = recent_ic["error"].std() if len(recent_ic) >= 5 else np.nan
     ticker_df["model_error_vol_20d"] = error_vol  # same for all tickers (global)
 
     log.info("meta_features_computed",

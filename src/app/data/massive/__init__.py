@@ -14,16 +14,16 @@ covering all major endpoints relevant to US small-cap equity research:
 - Flat Files (bulk historical data)
 """
 
-from app.data.massive.client import MassiveClient
-from app.data.massive.reference import ReferenceAPI
 from app.data.massive.aggregates import AggregatesAPI
-from app.data.massive.snapshots import SnapshotsAPI
-from app.data.massive.trades import TradesAPI
-from app.data.massive.quotes import QuotesAPI
+from app.data.massive.client import MassiveClient
 from app.data.massive.corporate_actions import CorporateActionsAPI
 from app.data.massive.financials import FinancialsAPI
-from app.data.massive.news import NewsAPI
 from app.data.massive.flat_files import FlatFilesAPI
+from app.data.massive.news import NewsAPI
+from app.data.massive.quotes import QuotesAPI
+from app.data.massive.reference import ReferenceAPI
+from app.data.massive.snapshots import SnapshotsAPI
+from app.data.massive.trades import TradesAPI
 
 __all__ = [
     "MassiveClient",

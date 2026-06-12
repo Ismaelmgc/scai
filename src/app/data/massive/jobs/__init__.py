@@ -6,15 +6,14 @@ All jobs respect rate limits and persist metadata for auditability.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import pandas as pd
 
 from app.config import get_settings
-from app.data.massive.client import MassiveClient
 from app.data.massive.aggregates import AggregatesAPI
+from app.data.massive.client import MassiveClient
 from app.data.massive.corporate_actions import CorporateActionsAPI
 from app.data.massive.reference import ReferenceAPI
 from app.data.massive.snapshots import SnapshotsAPI
@@ -81,7 +80,7 @@ def backfill_reference(
 
     if all_tickers:
         df = pd.DataFrame([t.model_dump() for t in all_tickers])
-        df["ingested_at"] = datetime.now(timezone.utc)
+        df["ingested_at"] = datetime.now(UTC)
         store.upsert("massive_tickers", df, key_cols=["ticker"])
         counts["tickers"] = len(all_tickers)
 
@@ -122,7 +121,7 @@ def backfill_daily_bars(
                 bars = aggs.get_grouped_daily(current, adjusted=adjusted)
                 if bars:
                     df = pd.DataFrame([b.model_dump() for b in bars])
-                    df["ingested_at"] = datetime.now(timezone.utc)
+                    df["ingested_at"] = datetime.now(UTC)
                     df["adjusted"] = adjusted
                     store.upsert("massive_daily_bars", df, key_cols=["ticker", "trading_date"])
                     total_bars += len(bars)
@@ -148,7 +147,7 @@ def backfill_daily_bars(
             )
             if bars:
                 df = pd.DataFrame([b.model_dump() for b in bars])
-                df["ingested_at"] = datetime.now(timezone.utc)
+                df["ingested_at"] = datetime.now(UTC)
                 store.upsert("massive_daily_bars", df, key_cols=["ticker", "trading_date"])
                 total_bars += len(bars)
 
@@ -174,14 +173,14 @@ def backfill_corporate_actions(
     splits = ca.get_splits(execution_date_gte=start_date, execution_date_lte=end)
     if splits:
         df = pd.DataFrame([s.model_dump() for s in splits])
-        df["ingested_at"] = datetime.now(timezone.utc)
+        df["ingested_at"] = datetime.now(UTC)
         store.upsert("massive_splits", df, key_cols=["ticker", "execution_date"])
 
     # Dividends
     dividends = ca.get_dividends(ex_dividend_date_gte=start_date, ex_dividend_date_lte=end)
     if dividends:
         df = pd.DataFrame([d.model_dump() for d in dividends])
-        df["ingested_at"] = datetime.now(timezone.utc)
+        df["ingested_at"] = datetime.now(UTC)
         store.upsert("massive_dividends", df, key_cols=["ticker", "ex_dividend_date"])
 
     client.close()
@@ -215,7 +214,7 @@ def update_daily() -> dict[str, Any]:
     bars = aggs.get_grouped_daily(yesterday, adjusted=True)
     if bars:
         df = pd.DataFrame([b.model_dump() for b in bars])
-        df["ingested_at"] = datetime.now(timezone.utc)
+        df["ingested_at"] = datetime.now(UTC)
         df["adjusted"] = True
         store.upsert("massive_daily_bars", df, key_cols=["ticker", "trading_date"])
         results["daily_bars"] = len(bars)
@@ -224,7 +223,7 @@ def update_daily() -> dict[str, Any]:
     snapshots = snaps.get_full_market_snapshot()
     if snapshots:
         df = pd.DataFrame([s.model_dump() for s in snapshots])
-        df["ingested_at"] = datetime.now(timezone.utc)
+        df["ingested_at"] = datetime.now(UTC)
         df["snapshot_date"] = date.today()
         store.write("massive_snapshots", df)
         results["snapshots"] = len(snapshots)
@@ -234,14 +233,14 @@ def update_daily() -> dict[str, Any]:
     splits = ca.get_splits(execution_date_gte=week_ago)
     if splits:
         df = pd.DataFrame([s.model_dump() for s in splits])
-        df["ingested_at"] = datetime.now(timezone.utc)
+        df["ingested_at"] = datetime.now(UTC)
         store.upsert("massive_splits", df, key_cols=["ticker", "execution_date"])
         results["new_splits"] = len(splits)
 
     dividends = ca.get_dividends(ex_dividend_date_gte=week_ago)
     if dividends:
         df = pd.DataFrame([d.model_dump() for d in dividends])
-        df["ingested_at"] = datetime.now(timezone.utc)
+        df["ingested_at"] = datetime.now(UTC)
         store.upsert("massive_dividends", df, key_cols=["ticker", "ex_dividend_date"])
         results["new_dividends"] = len(dividends)
 
@@ -260,7 +259,7 @@ def update_snapshots() -> int:
     snapshots = snaps.get_full_market_snapshot()
     if snapshots:
         df = pd.DataFrame([s.model_dump() for s in snapshots])
-        df["ingested_at"] = datetime.now(timezone.utc)
+        df["ingested_at"] = datetime.now(UTC)
         df["snapshot_date"] = date.today()
         store.write("massive_snapshots", df)
 

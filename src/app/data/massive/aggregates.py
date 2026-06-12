@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Any
 
 import pytz
@@ -18,7 +18,7 @@ _ET = pytz.timezone("America/New_York")
 
 def _ts_to_trading_date(timestamp_ms: int) -> date:
     """Convert Unix timestamp (ms) to Eastern Time trading date."""
-    dt_utc = datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc)
+    dt_utc = datetime.fromtimestamp(timestamp_ms / 1000, tz=UTC)
     dt_et = dt_utc.astimezone(_ET)
     return dt_et.date()
 
@@ -55,8 +55,10 @@ class AggregatesAPI:
 
         Returns list of DailyBar (also used for intraday, trading_date derived from timestamp).
         """
-        from_str = from_date.isoformat() if isinstance(from_date, date) else (from_date or "2010-01-01")
-        to_str = to_date.isoformat() if isinstance(to_date, date) else (to_date or date.today().isoformat())
+        from_str = (from_date.isoformat() if isinstance(from_date, date)
+                    else (from_date or "2010-01-01"))
+        to_str = (to_date.isoformat() if isinstance(to_date, date)
+                  else (to_date or date.today().isoformat()))
 
         path = f"/v2/aggs/ticker/{ticker}/range/{multiplier}/{timespan}/{from_str}/{to_str}"
         params: dict[str, Any] = {

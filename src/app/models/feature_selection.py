@@ -199,7 +199,8 @@ def select_features(
             df, pruned, label_col, task=task, top_k=top_k,
             random_state=random_state,
         )
-        print(f"  ✓ Feature selection: {len(feature_cols)} → {len(selected)} features (gain importance)", flush=True)
+        print(f"  ✓ Feature selection: {len(feature_cols)} → {len(selected)} features "
+              f"(gain importance)", flush=True)
     else:
         selected = select_by_mutual_info(
             df, pruned, label_col, task=task, top_k=top_k,

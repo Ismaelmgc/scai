@@ -100,7 +100,8 @@ def compute_momentum_features(
     tp_grouped = typical_price.groupby(df["ticker"])
     tp_mean = tp_grouped.transform(lambda x: x.rolling(20, min_periods=10).mean())
     tp_mad = tp_grouped.transform(
-        lambda x: x.rolling(20, min_periods=10).apply(lambda w: np.mean(np.abs(w - w.mean())), raw=True)
+        lambda x: x.rolling(20, min_periods=10).apply(
+            lambda w: np.mean(np.abs(w - w.mean())), raw=True)
     )
     df["cci_20"] = (typical_price - tp_mean) / (0.015 * tp_mad.replace(0, np.nan))
 
@@ -137,8 +138,10 @@ def compute_momentum_features(
     df["minus_di_14"] = minus_di
 
     # ── Donchian Channels ──────────────────────────────────
-    df["donchian_upper_20"] = grouped["high"].transform(lambda x: x.rolling(20, min_periods=10).max())
-    df["donchian_lower_20"] = grouped["low"].transform(lambda x: x.rolling(20, min_periods=10).min())
+    df["donchian_upper_20"] = grouped["high"].transform(
+        lambda x: x.rolling(20, min_periods=10).max())
+    df["donchian_lower_20"] = grouped["low"].transform(
+        lambda x: x.rolling(20, min_periods=10).min())
     don_range = (df["donchian_upper_20"] - df["donchian_lower_20"]).replace(0, np.nan)
     df["donchian_position"] = (df["close"] - df["donchian_lower_20"]) / don_range
 
@@ -151,7 +154,8 @@ def compute_momentum_features(
     low_26 = grouped["low"].transform(lambda x: x.rolling(26, min_periods=13).min())
     df["ichi_kijun"] = (high_26 + low_26) / 2
 
-    df["ichi_tenkan_kijun"] = (df["ichi_tenkan"] - df["ichi_kijun"]) / df["close"].replace(0, np.nan)
+    df["ichi_tenkan_kijun"] = ((df["ichi_tenkan"] - df["ichi_kijun"])
+                               / df["close"].replace(0, np.nan))
     senkou_a = (df["ichi_tenkan"] + df["ichi_kijun"]) / 2
     senkou_b_high = grouped["high"].transform(lambda x: x.rolling(52, min_periods=26).max())
     senkou_b_low = grouped["low"].transform(lambda x: x.rolling(52, min_periods=26).min())

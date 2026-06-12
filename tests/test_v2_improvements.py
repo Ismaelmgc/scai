@@ -1,21 +1,25 @@
 """Quick smoke test for all v2 improvements."""
 import sys
+
 sys.path.insert(0, "src")
 
 # 1. Test all new modules import cleanly
-from app.models.feature_selection import select_features, select_by_mutual_info, prune_correlated
+from app.models.feature_selection import select_features
+
 print("OK feature_selection module")
 
-from app.features.microstructure import compute_microstructure_features
 print("OK microstructure module")
 
-from app.features.sector import sic_to_sector, assign_sectors, compute_sector_features
+from app.features.sector import sic_to_sector
+
 print("OK sector module")
 
 from app.models.tabular import TabularModel
+
 print("OK tabular module (with stacking, calibration, tuning)")
 
 from app.features.pipeline import build_feature_matrix
+
 print("OK pipeline module (with sector + microstructure + risk-adjusted)")
 
 # 2. Test sector mapping
@@ -89,7 +93,8 @@ assert len(micro_cols) >= 3, f"Expected microstructure features, got: {micro_col
 print(f"OK microstructure features ({len(micro_cols)} cols)")
 
 # Check sector features
-sec_cols = [c for c in features.columns if "sector_ret" in c or "ret_vs_sector" in c or "sector_breadth" in c]
+sec_cols = [c for c in features.columns
+            if "sector_ret" in c or "ret_vs_sector" in c or "sector_breadth" in c]
 assert len(sec_cols) >= 3, f"Expected sector features, got: {sec_cols}"
 print(f"OK sector features ({len(sec_cols)} cols)")
 
@@ -106,9 +111,11 @@ cls = TabularModel(
     use_calibration=True,
 )
 import warnings
+
 warnings.filterwarnings("ignore")
 metrics = cls.train(train_data)
-print(f"OK classification trained - AUC: {metrics.get('val_auc', 0):.4f}, features: {metrics.get('n_features', 0)}")
+print(f"OK classification trained - AUC: {metrics.get('val_auc', 0):.4f}, "
+      f"features: {metrics.get('n_features', 0)}")
 
 # Test prediction
 pred = cls.predict(train_data.head(10))
@@ -122,9 +129,9 @@ assert len(fi) > 0
 print(f"OK feature importance ({len(fi)} features)")
 
 # 6. Test feature selection standalone
-from app.models.feature_selection import select_features
 feat_cols = [c for c in train_data.select_dtypes(include=[np.number]).columns
-             if not c.startswith("fwd_ret_") and c not in ("ticker", "date", "open", "high", "low", "close", "volume")]
+             if not c.startswith("fwd_ret_")
+             and c not in ("ticker", "date", "open", "high", "low", "close", "volume")]
 selected = select_features(train_data, feat_cols, "fwd_ret_5d_positive", top_k=15)
 assert len(selected) <= 15
 print(f"OK feature selection: {len(feat_cols)} -> {len(selected)}")

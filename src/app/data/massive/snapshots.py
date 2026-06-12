@@ -89,7 +89,7 @@ class SnapshotsAPI:
         return snapshots
 
     def get_single_ticker_snapshot(self, ticker: str) -> SnapshotTicker | None:
-        """Fetch single ticker snapshot from /v2/snapshot/locale/us/markets/stocks/tickers/{ticker}."""
+        """Fetch a single ticker snapshot from /v2/snapshot/.../stocks/tickers/{ticker}."""
         data = self._c.get(
             f"/v2/snapshot/locale/us/markets/stocks/tickers/{ticker}"
         )

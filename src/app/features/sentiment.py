@@ -15,10 +15,6 @@ IMPORTANT: Always use published_utc <= decision_date to avoid look-ahead bias.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
-from typing import Any
-
-import numpy as np
 import pandas as pd
 
 from app.utils import get_logger
@@ -199,7 +195,8 @@ def build_sentiment_features(
         merged["ticker"] = ticker
         total_sent = merged["pos"] + merged["neg"]
         merged["news_count_7d"] = merged["count"].astype(int)
-        merged["sentiment_score_7d"] = ((merged["pos"] - merged["neg"]) / total_sent.clip(lower=1)).round(4)
+        merged["sentiment_score_7d"] = (
+            (merged["pos"] - merged["neg"]) / total_sent.clip(lower=1)).round(4)
         merged["sentiment_pos_ratio_7d"] = (merged["pos"] / merged["count"].clip(lower=1)).round(4)
         merged["sentiment_neg_ratio_7d"] = (merged["neg"] / merged["count"].clip(lower=1)).round(4)
         merged["has_news_7d"] = (merged["count"] > 0).astype(int)

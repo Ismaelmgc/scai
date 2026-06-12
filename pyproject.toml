@@ -72,10 +72,13 @@ src = ["src"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "TCH"]
-ignore = ["B008", "B023", "N806", "TC001", "TC002", "TC003"]
+# N803/N806: ML code uses uppercase X (feature matrix) as an argument/variable.
+ignore = ["B008", "B023", "N803", "N806", "TC001", "TC002", "TC003"]
 
 [tool.ruff.lint.per-file-ignores]
 "notebooks/*.py" = ["E402"]
+# Imports follow a sys.path.insert bootstrap in this standalone test script.
+"tests/test_v2_improvements.py" = ["E402"]
 
 [tool.mypy]
 python_version = "3.11"

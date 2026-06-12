@@ -131,7 +131,8 @@ class Backtester:
         capital = cfg.initial_capital
         portfolio_values: list[dict[str, Any]] = []
         trades: list[dict[str, Any]] = []
-        positions: dict[str, dict[str, Any]] = {}  # ticker → {shares, entry_price, entry_date, entry_idx, stop_loss, take_profit, high_price}
+        # ticker → {shares, entry_price, entry_date, entry_idx, stop_loss, take_profit, high_price}
+        positions: dict[str, dict[str, Any]] = {}
 
         for dt in bt_dates:
             dt_ts = pd.Timestamp(dt)
@@ -163,7 +164,8 @@ class Backtester:
 
                 if is_short:
                     # Short: receive proceeds now, owe shares later
-                    proceeds = shares * entry_p * (1 - cost_pct / 10000 * 0)  # entry price already adjusted
+                    # entry price already adjusted
+                    proceeds = shares * entry_p * (1 - cost_pct / 10000 * 0)
                     capital += proceeds
                     pos_trail = params.get("trailing_stop_pct", cfg.trailing_stop_pct)
                     positions[ticker] = {
@@ -218,7 +220,8 @@ class Backtester:
                 current_p = day_prices.get(tick, pos["entry_price"])
                 if pos.get("is_short"):
                     # Short: value = proceeds_received - cost_to_buy_back
-                    position_value += pos["entry_price"] * abs(pos["shares"]) - current_p * abs(pos["shares"])
+                    position_value += (pos["entry_price"] * abs(pos["shares"])
+                                       - current_p * abs(pos["shares"]))
                 else:
                     position_value += pos["shares"] * current_p
             total_value = capital + position_value
@@ -322,7 +325,8 @@ class Backtester:
 
         # Collect open positions at end of simulation
         last_date = bt_dates[-1] if bt_dates else None
-        last_prices = prices[prices["date"] == last_date].set_index("ticker")["close"].to_dict() if last_date else {}
+        last_prices = (prices[prices["date"] == last_date].set_index("ticker")["close"].to_dict()
+                       if last_date else {})
         open_pos_list = []
         for tick, pos in positions.items():
             current_p = last_prices.get(tick, pos["entry_price"])
@@ -332,7 +336,8 @@ class Backtester:
             days_held = date_to_idx.get(last_date, 0) - pos["entry_idx"]
             trail = pos.get("trailing_stop_pct", cfg.trailing_stop_pct)
             high_p = pos.get("high_price", entry_p)
-            trail_price = high_p * (1 - trail) if not is_short else pos.get("low_price", entry_p) * (1 + trail)
+            trail_price = (high_p * (1 - trail) if not is_short
+                           else pos.get("low_price", entry_p) * (1 + trail))
             open_pos_list.append({
                 "ticker": tick,
                 "side": "SHORT" if is_short else "LONG",

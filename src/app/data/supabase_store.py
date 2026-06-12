@@ -12,7 +12,7 @@ pipeline still runs locally without Supabase.
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -86,7 +86,7 @@ def write_state(strategy: str, state: dict) -> None:
     if not is_configured():
         log.warning("supabase_not_configured", op="write_state", strategy=strategy)
         return
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     _post("portfolio_state",
           [{"strategy": strategy, "state": state, "updated_at": now}],
           on_conflict="strategy")
