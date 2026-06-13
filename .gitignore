@@ -43,6 +43,10 @@ mlruns/
 # Generated static dashboard (published to Pages as a build artifact, not committed)
 site/
 
+# Strategy reference doc (model + features summary) — LOCAL ONLY, never publish.
+# Purged from git history 2026-06-13; keep it out of the public repo.
+docs/strategy.html
+
 # Environment
 .env
 
