@@ -1,10 +1,12 @@
-"""Render the dashboard to a standalone static HTML for GitHub Pages.
+"""Render the login shell to a standalone static HTML for GitHub Pages.
 
-Reuses the exact data-loading logic from `app.web.server` so the static
-snapshot matches the live dashboard. The live-only buttons (run pipeline,
-refresh prices) are hidden via `static_mode=True`.
+The published page ships with NO trade data: it logs in via Supabase Auth and
+then fetches the render-ready `dashboard_view` (RLS authenticated-only) to paint
+the dashboard client-side. So this just renders the shell with the embedded
+public config (Supabase URL + anon key, Finnhub token, brand assets) and copies
+the PWA manifest + icons.
 
-Output: ./site/index.html  (+ .nojekyll so Pages serves files verbatim)
+Output: ./site/index.html  (+ .nojekyll, manifest, icons)
 
 Usage:
     PYTHONPATH=src python scripts/render_static_dashboard.py
@@ -14,7 +16,6 @@ from __future__ import annotations
 import json
 import shutil
 import sys
-from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,57 +23,25 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape  # noqa: E402
 
-from app.data import supabase_store  # noqa: E402
-from app.data.free_sources import finnhub  # noqa: E402
 from app.web import server  # noqa: E402
 
 
 def main() -> None:
-    ohlcv = server._load_ohlcv()
-    paper = server._load_paper_trading(ohlcv, server.PAPER_TRADING_DIR)
-    paper_adaptive = server._load_paper_trading(
-        ohlcv, server.PAPER_TRADING_ADAPTIVE_DIR, adaptive_stop=True
-    )
-    signals = server._load_signal_history(server.PAPER_TRADING_DIR)
-    signals_adaptive = server._load_signal_history(server.PAPER_TRADING_ADAPTIVE_DIR)
-    data_info = server._get_data_freshness(ohlcv)
-
-    # Anon (publishable) creds embedded so the Pages snapshot can poll Supabase
-    # live (Phase 2b). Empty when unconfigured → live-refresh script is skipped.
-    supabase_url, supabase_anon_key = supabase_store.public_config()
-
-    # Finnhub token embedded so the snapshot can stream live prices over the
-    # Finnhub WebSocket (WebSockets aren't subject to CORS). Empty → no live prices.
-    finnhub_token = finnhub.public_token()
+    ctx = server.shell_context(static_mode=True)
 
     tpl_dir = ROOT / "src" / "app" / "web" / "templates"
     env = Environment(
         loader=FileSystemLoader(str(tpl_dir)),
         autoescape=select_autoescape(["html"]),
     )
-    html = env.get_template("dashboard.html").render(
-        request=None,
-        paper=paper,
-        paper_adaptive=paper_adaptive,
-        signals=signals,
-        signals_adaptive=signals_adaptive,
-        data_info=data_info,
-        now=datetime.now().strftime("%Y-%m-%d %H:%M"),
-        static_mode=True,
-        supabase_url=supabase_url,
-        supabase_anon_key=supabase_anon_key,
-        finnhub_token=finnhub_token,
-        logo=server._asset_data_uri(server.LOGO_PATH),
-        favicon=server._asset_data_uri(server.FAVICON_PATH),
-    )
-    if supabase_url and supabase_anon_key:
-        print("  Live refresh enabled (Supabase anon key embedded)")
+    html = env.get_template("dashboard.html").render(request=None, **ctx)
+
+    if ctx["supabase_url"] and ctx["supabase_anon_key"]:
+        print("  Login enabled (Supabase URL + anon key embedded)")
     else:
-        print("  Live refresh disabled (no Supabase anon config)")
-    if finnhub_token:
+        print("  WARNING: no Supabase config — login will not work")
+    if ctx["finnhub_token"]:
         print("  Live prices enabled (Finnhub token embedded)")
-    else:
-        print("  Live prices disabled (no FINNHUB_TOKEN)")
 
     out_dir = ROOT / "site"
     out_dir.mkdir(exist_ok=True)

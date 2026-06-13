@@ -1136,6 +1136,24 @@ def main() -> None:
         "dry_run": args.dry_run,
     })
 
+    # Write render-ready dashboard views to Supabase. The logged-in web client
+    # reads these single rows (RLS authenticated-only); raw trade tables never
+    # reach the browser and no client-side computation is needed. Best-effort.
+    if not args.dry_run and supabase_store.is_configured():
+        try:
+            from app.web import dashboard_data
+            for strat, pt_dir, adaptive in [
+                ("baseline", dashboard_data.PAPER_TRADING_DIR, False),
+                ("adaptive", dashboard_data.PAPER_TRADING_ADAPTIVE_DIR, True),
+            ]:
+                view = dashboard_data.build_view(ohlcv, pt_dir, adaptive)
+                if view is not None:
+                    supabase_store.write_dashboard_view(strat, view)
+            print("  ✓ Supabase: dashboard views (baseline + adaptive)")
+        except Exception as e:
+            log.warning("dashboard_view_write_failed", error=str(e))
+            print(f"  ⚠ Dashboard view write failed: {e}")
+
     print("  ✓ Done\n")
 
 

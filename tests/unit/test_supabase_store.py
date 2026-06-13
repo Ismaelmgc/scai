@@ -76,3 +76,27 @@ def test_append_trades_dedup(configured, monkeypatch):
 def test_read_state_returns_payload(configured, monkeypatch):
     monkeypatch.setattr(s.httpx, "get", lambda *a, **k: _FakeResp())
     assert s.read_state("baseline") == {"cash": 1000.0}
+
+
+def test_write_dashboard_view_upserts_on_strategy(configured, monkeypatch):
+    captured = {}
+
+    def _post(url, json, params, headers, timeout):
+        captured.update(url=url, json=json, params=params)
+        return _FakeResp()
+
+    monkeypatch.setattr(s.httpx, "post", _post)
+    s.write_dashboard_view("baseline", {"paper": {"cash": 1000.0}, "signals": []})
+
+    assert captured["url"].endswith("/rest/v1/dashboard_view")
+    assert captured["params"] == {"on_conflict": "strategy"}
+    assert captured["json"][0]["strategy"] == "baseline"
+    assert captured["json"][0]["view"]["paper"] == {"cash": 1000.0}
+
+
+def test_write_dashboard_view_noop_when_unconfigured(monkeypatch):
+    monkeypatch.setattr(s, "_base_url", lambda: "")
+    monkeypatch.setattr(s, "_service_key", lambda: "")
+    monkeypatch.setattr(s.httpx, "post",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("posted")))
+    s.write_dashboard_view("baseline", {"x": 1})  # no exception, no call
