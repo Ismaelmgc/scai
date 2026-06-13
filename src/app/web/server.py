@@ -49,6 +49,59 @@ def _load_ohlcv() -> pd.DataFrame:
     return ohlcv
 
 
+_spy_cache: pd.DataFrame | None = None
+
+
+def _load_spy() -> pd.DataFrame | None:
+    """SPY daily closes (benchmark for the equity chart / alpha). Cached."""
+    global _spy_cache
+    if _spy_cache is not None:
+        return _spy_cache
+    path = DATA_DIR / "smallcap_spy.parquet"
+    if not path.exists():
+        return None
+    spy = pd.read_parquet(path)
+    spy["date"] = pd.to_datetime(spy["date"])
+    _spy_cache = spy.sort_values("date")[["date", "close"]].reset_index(drop=True)
+    return _spy_cache
+
+
+def _spy_aligned(chart_dates: list[str], initial_capital: float) -> list[float]:
+    """SPY equity normalised to `initial_capital` at the first chart date, sampled
+    on-or-before each chart date (so a buy-and-hold SPY of the same € can overlay
+    the portfolio line). [] if SPY data is unavailable."""
+    spy = _load_spy()
+    if spy is None or not chart_dates:
+        return []
+    target = pd.DataFrame({"date": pd.to_datetime(chart_dates)})
+    merged = pd.merge_asof(target, spy, on="date", direction="backward")
+    closes = merged["close"].ffill().bfill()
+    if closes.isna().all() or float(closes.iloc[0]) == 0:
+        return []
+    base = float(closes.iloc[0])
+    return [round(float(initial_capital * c / base), 2) for c in closes]
+
+
+def _compute_stats(values: list[float], spy_values: list[float]) -> dict | None:
+    """Sharpe (annualised), max drawdown and alpha vs SPY from the NAV series.
+    None when there is too little history (<10 NAV points) for the figures to mean
+    anything — the paper-trading was reset 2026-06-11, so early days are noisy."""
+    if not values or len(values) < 10:
+        return None
+    arr = np.asarray(values, dtype=float)
+    rets = arr[1:] / arr[:-1] - 1
+    running_max = np.maximum.accumulate(arr)
+    max_dd = float((arr / running_max - 1).min()) * 100
+    std = float(rets.std())
+    sharpe = float(rets.mean() / std * np.sqrt(252)) if std > 0 else 0.0
+    total_ret = (arr[-1] / arr[0] - 1) * 100
+    alpha = None
+    if spy_values and len(spy_values) == len(values) and spy_values[0]:
+        spy_ret = (spy_values[-1] / spy_values[0] - 1) * 100
+        alpha = round(total_ret - spy_ret, 1)
+    return {"sharpe": round(sharpe, 2), "max_dd": round(max_dd, 1), "alpha": alpha}
+
+
 def _load_paper_trading(ohlcv: pd.DataFrame,
                         pt_dir: Path | None = None,
                         adaptive_stop: bool = False) -> dict | None:
@@ -150,6 +203,9 @@ def _load_paper_trading(ohlcv: pd.DataFrame,
                     except (json.JSONDecodeError, KeyError):
                         continue
 
+    spy_values = _spy_aligned(chart_dates, state["initial_capital"])
+    stats = _compute_stats(chart_values, spy_values)
+
     return {
         "positions": positions,
         "closed_trades": closed_trades,
@@ -168,6 +224,8 @@ def _load_paper_trading(ohlcv: pd.DataFrame,
         "last_update": state.get("last_update", ""),
         "chart_dates": chart_dates,
         "chart_values": chart_values,
+        "spy_values": spy_values,
+        "stats": stats,
     }
 
 

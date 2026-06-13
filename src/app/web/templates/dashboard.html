@@ -5,6 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SCAI</title>
     {% if favicon %}<link rel="icon" type="image/png" href="{{ favicon }}">{% endif %}
+    <!-- PWA: installable on phone home screen. Manifest + icons live next to
+         index.html on the published Pages site (relative paths 404 on the local
+         FastAPI server, which has no static mount — that's fine, PWA is for Pages). -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#0a0c12">
+    <link rel="apple-touch-icon" href="icon-180.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SCAI">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         :root {
@@ -135,22 +147,50 @@
 
         .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
 
-        /* KPI Cards */
-        .kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 26px; }
+        /* KPI Cards — 12-col grid: 2 hero cards (span 6) then 4 secondary (span 3) */
+        .kpi-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; margin-bottom: 16px; }
         .kpi-card {
+            grid-column: span 3;
             background: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: var(--radius);
-            padding: 20px 16px;
+            padding: 18px 16px;
             text-align: center;
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
             transition: transform 0.2s ease, border-color 0.2s, background 0.2s;
         }
+        .kpi-card.hero {
+            grid-column: span 6;
+            padding: 24px 20px;
+            background:
+                radial-gradient(420px circle at 50% 0%, rgba(232, 196, 86, 0.07), transparent 70%),
+                var(--bg-card);
+        }
         .kpi-card:hover { transform: translateY(-2px); border-color: var(--border-light); background: var(--bg-hover); }
         .kpi-card .label { font-size: 10.5px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.9px; margin-bottom: 8px; }
-        .kpi-card .value { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+        .kpi-card .value { font-size: 23px; font-weight: 700; letter-spacing: -0.5px; }
+        .kpi-card.hero .value { font-size: 34px; letter-spacing: -1px; }
         .kpi-card .detail { font-size: 11px; color: var(--text-muted); margin-top: 5px; }
+
+        /* Quant metrics strip (Sharpe / max drawdown / alpha vs SPY) */
+        .metrics-strip { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 22px; }
+        .metric-chip {
+            flex: 1; min-width: 130px;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 12px; padding: 12px 16px;
+            display: flex; flex-direction: column; gap: 3px;
+        }
+        .metric-chip .m-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-secondary); }
+        .metric-chip .m-value { font-size: 19px; font-weight: 700; letter-spacing: -0.3px; }
+        .metric-chip .m-hint { font-size: 10px; color: var(--text-muted); }
+        .arrow { font-size: 0.82em; }
+
+        /* Live-price tick flash (Finnhub WS) */
+        @keyframes flashUp { 0% { background: rgba(52, 211, 153, 0.32); } 100% { background: transparent; } }
+        @keyframes flashDown { 0% { background: rgba(248, 113, 113, 0.32); } 100% { background: transparent; } }
+        .flash-up { animation: flashUp 0.7s ease-out; }
+        .flash-down { animation: flashDown 0.7s ease-out; }
         .green { color: var(--green); }
         .red { color: var(--red); }
         .blue { color: var(--blue); }
@@ -261,12 +301,45 @@
         .strategy-panel.active { display: block; }
 
         @media (max-width: 1000px) {
-            .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+            .kpi-card { grid-column: span 6; }       /* 2 secondary per row */
+            .kpi-card.hero { grid-column: span 12; }  /* hero full width */
             .grid-2 { grid-template-columns: 1fr; }
         }
-        @media (max-width: 600px) {
-            .kpi-grid { grid-template-columns: repeat(2, 1fr); }
-            .header { flex-direction: column; gap: 12px; }
+        @media (max-width: 680px) {
+            .container { padding: 16px; }
+            .header { flex-direction: column; gap: 12px; padding: 14px 18px; }
+            .header-right { flex-direction: column; gap: 8px; align-items: flex-start; }
+            /* Drop the 12-col grid (its fixed gaps overflow narrow screens) for a
+               plain 2-col layout: hero cards full width, secondary cards paired. */
+            .kpi-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+            .kpi-card { grid-column: auto; }
+            .kpi-card.hero { grid-column: 1 / -1; }
+            .kpi-card .value { font-size: 21px; }
+            .kpi-card.hero .value { font-size: 30px; }
+            .metric-chip { min-width: 100px; }
+            .card { padding: 18px 16px; }
+
+            /* Tables collapse into stacked cards (label/value rows) */
+            .responsive-table thead { display: none; }
+            .responsive-table, .responsive-table tbody, .responsive-table tr, .responsive-table td { display: block; width: 100%; }
+            .responsive-table tr {
+                border: 1px solid var(--border); border-radius: 12px;
+                margin-bottom: 12px; padding: 6px 2px; background: var(--bg-card);
+            }
+            .responsive-table tr:hover { background: var(--bg-card); }
+            .responsive-table td {
+                border: none; padding: 7px 14px; text-align: right;
+                display: flex; justify-content: space-between; align-items: baseline; gap: 14px;
+            }
+            .responsive-table td::before {
+                content: attr(data-label);
+                color: var(--text-secondary); font-size: 10.5px;
+                text-transform: uppercase; letter-spacing: 0.5px; text-align: left;
+                font-weight: 600; white-space: nowrap;
+            }
+            .responsive-table td:first-child {
+                border-bottom: 1px solid var(--border); margin-bottom: 4px; padding-bottom: 9px;
+            }
         }
     </style>
 </head>
@@ -333,12 +406,12 @@
         {% if p %}
         <div class="strategy-panel {% if strat_id == 'baseline' %}active{% endif %}" id="panel-{{ strat_id }}">
         <div class="kpi-grid">
-            <div class="kpi-card">
+            <div class="kpi-card hero">
                 <div class="label">Valor Portfolio</div>
                 <div class="value {% if p.total_return >= 0 %}green{% else %}red{% endif %}" data-live="value-{{ strat_id }}">€{{ "%.2f"|format(p.total_value) }}</div>
                 <div class="detail">Capital inicial: €{{ "%.0f"|format(p.initial_capital) }}</div>
             </div>
-            <div class="kpi-card">
+            <div class="kpi-card hero">
                 <div class="label">Retorno Total</div>
                 <div class="value {% if p.total_return >= 0 %}green{% else %}red{% endif %}" data-live="return-{{ strat_id }}">{{ "%+.1f"|format(p.total_return) }}%</div>
                 <div class="detail" data-live="profit-{{ strat_id }}">{{ "%+.2f"|format(p.total_value - p.initial_capital) }}€ beneficio</div>
@@ -365,6 +438,31 @@
             </div>
         </div>
 
+        <!-- Quant metrics (Sharpe / max drawdown / alpha vs SPY) -->
+        <div class="metrics-strip">
+            <div class="metric-chip">
+                <span class="m-label">Sharpe (anual.)</span>
+                {% if p.stats %}
+                <span class="m-value {% if p.stats.sharpe >= 1 %}green{% elif p.stats.sharpe >= 0 %}yellow{% else %}red{% endif %}">{{ "%.2f"|format(p.stats.sharpe) }}</span>
+                {% else %}<span class="m-value" style="color: var(--text-muted);">—</span>{% endif %}
+                <span class="m-hint">retorno / volatilidad</span>
+            </div>
+            <div class="metric-chip">
+                <span class="m-label">Max Drawdown</span>
+                {% if p.stats %}
+                <span class="m-value red">{{ "%.1f"|format(p.stats.max_dd) }}%</span>
+                {% else %}<span class="m-value" style="color: var(--text-muted);">—</span>{% endif %}
+                <span class="m-hint">peor caída pico-valle</span>
+            </div>
+            <div class="metric-chip">
+                <span class="m-label">Alpha vs SPY</span>
+                {% if p.stats and p.stats.alpha is not none %}
+                <span class="m-value {% if p.stats.alpha >= 0 %}green{% else %}red{% endif %}">{{ "%+.1f"|format(p.stats.alpha) }}%</span>
+                {% else %}<span class="m-value" style="color: var(--text-muted);">—</span>{% endif %}
+                <span class="m-hint">exceso sobre el mercado</span>
+            </div>
+        </div>
+
         <!-- Portfolio Chart -->
         {% if p.chart_dates %}
         <div class="card">
@@ -384,7 +482,7 @@
                 {% endif %}
             </div>
             {% if p.positions %}
-            <table class="positions-table" id="posTable-{{ strat_id }}">
+            <table class="positions-table responsive-table" id="posTable-{{ strat_id }}">
                 <thead>
                     <tr>
                         <th>Ticker</th>
@@ -403,19 +501,19 @@
                 <tbody>
                     {% for pos in p.positions %}
                     <tr data-ticker="{{ pos.ticker }}" data-entry="{{ pos.entry_price }}" data-shares="{{ pos.shares }}">
-                        <td class="ticker">{{ pos.ticker }}</td>
-                        <td>{{ pos.entry_date }}</td>
-                        <td class="text-right">${{ "%.4f"|format(pos.entry_price) }}</td>
-                        <td class="text-right td-price">${{ "%.2f"|format(pos.current_price) }}</td>
-                        <td class="text-right td-live">—</td>
-                        <td class="text-right td-live-pct">—</td>
-                        <td class="text-right">{{ pos.shares }}</td>
-                        <td class="text-right">€{{ "%.2f"|format(pos.invested) }}</td>
-                        <td class="text-right" style="font-weight: 600;">€{{ "%.2f"|format(pos.current_value) }}</td>
-                        <td class="text-right {% if pos.pnl_pct >= 0 %}profit{% else %}loss{% endif %}">
-                            {{ "%+.1f"|format(pos.pnl_pct) }}% <span style="font-weight: 400; opacity: 0.7;">(€{{ "%+.2f"|format(pos.profit) }})</span>
+                        <td class="ticker" data-label="Ticker">{{ pos.ticker }}</td>
+                        <td data-label="Entrada">{{ pos.entry_date }}</td>
+                        <td class="text-right" data-label="$ Entrada">${{ "%.4f"|format(pos.entry_price) }}</td>
+                        <td class="text-right td-price" data-label="$ Actual">${{ "%.2f"|format(pos.current_price) }}</td>
+                        <td class="text-right td-live" data-label="$ Live">—</td>
+                        <td class="text-right td-live-pct" data-label="% Live">—</td>
+                        <td class="text-right" data-label="Acciones">{{ pos.shares }}</td>
+                        <td class="text-right" data-label="Invertido">€{{ "%.2f"|format(pos.invested) }}</td>
+                        <td class="text-right" data-label="Valor" style="font-weight: 600;">€{{ "%.2f"|format(pos.current_value) }}</td>
+                        <td class="text-right {% if pos.pnl_pct >= 0 %}profit{% else %}loss{% endif %}" data-label="P/L">
+                            <span class="arrow">{% if pos.pnl_pct >= 0 %}▲{% else %}▼{% endif %}</span> {{ "%+.1f"|format(pos.pnl_pct) }}% <span style="font-weight: 400; opacity: 0.7;">(€{{ "%+.2f"|format(pos.profit) }})</span>
                         </td>
-                        <td class="text-right">
+                        <td class="text-right" data-label="Trail Stop">
                             ${{ "%.2f"|format(pos.trail_trigger) }}
                             <span style="color: var(--text-muted); font-size: 11px;">({{ "%.0f"|format(pos.trailing_stop_pct) }}%)</span>
                         </td>
@@ -492,7 +590,7 @@
         <div class="card">
             <h2>Historial de Trades Cerrados <span class="badge">{{ p.n_closed }}</span></h2>
             {% if p.closed_trades %}
-            <table>
+            <table class="responsive-table">
                 <thead>
                     <tr>
                         <th>Ticker</th>
@@ -510,16 +608,16 @@
                 <tbody>
                     {% for t in p.closed_trades %}
                     <tr>
-                        <td class="ticker">{{ t.ticker }}</td>
-                        <td>{{ t.entry_date }}</td>
-                        <td class="text-right">${{ "%.4f"|format(t.entry_price) }}</td>
-                        <td>{{ t.exit_date }}</td>
-                        <td class="text-right">${{ "%.2f"|format(t.exit_price) }}</td>
-                        <td class="text-right">{{ t.shares }}</td>
-                        <td class="text-right {% if t.pnl_usd >= 0 %}profit{% else %}loss{% endif %}">€{{ "%+.2f"|format(t.pnl_usd) }}</td>
-                        <td class="text-right {% if t.pnl_pct >= 0 %}profit{% else %}loss{% endif %}">{{ "%+.1f"|format(t.pnl_pct) }}%</td>
-                        <td class="text-right">{{ t.days_held }}d</td>
-                        <td>
+                        <td class="ticker" data-label="Ticker">{{ t.ticker }}</td>
+                        <td data-label="Compra">{{ t.entry_date }}</td>
+                        <td class="text-right" data-label="$ Entrada">${{ "%.4f"|format(t.entry_price) }}</td>
+                        <td data-label="Venta">{{ t.exit_date }}</td>
+                        <td class="text-right" data-label="$ Salida">${{ "%.2f"|format(t.exit_price) }}</td>
+                        <td class="text-right" data-label="Acciones">{{ t.shares }}</td>
+                        <td class="text-right {% if t.pnl_usd >= 0 %}profit{% else %}loss{% endif %}" data-label="P/L €">€{{ "%+.2f"|format(t.pnl_usd) }}</td>
+                        <td class="text-right {% if t.pnl_pct >= 0 %}profit{% else %}loss{% endif %}" data-label="Retorno"><span class="arrow">{% if t.pnl_pct >= 0 %}▲{% else %}▼{% endif %}</span> {{ "%+.1f"|format(t.pnl_pct) }}%</td>
+                        <td class="text-right" data-label="Días">{{ t.days_held }}d</td>
+                        <td data-label="Motivo">
                             {% if t.exit_reason == 'trailing_stop' %}<span class="tag tag-trail">Trailing Stop</span>
                             {% elif t.exit_reason == 'expiry' %}<span class="tag tag-expiry">Expiración</span>
                             {% else %}<span class="tag tag-expiry">{{ t.exit_reason }}</span>{% endif %}
@@ -537,7 +635,7 @@
         {% if sigs %}
         <div class="card">
             <h2>Historial de Señales <span class="badge">últimas {{ sigs|length }}</span></h2>
-            <table>
+            <table class="responsive-table">
                 <thead>
                     <tr>
                         <th>Fecha</th>
@@ -550,15 +648,15 @@
                 <tbody>
                     {% for s in sigs %}
                     <tr>
-                        <td>{{ s.date }}</td>
-                        <td class="ticker">{{ s.ticker }}</td>
-                        <td class="text-right">{{ "%.4f"|format(s.score) }}</td>
-                        <td>
+                        <td data-label="Fecha">{{ s.date }}</td>
+                        <td class="ticker" data-label="Ticker">{{ s.ticker }}</td>
+                        <td class="text-right" data-label="Score">{{ "%.4f"|format(s.score) }}</td>
+                        <td data-label="Estado">
                             {% if s.was_traded %}<span class="tag tag-buy">Ejecutada</span>
                             {% elif s.skip_reason %}<span class="tag tag-skip">{{ s.skip_reason }}</span>
                             {% else %}<span class="tag tag-expiry">Skip</span>{% endif %}
                         </td>
-                        <td class="text-right">
+                        <td class="text-right" data-label="Retorno real (20d)">
                             {% if s.actual_ret is not none %}
                             <span class="{% if s.actual_ret >= 0 %}profit{% else %}loss{% endif %}">{{ "%+.1f"|format(s.actual_ret) }}%</span>
                             {% else %}
@@ -602,7 +700,7 @@
         // Portfolio charts — one per strategy. Instances kept so the live
         // refresh (Phase 2b) can push new Supabase data into them.
         window.scaiCharts = {};
-        function createPortfolioChart(canvasId, dates, values, initialCapital) {
+        function createPortfolioChart(canvasId, dates, values, initialCapital, spyValues) {
             const el = document.getElementById(canvasId);
             if (!el) return;
             const ctx = el.getContext('2d');
@@ -615,22 +713,28 @@
                 gradient.addColorStop(0, 'rgba(248, 113, 113, 0.28)');
                 gradient.addColorStop(1, 'rgba(248, 113, 113, 0.0)');
             }
+            const datasets = [{
+                label: 'Portfolio (€)',
+                data: values,
+                borderColor: lastVal >= initialCapital ? '#34d399' : '#f87171',
+                backgroundColor: gradient,
+                fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 5, borderWidth: 2,
+            }, {
+                label: 'Capital inicial',
+                data: Array(dates.length).fill(initialCapital),
+                borderColor: 'rgba(255, 255, 255, 0.14)', borderDash: [5, 5], borderWidth: 1, pointRadius: 0, fill: false,
+            }];
+            if (spyValues && spyValues.length) {
+                datasets.push({
+                    label: 'SPY (mismo €)',
+                    data: spyValues,
+                    borderColor: 'rgba(152, 162, 179, 0.85)', borderDash: [2, 3],
+                    borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 4, fill: false, tension: 0.3,
+                });
+            }
             window.scaiCharts[canvasId] = new Chart(ctx, {
                 type: 'line',
-                data: {
-                    labels: dates,
-                    datasets: [{
-                        label: 'Portfolio (€)',
-                        data: values,
-                        borderColor: lastVal >= initialCapital ? '#34d399' : '#f87171',
-                        backgroundColor: gradient,
-                        fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 5, borderWidth: 2,
-                    }, {
-                        label: 'Capital inicial',
-                        data: Array(dates.length).fill(initialCapital),
-                        borderColor: 'rgba(255, 255, 255, 0.14)', borderDash: [5, 5], borderWidth: 1, pointRadius: 0, fill: false,
-                    }]
-                },
+                data: { labels: dates, datasets: datasets },
                 options: {
                     responsive: true,
                     interaction: { mode: 'index', intersect: false },
@@ -659,10 +763,10 @@
         }
 
         {% if paper and paper.chart_dates %}
-        createPortfolioChart('portfolioChart-baseline', {{ paper.chart_dates | tojson }}, {{ paper.chart_values | tojson }}, {{ paper.initial_capital }});
+        createPortfolioChart('portfolioChart-baseline', {{ paper.chart_dates | tojson }}, {{ paper.chart_values | tojson }}, {{ paper.initial_capital }}, {{ paper.spy_values | tojson }});
         {% endif %}
         {% if paper_adaptive and paper_adaptive.chart_dates %}
-        createPortfolioChart('portfolioChart-adaptive', {{ paper_adaptive.chart_dates | tojson }}, {{ paper_adaptive.chart_values | tojson }}, {{ paper_adaptive.initial_capital }});
+        createPortfolioChart('portfolioChart-adaptive', {{ paper_adaptive.chart_dates | tojson }}, {{ paper_adaptive.chart_values | tojson }}, {{ paper_adaptive.initial_capital }}, {{ paper_adaptive.spy_values | tojson }});
         {% endif %}
 
         // Tab switching
@@ -784,19 +888,29 @@
                     if (lbl) lbl.textContent = text;
                 });
             }
+            function flash(cell, up) {
+                if (!cell) return;
+                const cls = up ? 'flash-up' : 'flash-down';
+                cell.classList.remove('flash-up', 'flash-down');
+                void cell.offsetWidth;  // restart the animation
+                cell.classList.add(cls);
+            }
             function applyPrice(ticker, price) {
                 document.querySelectorAll('.positions-table tbody tr[data-ticker="' + ticker + '"]').forEach(row => {
                     const entry = parseFloat(row.dataset.entry);
                     const liveCell = row.querySelector('.td-live');
                     if (liveCell) {
+                        const prev = parseFloat((liveCell.textContent || '').replace('$', ''));
                         liveCell.textContent = '$' + price.toFixed(2);
                         liveCell.style.color = '#e8c456';
                         liveCell.style.fontWeight = '600';
+                        if (!isNaN(prev) && prev !== price) flash(liveCell, price >= prev);
                     }
                     const pctCell = row.querySelector('.td-live-pct');
                     if (pctCell && entry) {
                         const pnl = (price / entry - 1) * 100;
-                        pctCell.textContent = (pnl >= 0 ? '+' : '') + pnl.toFixed(1) + '%';
+                        const arrow = pnl >= 0 ? '▲' : '▼';
+                        pctCell.innerHTML = '<span class="arrow">' + arrow + '</span> ' + (pnl >= 0 ? '+' : '') + pnl.toFixed(1) + '%';
                         pctCell.className = 'text-right td-live-pct ' + (pnl >= 0 ? 'profit' : 'loss');
                         pctCell.style.fontWeight = '600';
                     }
