@@ -166,6 +166,21 @@ def upsert_nav(strategy: str, date: str, portfolio_value: float) -> None:
           on_conflict="strategy,date")
 
 
+def write_dashboard_view(strategy: str, view: dict) -> None:
+    """Upsert the render-ready dashboard view (one row per strategy).
+
+    The logged-in client reads this single row to paint the dashboard, so raw
+    trade tables never reach the browser and no client-side computation is needed.
+    """
+    if not is_configured():
+        log.warning("supabase_not_configured", op="write_dashboard_view", strategy=strategy)
+        return
+    now = datetime.now(UTC).isoformat()
+    _post("dashboard_view",
+          [{"strategy": strategy, "view": view, "updated_at": now}],
+          on_conflict="strategy")
+
+
 def _get(table: str, params: dict) -> list[dict]:
     r = httpx.get(f"{_base_url()}/rest/v1/{table}", params=params,
                   headers=_headers(key=_read_key()), timeout=_TIMEOUT)

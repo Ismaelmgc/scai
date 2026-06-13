@@ -112,6 +112,37 @@
         .spinner { width: 16px; height: 16px; border: 2px solid transparent; border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; display: none; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
+        /* Login */
+        .login-wrap { min-height: calc(100vh - 78px); display: flex; align-items: center; justify-content: center; padding: 24px; }
+        .login-card {
+            background: var(--bg-card); border: 1px solid var(--border); border-radius: 18px;
+            padding: 36px 30px; width: 100%; max-width: 360px;
+            display: flex; flex-direction: column; gap: 14px; text-align: center;
+            box-shadow: var(--shadow-card); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+        }
+        .login-logo { width: 64px; height: 64px; margin: 0 auto 2px; }
+        .login-card h1 {
+            font-size: 26px; font-weight: 800; letter-spacing: -0.6px;
+            background: var(--accent-grad); -webkit-background-clip: text; background-clip: text; color: transparent;
+        }
+        .login-sub { color: var(--text-secondary); font-size: 13px; margin-top: -10px; }
+        .login-card input {
+            background: var(--bg-primary); border: 1px solid var(--border); border-radius: 10px;
+            padding: 12px 14px; color: var(--text-primary); font-size: 14px; font-family: inherit;
+        }
+        .login-card input:focus { outline: none; border-color: rgba(232,196,86,0.5); }
+        .login-card button {
+            background: var(--accent-grad); color: #1a1206; border: none; border-radius: 10px;
+            padding: 12px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; margin-top: 2px;
+        }
+        .login-card button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .login-error { color: var(--red); font-size: 12px; min-height: 16px; }
+        .btn-logout {
+            background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary);
+            border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+        }
+        .btn-logout:hover { color: var(--text-primary); border-color: var(--border-light); }
+
         /* Pipeline log modal */
         .pipeline-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; justify-content: center; align-items: center; }
         .pipeline-overlay.active { display: flex; }
@@ -349,31 +380,23 @@
             {% if logo %}<img class="logo-mark" src="{{ logo }}" alt="SCAI">{% endif %}
             <span class="brand-name">SCAI</span>
         </div>
-        <div class="header-right">
-            <div class="data-info">
-                <span class="status-dot {% if paper %}ok{% else %}stale{% endif %}"></span>
-                Datos: {{ data_info.latest_date }} · {{ data_info.n_tickers }} tickers
+        <div class="header-right" id="headerRight" style="display: none;">
+            <div class="data-info" id="dataInfo"></div>
+            <div class="data-info" id="liveStatus" title="Precio en vivo vía Finnhub (WebSocket)">
+                <span class="status-dot stale" id="liveDot"></span><span id="liveLabel">—</span>
             </div>
-            {% if static_mode %}
-            {% if supabase_url and supabase_anon_key %}
-            <div class="data-info" id="liveStatus" title="Se actualiza solo desde Supabase (anon, solo lectura)">
-                <span class="status-dot stale" id="liveDot"></span>
-                <span id="liveLabel">Conectando…</span>
-            </div>
-            {% endif %}
-            <div class="data-info" title="Snapshot estático publicado en GitHub Pages">
-                Snapshot: {{ now }}
-            </div>
-            {% else %}
+            {% if not static_mode %}
             <button class="btn-pipeline" id="btnPipeline" onclick="runPipeline()">
                 <span class="spinner" id="pipelineSpinner"></span>
                 <span id="btnText">Actualizar datos</span>
             </button>
             {% endif %}
+            <button class="btn-logout" id="btnLogout" onclick="logout()">Salir</button>
         </div>
     </div>
 
-    <!-- Pipeline log overlay -->
+    {% if not static_mode %}
+    <!-- Pipeline log overlay (live server only) -->
     <div class="pipeline-overlay" id="pipelineOverlay">
         <div class="pipeline-modal">
             <div class="pipeline-modal-header">
@@ -383,326 +406,342 @@
             <div class="pipeline-log" id="pipelineLog">Iniciando pipeline...</div>
         </div>
     </div>
+    {% endif %}
 
-    <div class="container">
-        {% if paper or paper_adaptive %}
-        <!-- Strategy tabs -->
-        <div class="strategy-tabs">
-            {% if paper %}
-            <button class="strategy-tab active" onclick="switchTab('baseline')">
-                Baseline
-                <span class="tab-badge {% if paper.total_return >= 0 %}green{% else %}red{% endif %}" data-live="badge-baseline">{{ "%+.1f"|format(paper.total_return) }}%</span>
-            </button>
-            {% endif %}
-            {% if paper_adaptive %}
-            <button class="strategy-tab" onclick="switchTab('adaptive')">
-                Adaptive Stop
-                <span class="tab-badge {% if paper_adaptive.total_return >= 0 %}green{% else %}red{% endif %}" data-live="badge-adaptive">{{ "%+.1f"|format(paper_adaptive.total_return) }}%</span>
-            </button>
-            {% endif %}
-        </div>
-
-        {% for strat_id, p, sigs in [('baseline', paper, signals), ('adaptive', paper_adaptive, signals_adaptive)] %}
-        {% if p %}
-        <div class="strategy-panel {% if strat_id == 'baseline' %}active{% endif %}" id="panel-{{ strat_id }}">
-        <div class="kpi-grid">
-            <div class="kpi-card hero">
-                <div class="label">Valor Portfolio</div>
-                <div class="value {% if p.total_return >= 0 %}green{% else %}red{% endif %}" data-live="value-{{ strat_id }}">€{{ "%.2f"|format(p.total_value) }}</div>
-                <div class="detail">Capital inicial: €{{ "%.0f"|format(p.initial_capital) }}</div>
-            </div>
-            <div class="kpi-card hero">
-                <div class="label">Retorno Total</div>
-                <div class="value {% if p.total_return >= 0 %}green{% else %}red{% endif %}" data-live="return-{{ strat_id }}">{{ "%+.1f"|format(p.total_return) }}%</div>
-                <div class="detail" data-live="profit-{{ strat_id }}">{{ "%+.2f"|format(p.total_value - p.initial_capital) }}€ beneficio</div>
-            </div>
-            <div class="kpi-card">
-                <div class="label">Cash Disponible</div>
-                <div class="value blue">€{{ "%.2f"|format(p.cash) }}</div>
-                <div class="detail">{{ "%.0f"|format(p.cash / p.total_value * 100) }}% del portfolio</div>
-            </div>
-            <div class="kpi-card">
-                <div class="label">Win Rate</div>
-                <div class="value {% if p.win_rate >= 50 %}green{% elif p.win_rate > 0 %}yellow{% else %}red{% endif %}">{{ "%.0f"|format(p.win_rate) }}%</div>
-                <div class="detail">{{ p.n_closed }} trades cerrados</div>
-            </div>
-            <div class="kpi-card">
-                <div class="label">Avg Win / Avg Loss</div>
-                <div class="value green" style="font-size: 20px;">{{ "%+.1f"|format(p.avg_win) }}% <span style="color: var(--text-muted); font-size: 14px;">/</span> <span class="red">{{ "%+.1f"|format(p.avg_loss) }}%</span></div>
-                <div class="detail">P/L total: €{{ "%+.2f"|format(p.total_profit) }}</div>
-            </div>
-            <div class="kpi-card">
-                <div class="label">Posiciones</div>
-                <div class="value blue">{{ p.n_open }} / {{ p.max_positions }}</div>
-                <div class="detail">{{ p.pending|length }} pendientes</div>
-            </div>
-        </div>
-
-        <!-- Quant metrics (Sharpe / max drawdown / alpha vs SPY) -->
-        <div class="metrics-strip">
-            <div class="metric-chip">
-                <span class="m-label">Sharpe (anual.)</span>
-                {% if p.stats %}
-                <span class="m-value {% if p.stats.sharpe >= 1 %}green{% elif p.stats.sharpe >= 0 %}yellow{% else %}red{% endif %}">{{ "%.2f"|format(p.stats.sharpe) }}</span>
-                {% else %}<span class="m-value" style="color: var(--text-muted);">—</span>{% endif %}
-                <span class="m-hint">retorno / volatilidad</span>
-            </div>
-            <div class="metric-chip">
-                <span class="m-label">Max Drawdown</span>
-                {% if p.stats %}
-                <span class="m-value red">{{ "%.1f"|format(p.stats.max_dd) }}%</span>
-                {% else %}<span class="m-value" style="color: var(--text-muted);">—</span>{% endif %}
-                <span class="m-hint">peor caída pico-valle</span>
-            </div>
-            <div class="metric-chip">
-                <span class="m-label">Alpha vs SPY</span>
-                {% if p.stats and p.stats.alpha is not none %}
-                <span class="m-value {% if p.stats.alpha >= 0 %}green{% else %}red{% endif %}">{{ "%+.1f"|format(p.stats.alpha) }}%</span>
-                {% else %}<span class="m-value" style="color: var(--text-muted);">—</span>{% endif %}
-                <span class="m-hint">exceso sobre el mercado</span>
-            </div>
-        </div>
-
-        <!-- Portfolio Chart -->
-        {% if p.chart_dates %}
-        <div class="card">
-            <h2>Evolución del Portfolio</h2>
-            <canvas id="portfolioChart-{{ strat_id }}" height="75"></canvas>
-        </div>
-        {% endif %}
-
-        <!-- Open Positions -->
-        <div class="card">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                <h2 style="margin-bottom: 0;">Posiciones Abiertas <span class="badge">{{ p.n_open }}</span></h2>
-                {% if finnhub_token %}
-                <span class="live-badge" id="liveBadge-{{ strat_id }}" title="Precio en vivo vía Finnhub (WebSocket, tiempo real)">
-                    <span class="status-dot stale"></span><span class="live-label">Conectando…</span>
-                </span>
-                {% endif %}
-            </div>
-            {% if p.positions %}
-            <table class="positions-table responsive-table" id="posTable-{{ strat_id }}">
-                <thead>
-                    <tr>
-                        <th>Ticker</th>
-                        <th>Entrada</th>
-                        <th class="text-right">$ Entrada</th>
-                        <th class="text-right">$ Actual</th>
-                        <th class="text-right">$ Live</th>
-                        <th class="text-right">% Live</th>
-                        <th class="text-right">Acciones</th>
-                        <th class="text-right">Invertido</th>
-                        <th class="text-right">Valor</th>
-                        <th class="text-right">P/L</th>
-                        <th class="text-right">Trail Stop</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for pos in p.positions %}
-                    <tr data-ticker="{{ pos.ticker }}" data-entry="{{ pos.entry_price }}" data-shares="{{ pos.shares }}">
-                        <td class="ticker" data-label="Ticker">{{ pos.ticker }}</td>
-                        <td data-label="Entrada">{{ pos.entry_date }}</td>
-                        <td class="text-right" data-label="$ Entrada">${{ "%.4f"|format(pos.entry_price) }}</td>
-                        <td class="text-right td-price" data-label="$ Actual">${{ "%.2f"|format(pos.current_price) }}</td>
-                        <td class="text-right td-live" data-label="$ Live">—</td>
-                        <td class="text-right td-live-pct" data-label="% Live">—</td>
-                        <td class="text-right" data-label="Acciones">{{ pos.shares }}</td>
-                        <td class="text-right" data-label="Invertido">€{{ "%.2f"|format(pos.invested) }}</td>
-                        <td class="text-right" data-label="Valor" style="font-weight: 600;">€{{ "%.2f"|format(pos.current_value) }}</td>
-                        <td class="text-right {% if pos.pnl_pct >= 0 %}profit{% else %}loss{% endif %}" data-label="P/L">
-                            <span class="arrow">{% if pos.pnl_pct >= 0 %}▲{% else %}▼{% endif %}</span> {{ "%+.1f"|format(pos.pnl_pct) }}% <span style="font-weight: 400; opacity: 0.7;">(€{{ "%+.2f"|format(pos.profit) }})</span>
-                        </td>
-                        <td class="text-right" data-label="Trail Stop">
-                            ${{ "%.2f"|format(pos.trail_trigger) }}
-                            <span style="color: var(--text-muted); font-size: 11px;">({{ "%.0f"|format(pos.trailing_stop_pct) }}%)</span>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% else %}
-            <p style="color: var(--text-secondary); font-size: 13px;">Sin posiciones abiertas.</p>
-            {% endif %}
-        </div>
-
-        <!-- Pending Signals + Closed Trades grid -->
-        <div class="grid-2">
-            <!-- Pending Signals -->
-            <div class="card">
-                <h2>Señales Pendientes <span class="badge">{{ p.pending|length }}</span></h2>
-                {% if p.pending %}
-                <p style="color: var(--text-secondary); font-size: 12px; margin-bottom: 12px;">Se ejecutarán al open del próximo día de mercado</p>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    {% for sig in p.pending %}
-                    <div style="background: var(--blue-bg); border: 1px solid rgba(88,166,255,0.25); border-radius: 8px; padding: 10px 16px;">
-                        <span class="ticker" style="font-size: 15px;">{{ sig.ticker }}</span>
-                        <div style="color: var(--text-secondary); font-size: 11px; margin-top: 2px;">{{ "%.0f"|format(sig.position_size_pct * 100) }}% del portfolio</div>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <p style="color: var(--text-secondary); font-size: 13px;">Sin señales pendientes.</p>
-                {% endif %}
-            </div>
-
-            <!-- Trade Stats Summary -->
-            <div class="card">
-                <h2>Resumen de Trading</h2>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                    <div style="background: var(--bg-primary); border-radius: 8px; padding: 14px;">
-                        <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase;">Mejor trade</div>
-                        {% if p.closed_trades %}
-                        {% set best = p.closed_trades | sort(attribute='pnl_pct') | last %}
-                        <div class="green" style="font-size: 20px; font-weight: 700;">{{ "%+.1f"|format(best.pnl_pct) }}%</div>
-                        <div style="color: var(--text-muted); font-size: 11px;">{{ best.ticker }} · {{ best.days_held }}d</div>
-                        {% else %}
-                        <div style="color: var(--text-muted); font-size: 14px;">—</div>
-                        {% endif %}
-                    </div>
-                    <div style="background: var(--bg-primary); border-radius: 8px; padding: 14px;">
-                        <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase;">Peor trade</div>
-                        {% if p.closed_trades %}
-                        {% set worst = p.closed_trades | sort(attribute='pnl_pct') | first %}
-                        <div class="red" style="font-size: 20px; font-weight: 700;">{{ "%+.1f"|format(worst.pnl_pct) }}%</div>
-                        <div style="color: var(--text-muted); font-size: 11px;">{{ worst.ticker }} · {{ worst.days_held }}d</div>
-                        {% else %}
-                        <div style="color: var(--text-muted); font-size: 14px;">—</div>
-                        {% endif %}
-                    </div>
-                    <div style="background: var(--bg-primary); border-radius: 8px; padding: 14px;">
-                        <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase;">Holding medio</div>
-                        {% if p.closed_trades %}
-                        <div class="blue" style="font-size: 20px; font-weight: 700;">{{ "%.0f"|format(p.closed_trades | map(attribute='days_held') | list | sum / p.n_closed) }}d</div>
-                        {% else %}
-                        <div style="color: var(--text-muted); font-size: 14px;">—</div>
-                        {% endif %}
-                    </div>
-                    <div style="background: var(--bg-primary); border-radius: 8px; padding: 14px;">
-                        <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase;">Beneficio total</div>
-                        <div class="{% if p.total_profit >= 0 %}green{% else %}red{% endif %}" style="font-size: 20px; font-weight: 700;">€{{ "%+.2f"|format(p.total_profit) }}</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Closed Trades -->
-        <div class="card">
-            <h2>Historial de Trades Cerrados <span class="badge">{{ p.n_closed }}</span></h2>
-            {% if p.closed_trades %}
-            <table class="responsive-table">
-                <thead>
-                    <tr>
-                        <th>Ticker</th>
-                        <th>Compra</th>
-                        <th class="text-right">$ Entrada</th>
-                        <th>Venta</th>
-                        <th class="text-right">$ Salida</th>
-                        <th class="text-right">Acciones</th>
-                        <th class="text-right">P/L €</th>
-                        <th class="text-right">Retorno</th>
-                        <th class="text-right">Días</th>
-                        <th>Motivo</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for t in p.closed_trades %}
-                    <tr>
-                        <td class="ticker" data-label="Ticker">{{ t.ticker }}</td>
-                        <td data-label="Compra">{{ t.entry_date }}</td>
-                        <td class="text-right" data-label="$ Entrada">${{ "%.4f"|format(t.entry_price) }}</td>
-                        <td data-label="Venta">{{ t.exit_date }}</td>
-                        <td class="text-right" data-label="$ Salida">${{ "%.2f"|format(t.exit_price) }}</td>
-                        <td class="text-right" data-label="Acciones">{{ t.shares }}</td>
-                        <td class="text-right {% if t.pnl_usd >= 0 %}profit{% else %}loss{% endif %}" data-label="P/L €">€{{ "%+.2f"|format(t.pnl_usd) }}</td>
-                        <td class="text-right {% if t.pnl_pct >= 0 %}profit{% else %}loss{% endif %}" data-label="Retorno"><span class="arrow">{% if t.pnl_pct >= 0 %}▲{% else %}▼{% endif %}</span> {{ "%+.1f"|format(t.pnl_pct) }}%</td>
-                        <td class="text-right" data-label="Días">{{ t.days_held }}d</td>
-                        <td data-label="Motivo">
-                            {% if t.exit_reason == 'trailing_stop' %}<span class="tag tag-trail">Trailing Stop</span>
-                            {% elif t.exit_reason == 'expiry' %}<span class="tag tag-expiry">Expiración</span>
-                            {% else %}<span class="tag tag-expiry">{{ t.exit_reason }}</span>{% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% else %}
-            <p style="color: var(--text-secondary); font-size: 13px;">Sin trades cerrados aún.</p>
-            {% endif %}
-        </div>
-
-        <!-- Signal History -->
-        {% if sigs %}
-        <div class="card">
-            <h2>Historial de Señales <span class="badge">últimas {{ sigs|length }}</span></h2>
-            <table class="responsive-table">
-                <thead>
-                    <tr>
-                        <th>Fecha</th>
-                        <th>Ticker</th>
-                        <th class="text-right">Score</th>
-                        <th>Estado</th>
-                        <th class="text-right">Retorno real (20d)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for s in sigs %}
-                    <tr>
-                        <td data-label="Fecha">{{ s.date }}</td>
-                        <td class="ticker" data-label="Ticker">{{ s.ticker }}</td>
-                        <td class="text-right" data-label="Score">{{ "%.4f"|format(s.score) }}</td>
-                        <td data-label="Estado">
-                            {% if s.was_traded %}<span class="tag tag-buy">Ejecutada</span>
-                            {% elif s.skip_reason %}<span class="tag tag-skip">{{ s.skip_reason }}</span>
-                            {% else %}<span class="tag tag-expiry">Skip</span>{% endif %}
-                        </td>
-                        <td class="text-right" data-label="Retorno real (20d)">
-                            {% if s.actual_ret is not none %}
-                            <span class="{% if s.actual_ret >= 0 %}profit{% else %}loss{% endif %}">{{ "%+.1f"|format(s.actual_ret) }}%</span>
-                            {% else %}
-                            <span style="color: var(--text-muted);">pendiente</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% endif %}
-
-        </div><!-- close strategy-panel -->
-        {% endif %}
-        {% endfor %}
-
-        {% else %}
-        <!-- No paper trading data -->
-        <div class="card" style="text-align: center; padding: 60px;">
-            <div style="font-size: 48px; margin-bottom: 16px;">📊</div>
-            <h2 style="justify-content: center; font-size: 20px;">Sin datos de Paper Trading</h2>
-            <p style="color: var(--text-secondary); margin-top: 8px; max-width: 400px; margin-left: auto; margin-right: auto;">
-                Ejecuta el pipeline para descargar datos, entrenar el modelo y generar las primeras señales de trading.
-            </p>
-            {% if not static_mode %}
-            <button class="btn-pipeline" onclick="runPipeline()" style="margin: 24px auto 0;">
-                <span class="spinner" id="pipelineSpinner2"></span>
-                <span>Ejecutar Pipeline</span>
-            </button>
-            {% endif %}
-        </div>
-        {% endif %}
+    <!-- Login (shown until authenticated) -->
+    <div id="login" class="login-wrap" style="display: none;">
+        <form class="login-card" id="loginForm" onsubmit="return doLogin(event)">
+            {% if logo %}<img class="logo-mark login-logo" src="{{ logo }}" alt="SCAI">{% endif %}
+            <h1>SCAI</h1>
+            <p class="login-sub">Acceso privado</p>
+            <input type="email" id="email" placeholder="Email" autocomplete="username" required>
+            <input type="password" id="password" placeholder="Contraseña" autocomplete="current-password" required>
+            <button type="submit" id="loginBtn">Entrar</button>
+            <div class="login-error" id="loginError"></div>
+        </form>
     </div>
 
-    <div class="footer">
-        SCAI Paper Trading · Modelo V3 LambdaRank · {{ data_info.n_tickers }} tickers · Actualizado {{ now }}
+    <!-- App (client-rendered after login) -->
+    <div class="container" id="app" style="display: none;">
+        <div id="appContent"></div>
     </div>
+
+    <div class="footer" id="footer" style="display: none;"></div>
 
     <script>
-        // Portfolio charts — one per strategy. Instances kept so the live
-        // refresh (Phase 2b) can push new Supabase data into them.
+        // ── Embedded public config (anon key + Finnhub token are public by design;
+        //    data is protected by Supabase Auth + RLS, not by hiding the key) ──
+        const SB_URL = {{ supabase_url | tojson }};
+        const SB_ANON = {{ supabase_anon_key | tojson }};
+        const FINNHUB_TOKEN = {{ finnhub_token | tojson }};
+        const STATIC_MODE = {{ static_mode | tojson }};
+        const LS_KEY = 'scai_session';
+
+        // ── Auth (Supabase, vanilla REST — no SDK) ──
+        function loadSession() { try { return JSON.parse(localStorage.getItem(LS_KEY)); } catch { return null; } }
+        function saveSession(s) { localStorage.setItem(LS_KEY, JSON.stringify(s)); }
+        function clearSession() { localStorage.removeItem(LS_KEY); }
+
+        async function sbAuth(path, body) {
+            const r = await fetch(SB_URL + '/auth/v1/' + path, {
+                method: 'POST',
+                headers: { apikey: SB_ANON, 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(data.error_description || data.msg || data.error || ('HTTP ' + r.status));
+            return data;
+        }
+        function storeTokens(data) {
+            saveSession({
+                access_token: data.access_token,
+                refresh_token: data.refresh_token,
+                expires_at: Date.now() + ((data.expires_in || 3600) * 1000),
+            });
+        }
+        async function doLogin(ev) {
+            ev.preventDefault();
+            const btn = document.getElementById('loginBtn');
+            const err = document.getElementById('loginError');
+            err.textContent = ''; btn.disabled = true; btn.textContent = 'Entrando…';
+            try {
+                const email = document.getElementById('email').value.trim();
+                const password = document.getElementById('password').value;
+                storeTokens(await sbAuth('token?grant_type=password', { email, password }));
+                await showApp();
+            } catch (e) {
+                err.textContent = 'No se pudo iniciar sesión: ' + e.message;
+            } finally {
+                btn.disabled = false; btn.textContent = 'Entrar';
+            }
+            return false;
+        }
+        async function getToken() {
+            const s = loadSession();
+            if (!s) return null;
+            if (Date.now() < s.expires_at - 60000) return s.access_token;
+            try {
+                storeTokens(await sbAuth('token?grant_type=refresh_token', { refresh_token: s.refresh_token }));
+                return loadSession().access_token;
+            } catch (e) { clearSession(); return null; }
+        }
+        function logout() { clearSession(); stopLivePrices(); location.reload(); }
+
+        async function fetchViews(token) {
+            const r = await fetch(SB_URL + '/rest/v1/dashboard_view?select=strategy,view', {
+                headers: { apikey: SB_ANON, Authorization: 'Bearer ' + token }, cache: 'no-store',
+            });
+            if (r.status === 401 || r.status === 403) throw new Error('unauthorized');
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const rows = await r.json();
+            const out = {};
+            for (const row of rows) out[row.strategy] = row.view;
+            return out;
+        }
+
+        // ── Small formatters ──
+        function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+        const f1 = x => (x >= 0 ? '+' : '') + Number(x).toFixed(1);
+        const f2 = x => (x >= 0 ? '+' : '') + Number(x).toFixed(2);
+        const m2 = x => Number(x).toFixed(2);
+        const cls = x => x >= 0 ? 'green' : 'red';
+        const pc = x => x >= 0 ? 'profit' : 'loss';
+        const arrow = x => '<span class="arrow">' + (x >= 0 ? '▲' : '▼') + '</span>';
+
+        // ── Render ──
         window.scaiCharts = {};
+
+        function kpiHTML(p, sid) {
+            const wrCls = p.win_rate >= 50 ? 'green' : (p.win_rate > 0 ? 'yellow' : 'red');
+            return `
+            <div class="kpi-grid">
+              <div class="kpi-card hero">
+                <div class="label">Valor Portfolio</div>
+                <div class="value ${cls(p.total_return)}" data-live="value-${sid}">€${m2(p.total_value)}</div>
+                <div class="detail">Capital inicial: €${Math.round(p.initial_capital)}</div>
+              </div>
+              <div class="kpi-card hero">
+                <div class="label">Retorno Total</div>
+                <div class="value ${cls(p.total_return)}" data-live="return-${sid}">${f1(p.total_return)}%</div>
+                <div class="detail" data-live="profit-${sid}">${f2(p.total_value - p.initial_capital)}€ beneficio</div>
+              </div>
+              <div class="kpi-card">
+                <div class="label">Cash Disponible</div>
+                <div class="value blue">€${m2(p.cash)}</div>
+                <div class="detail">${Math.round(p.cash / p.total_value * 100)}% del portfolio</div>
+              </div>
+              <div class="kpi-card">
+                <div class="label">Win Rate</div>
+                <div class="value ${wrCls}">${Math.round(p.win_rate)}%</div>
+                <div class="detail">${p.n_closed} trades cerrados</div>
+              </div>
+              <div class="kpi-card">
+                <div class="label">Avg Win / Avg Loss</div>
+                <div class="value green" style="font-size: 20px;">${f1(p.avg_win)}% <span style="color: var(--text-muted); font-size: 14px;">/</span> <span class="red">${f1(p.avg_loss)}%</span></div>
+                <div class="detail">P/L total: €${f2(p.total_profit)}</div>
+              </div>
+              <div class="kpi-card">
+                <div class="label">Posiciones</div>
+                <div class="value blue">${p.n_open} / ${p.max_positions}</div>
+                <div class="detail">${(p.pending || []).length} pendientes</div>
+              </div>
+            </div>`;
+        }
+
+        function metricsHTML(p) {
+            const st = p.stats;
+            const dash = '<span class="m-value" style="color: var(--text-muted);">—</span>';
+            const sharpe = st ? `<span class="m-value ${st.sharpe >= 1 ? 'green' : (st.sharpe >= 0 ? 'yellow' : 'red')}">${Number(st.sharpe).toFixed(2)}</span>` : dash;
+            const dd = st ? `<span class="m-value red">${Number(st.max_dd).toFixed(1)}%</span>` : dash;
+            const alpha = (st && st.alpha != null) ? `<span class="m-value ${st.alpha >= 0 ? 'green' : 'red'}">${f1(st.alpha)}%</span>` : dash;
+            return `
+            <div class="metrics-strip">
+              <div class="metric-chip"><span class="m-label">Sharpe (anual.)</span>${sharpe}<span class="m-hint">retorno / volatilidad</span></div>
+              <div class="metric-chip"><span class="m-label">Max Drawdown</span>${dd}<span class="m-hint">peor caída pico-valle</span></div>
+              <div class="metric-chip"><span class="m-label">Alpha vs SPY</span>${alpha}<span class="m-hint">exceso sobre el mercado</span></div>
+            </div>`;
+        }
+
+        function positionsHTML(p, sid) {
+            if (!p.positions || !p.positions.length) {
+                return '<div class="card"><h2>Posiciones Abiertas</h2><p style="color: var(--text-secondary); font-size: 13px;">Sin posiciones abiertas.</p></div>';
+            }
+            const rows = p.positions.map(pos => `
+                <tr data-ticker="${esc(pos.ticker)}" data-entry="${pos.entry_price}" data-shares="${pos.shares}">
+                    <td class="ticker" data-label="Ticker">${esc(pos.ticker)}</td>
+                    <td data-label="Entrada">${esc(pos.entry_date)}</td>
+                    <td class="text-right" data-label="$ Entrada">$${Number(pos.entry_price).toFixed(4)}</td>
+                    <td class="text-right td-price" data-label="$ Actual">$${m2(pos.current_price)}</td>
+                    <td class="text-right td-live" data-label="$ Live">—</td>
+                    <td class="text-right td-live-pct" data-label="% Live">—</td>
+                    <td class="text-right" data-label="Acciones">${pos.shares}</td>
+                    <td class="text-right" data-label="Invertido">€${m2(pos.invested)}</td>
+                    <td class="text-right" data-label="Valor" style="font-weight: 600;">€${m2(pos.current_value)}</td>
+                    <td class="text-right ${pc(pos.pnl_pct)}" data-label="P/L">${arrow(pos.pnl_pct)} ${f1(pos.pnl_pct)}% <span style="font-weight: 400; opacity: 0.7;">(€${f2(pos.profit)})</span></td>
+                    <td class="text-right" data-label="Trail Stop">$${m2(pos.trail_trigger)} <span style="color: var(--text-muted); font-size: 11px;">(${Math.round(pos.trailing_stop_pct)}%)</span></td>
+                </tr>`).join('');
+            const liveBadge = FINNHUB_TOKEN ? `<span class="live-badge" id="liveBadge-${sid}"><span class="status-dot stale"></span><span class="live-label">Conectando…</span></span>` : '';
+            return `
+            <div class="card">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                <h2 style="margin-bottom: 0;">Posiciones Abiertas <span class="badge">${p.n_open}</span></h2>
+                ${liveBadge}
+              </div>
+              <table class="positions-table responsive-table" id="posTable-${sid}">
+                <thead><tr>
+                  <th>Ticker</th><th>Entrada</th><th class="text-right">$ Entrada</th><th class="text-right">$ Actual</th>
+                  <th class="text-right">$ Live</th><th class="text-right">% Live</th><th class="text-right">Acciones</th>
+                  <th class="text-right">Invertido</th><th class="text-right">Valor</th><th class="text-right">P/L</th><th class="text-right">Trail Stop</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>`;
+        }
+
+        function pendingSummaryHTML(p) {
+            const pending = p.pending || [];
+            const pendingCards = pending.length
+                ? `<p style="color: var(--text-secondary); font-size: 12px; margin-bottom: 12px;">Se ejecutarán al open del próximo día de mercado</p>
+                   <div style="display: flex; gap: 10px; flex-wrap: wrap;">` + pending.map(sig => `
+                     <div style="background: var(--blue-bg); border: 1px solid rgba(88,166,255,0.25); border-radius: 8px; padding: 10px 16px;">
+                       <span class="ticker" style="font-size: 15px;">${esc(sig.ticker)}</span>
+                       <div style="color: var(--text-secondary); font-size: 11px; margin-top: 2px;">${Math.round((sig.position_size_pct || 0) * 100)}% del portfolio</div>
+                     </div>`).join('') + `</div>`
+                : '<p style="color: var(--text-secondary); font-size: 13px;">Sin señales pendientes.</p>';
+
+            const ct = p.closed_trades || [];
+            let best = '<div style="color: var(--text-muted); font-size: 14px;">—</div>';
+            let worst = best, hold = best;
+            if (ct.length) {
+                const sorted = [...ct].sort((a, b) => a.pnl_pct - b.pnl_pct);
+                const b = sorted[sorted.length - 1], w = sorted[0];
+                best = `<div class="green" style="font-size: 20px; font-weight: 700;">${f1(b.pnl_pct)}%</div><div style="color: var(--text-muted); font-size: 11px;">${esc(b.ticker)} · ${b.days_held}d</div>`;
+                worst = `<div class="red" style="font-size: 20px; font-weight: 700;">${f1(w.pnl_pct)}%</div><div style="color: var(--text-muted); font-size: 11px;">${esc(w.ticker)} · ${w.days_held}d</div>`;
+                const avg = Math.round(ct.reduce((s, t) => s + t.days_held, 0) / ct.length);
+                hold = `<div class="blue" style="font-size: 20px; font-weight: 700;">${avg}d</div>`;
+            }
+            return `
+            <div class="grid-2">
+              <div class="card">
+                <h2>Señales Pendientes <span class="badge">${pending.length}</span></h2>
+                ${pendingCards}
+              </div>
+              <div class="card">
+                <h2>Resumen de Trading</h2>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                  <div style="background: var(--bg-primary); border-radius: 8px; padding: 14px;"><div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase;">Mejor trade</div>${best}</div>
+                  <div style="background: var(--bg-primary); border-radius: 8px; padding: 14px;"><div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase;">Peor trade</div>${worst}</div>
+                  <div style="background: var(--bg-primary); border-radius: 8px; padding: 14px;"><div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase;">Holding medio</div>${hold}</div>
+                  <div style="background: var(--bg-primary); border-radius: 8px; padding: 14px;"><div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase;">Beneficio total</div><div class="${cls(p.total_profit)}" style="font-size: 20px; font-weight: 700;">€${f2(p.total_profit)}</div></div>
+                </div>
+              </div>
+            </div>`;
+        }
+
+        function closedHTML(p) {
+            const ct = p.closed_trades || [];
+            if (!ct.length) return '<div class="card"><h2>Historial de Trades Cerrados</h2><p style="color: var(--text-secondary); font-size: 13px;">Sin trades cerrados aún.</p></div>';
+            const rows = ct.map(t => {
+                let tag = `<span class="tag tag-expiry">${esc(t.exit_reason)}</span>`;
+                if (t.exit_reason === 'trailing_stop') tag = '<span class="tag tag-trail">Trailing Stop</span>';
+                else if (t.exit_reason === 'expiry') tag = '<span class="tag tag-expiry">Expiración</span>';
+                return `<tr>
+                    <td class="ticker" data-label="Ticker">${esc(t.ticker)}</td>
+                    <td data-label="Compra">${esc(t.entry_date)}</td>
+                    <td class="text-right" data-label="$ Entrada">$${Number(t.entry_price).toFixed(4)}</td>
+                    <td data-label="Venta">${esc(t.exit_date)}</td>
+                    <td class="text-right" data-label="$ Salida">$${m2(t.exit_price)}</td>
+                    <td class="text-right" data-label="Acciones">${t.shares}</td>
+                    <td class="text-right ${pc(t.pnl_usd)}" data-label="P/L €">€${f2(t.pnl_usd)}</td>
+                    <td class="text-right ${pc(t.pnl_pct)}" data-label="Retorno">${arrow(t.pnl_pct)} ${f1(t.pnl_pct)}%</td>
+                    <td class="text-right" data-label="Días">${t.days_held}d</td>
+                    <td data-label="Motivo">${tag}</td>
+                </tr>`;
+            }).join('');
+            return `
+            <div class="card">
+              <h2>Historial de Trades Cerrados <span class="badge">${ct.length}</span></h2>
+              <table class="responsive-table">
+                <thead><tr><th>Ticker</th><th>Compra</th><th class="text-right">$ Entrada</th><th>Venta</th><th class="text-right">$ Salida</th><th class="text-right">Acciones</th><th class="text-right">P/L €</th><th class="text-right">Retorno</th><th class="text-right">Días</th><th>Motivo</th></tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>`;
+        }
+
+        function signalsHTML(sigs) {
+            if (!sigs || !sigs.length) return '';
+            const rows = sigs.map(s => {
+                let st = '<span class="tag tag-expiry">Skip</span>';
+                if (s.was_traded) st = '<span class="tag tag-buy">Ejecutada</span>';
+                else if (s.skip_reason) st = `<span class="tag tag-skip">${esc(s.skip_reason)}</span>`;
+                const ret = (s.actual_ret != null)
+                    ? `<span class="${pc(s.actual_ret)}">${f1(s.actual_ret)}%</span>`
+                    : '<span style="color: var(--text-muted);">pendiente</span>';
+                return `<tr>
+                    <td data-label="Fecha">${esc(s.date)}</td>
+                    <td class="ticker" data-label="Ticker">${esc(s.ticker)}</td>
+                    <td class="text-right" data-label="Score">${Number(s.score).toFixed(4)}</td>
+                    <td data-label="Estado">${st}</td>
+                    <td class="text-right" data-label="Retorno real (20d)">${ret}</td>
+                </tr>`;
+            }).join('');
+            return `
+            <div class="card">
+              <h2>Historial de Señales <span class="badge">últimas ${sigs.length}</span></h2>
+              <table class="responsive-table">
+                <thead><tr><th>Fecha</th><th>Ticker</th><th class="text-right">Score</th><th>Estado</th><th class="text-right">Retorno real (20d)</th></tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>`;
+        }
+
+        function panelHTML(sid, view, active) {
+            const p = view.paper;
+            const chart = (p.chart_dates && p.chart_dates.length)
+                ? `<div class="card"><h2>Evolución del Portfolio</h2><canvas id="portfolioChart-${sid}" height="75"></canvas></div>` : '';
+            return `<div class="strategy-panel${active ? ' active' : ''}" id="panel-${sid}">
+                ${kpiHTML(p, sid)}${metricsHTML(p)}${chart}${positionsHTML(p, sid)}${pendingSummaryHTML(p)}${closedHTML(p)}${signalsHTML(view.signals)}
+            </div>`;
+        }
+
+        function renderDashboard(views) {
+            const order = [['baseline', 'Baseline'], ['adaptive', 'Adaptive Stop']].filter(([id]) => views[id]);
+            if (!order.length) {
+                document.getElementById('appContent').innerHTML = '<div class="card" style="text-align:center; padding:60px;"><div style="font-size:48px;">📊</div><h2 style="justify-content:center;">Sin datos de Paper Trading</h2><p style="color:var(--text-secondary);">El pipeline aún no ha publicado datos.</p></div>';
+                return;
+            }
+            const tabs = order.length > 1 ? '<div class="strategy-tabs">' + order.map(([id, name], i) => {
+                const p = views[id].paper;
+                return `<button class="strategy-tab${i === 0 ? ' active' : ''}" onclick="switchTab('${id}')">${name} <span class="tab-badge ${cls(p.total_return)}">${f1(p.total_return)}%</span></button>`;
+            }).join('') + '</div>' : '';
+            const panels = order.map(([id], i) => panelHTML(id, views[id], i === 0)).join('');
+            document.getElementById('appContent').innerHTML = tabs + panels;
+
+            // Header data-info + footer from the first view
+            const di = views[order[0][0]].data_info || {};
+            document.getElementById('dataInfo').innerHTML = `<span class="status-dot ok"></span>Datos: ${esc(di.latest_date || '')} · ${di.n_tickers || 0} tickers`;
+            document.getElementById('footer').textContent = `SCAI Paper Trading · Modelo V3 LambdaRank · ${di.n_tickers || 0} tickers`;
+
+            // Charts (after DOM exists)
+            for (const [id] of order) {
+                const p = views[id].paper;
+                if (p.chart_dates && p.chart_dates.length) {
+                    createPortfolioChart('portfolioChart-' + id, p.chart_dates, p.chart_values, p.initial_capital, p.spy_values);
+                }
+            }
+        }
+
+        function switchTab(stratId) {
+            document.querySelectorAll('.strategy-panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.strategy-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('panel-' + stratId).classList.add('active');
+            event.target.closest('.strategy-tab').classList.add('active');
+        }
+
         function createPortfolioChart(canvasId, dates, values, initialCapital, spyValues) {
             const el = document.getElementById(canvasId);
             if (!el) return;
+            if (window.scaiCharts[canvasId]) { window.scaiCharts[canvasId].destroy(); }
             const ctx = el.getContext('2d');
             const gradient = ctx.createLinearGradient(0, 0, 0, 280);
             const lastVal = values[values.length - 1];
@@ -714,20 +753,16 @@
                 gradient.addColorStop(1, 'rgba(248, 113, 113, 0.0)');
             }
             const datasets = [{
-                label: 'Portfolio (€)',
-                data: values,
+                label: 'Portfolio (€)', data: values,
                 borderColor: lastVal >= initialCapital ? '#34d399' : '#f87171',
-                backgroundColor: gradient,
-                fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 5, borderWidth: 2,
+                backgroundColor: gradient, fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 5, borderWidth: 2,
             }, {
-                label: 'Capital inicial',
-                data: Array(dates.length).fill(initialCapital),
+                label: 'Capital inicial', data: Array(dates.length).fill(initialCapital),
                 borderColor: 'rgba(255, 255, 255, 0.14)', borderDash: [5, 5], borderWidth: 1, pointRadius: 0, fill: false,
             }];
             if (spyValues && spyValues.length) {
                 datasets.push({
-                    label: 'SPY (mismo €)',
-                    data: spyValues,
+                    label: 'SPY (mismo €)', data: spyValues,
                     borderColor: 'rgba(152, 162, 179, 0.85)', borderDash: [2, 3],
                     borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 4, fill: false, tension: 0.3,
                 });
@@ -744,7 +779,7 @@
                             backgroundColor: '#0f131b', borderColor: 'rgba(255, 255, 255, 0.14)', borderWidth: 1,
                             titleColor: '#c9d1d9', bodyColor: '#e1e4e8', padding: 10,
                             callbacks: {
-                                label: function(c) {
+                                label: function (c) {
                                     if (c.datasetIndex === 0) {
                                         const pct = ((c.raw / initialCapital - 1) * 100).toFixed(1);
                                         return `€${c.raw.toFixed(2)} (${pct >= 0 ? '+' : ''}${pct}%)`;
@@ -762,124 +797,13 @@
             });
         }
 
-        {% if paper and paper.chart_dates %}
-        createPortfolioChart('portfolioChart-baseline', {{ paper.chart_dates | tojson }}, {{ paper.chart_values | tojson }}, {{ paper.initial_capital }}, {{ paper.spy_values | tojson }});
-        {% endif %}
-        {% if paper_adaptive and paper_adaptive.chart_dates %}
-        createPortfolioChart('portfolioChart-adaptive', {{ paper_adaptive.chart_dates | tojson }}, {{ paper_adaptive.chart_values | tojson }}, {{ paper_adaptive.initial_capital }}, {{ paper_adaptive.spy_values | tojson }});
-        {% endif %}
+        // ── Live prices via Finnhub WebSocket (real-time, no CORS) ──
+        let _ws = null, _wsClosedByUs = false;
+        function stopLivePrices() { _wsClosedByUs = true; try { _ws && _ws.close(); } catch (e) {} _ws = null; }
+        function startLivePrices() {
+            if (!FINNHUB_TOKEN) return;
+            stopLivePrices(); _wsClosedByUs = false;
 
-        // Tab switching
-        function switchTab(stratId) {
-            document.querySelectorAll('.strategy-panel').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.strategy-tab').forEach(t => t.classList.remove('active'));
-            document.getElementById('panel-' + stratId).classList.add('active');
-            event.target.closest('.strategy-tab').classList.add('active');
-        }
-
-        // Pipeline trigger
-        let pollInterval = null;
-
-        function runPipeline() {
-            const btn = document.getElementById('btnPipeline');
-            const spinner = document.getElementById('pipelineSpinner');
-            const btnText = document.getElementById('btnText');
-            const overlay = document.getElementById('pipelineOverlay');
-            const logEl = document.getElementById('pipelineLog');
-            const titleEl = document.getElementById('pipelineTitle');
-
-            btn.disabled = true;
-            btn.classList.add('running');
-            spinner.style.display = 'inline-block';
-            btnText.textContent = 'Ejecutando...';
-
-            overlay.classList.add('active');
-            logEl.textContent = 'Iniciando pipeline...\n';
-            titleEl.textContent = 'Pipeline en ejecución...';
-            titleEl.style.color = 'var(--yellow)';
-
-            fetch('/api/run-pipeline', { method: 'POST' })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.status === 'running') {
-                        logEl.textContent += 'Pipeline ya en ejecución (PID: ' + data.pid + ')\n';
-                    } else {
-                        logEl.textContent += 'Pipeline iniciado (PID: ' + data.pid + ')\n';
-                    }
-                    pollInterval = setInterval(checkPipelineStatus, 3000);
-                })
-                .catch(err => {
-                    logEl.textContent += 'Error: ' + err.message + '\n';
-                    resetButton();
-                });
-        }
-
-        function checkPipelineStatus() {
-            const logEl = document.getElementById('pipelineLog');
-            const titleEl = document.getElementById('pipelineTitle');
-
-            fetch('/api/pipeline-status')
-                .then(r => r.json())
-                .then(data => {
-                    if (data.status === 'running') {
-                        if (data.log_tail) {
-                            logEl.textContent = data.log_tail;
-                        }
-                        logEl.scrollTop = logEl.scrollHeight;
-                    } else if (data.status === 'finished') {
-                        clearInterval(pollInterval);
-                        if (data.log_tail) {
-                            logEl.textContent = data.log_tail;
-                        }
-                        if (data.exit_code === 0) {
-                            titleEl.textContent = 'Pipeline completado';
-                            titleEl.style.color = 'var(--green)';
-                            logEl.textContent += '\n\n✓ Pipeline completado. Recargando...';
-                            setTimeout(() => location.reload(), 2000);
-                        } else {
-                            titleEl.textContent = 'Pipeline falló (código ' + data.exit_code + ')';
-                            titleEl.style.color = 'var(--red)';
-                            logEl.textContent += '\n\n✗ Error en el pipeline. Revisa los logs.';
-                            resetButton();
-                        }
-                    } else {
-                        clearInterval(pollInterval);
-                        resetButton();
-                    }
-                })
-                .catch(() => {});
-        }
-
-        function closePipelineModal() {
-            document.getElementById('pipelineOverlay').classList.remove('active');
-        }
-
-        function resetButton() {
-            const btn = document.getElementById('btnPipeline');
-            const spinner = document.getElementById('pipelineSpinner');
-            const btnText = document.getElementById('btnText');
-            btn.disabled = false;
-            btn.classList.remove('running');
-            spinner.style.display = 'none';
-            btnText.textContent = 'Actualizar datos';
-        }
-
-        {% if finnhub_token %}
-        // ── Live prices via Finnhub WebSocket (free, real-time, no proxy) ──
-        // Streams trades for open-position tickers straight into the page (works
-        // on the static Pages snapshot too: WebSockets aren't subject to CORS, so
-        // the token is embedded like the Supabase anon key). Updates the existing
-        // .td-live / .td-live-pct cells across both strategy tables.
-        (function () {
-            const TOKEN = {{ finnhub_token | tojson }};
-
-            function positionTickers() {
-                const set = new Set();
-                document.querySelectorAll('.positions-table tbody tr[data-ticker]').forEach(r => {
-                    if (r.dataset.ticker) set.add(r.dataset.ticker);
-                });
-                return [...set];
-            }
             function setBadges(text, ok) {
                 document.querySelectorAll('[id^="liveBadge-"]').forEach(b => {
                     const dot = b.querySelector('.status-dot');
@@ -887,13 +811,15 @@
                     const lbl = b.querySelector('.live-label');
                     if (lbl) lbl.textContent = text;
                 });
+                const hd = document.getElementById('liveDot'), hl = document.getElementById('liveLabel');
+                if (hd) { hd.classList.toggle('ok', ok); hd.classList.toggle('stale', !ok); }
+                if (hl) hl.textContent = text;
             }
             function flash(cell, up) {
                 if (!cell) return;
-                const cls = up ? 'flash-up' : 'flash-down';
                 cell.classList.remove('flash-up', 'flash-down');
-                void cell.offsetWidth;  // restart the animation
-                cell.classList.add(cls);
+                void cell.offsetWidth;
+                cell.classList.add(up ? 'flash-up' : 'flash-down');
             }
             function applyPrice(ticker, price) {
                 document.querySelectorAll('.positions-table tbody tr[data-ticker="' + ticker + '"]').forEach(row => {
@@ -902,15 +828,13 @@
                     if (liveCell) {
                         const prev = parseFloat((liveCell.textContent || '').replace('$', ''));
                         liveCell.textContent = '$' + price.toFixed(2);
-                        liveCell.style.color = '#e8c456';
-                        liveCell.style.fontWeight = '600';
+                        liveCell.style.color = '#e8c456'; liveCell.style.fontWeight = '600';
                         if (!isNaN(prev) && prev !== price) flash(liveCell, price >= prev);
                     }
                     const pctCell = row.querySelector('.td-live-pct');
                     if (pctCell && entry) {
                         const pnl = (price / entry - 1) * 100;
-                        const arrow = pnl >= 0 ? '▲' : '▼';
-                        pctCell.innerHTML = '<span class="arrow">' + arrow + '</span> ' + (pnl >= 0 ? '+' : '') + pnl.toFixed(1) + '%';
+                        pctCell.innerHTML = '<span class="arrow">' + (pnl >= 0 ? '▲' : '▼') + '</span> ' + (pnl >= 0 ? '+' : '') + pnl.toFixed(1) + '%';
                         pctCell.className = 'text-right td-live-pct ' + (pnl >= 0 ? 'profit' : 'loss');
                         pctCell.style.fontWeight = '600';
                     }
@@ -923,20 +847,19 @@
                 const mins = et.getHours() * 60 + et.getMinutes();
                 return mins >= 9 * 60 + 30 && mins <= 16 * 60;
             }
+            const tickers = [...new Set([...document.querySelectorAll('.positions-table tbody tr[data-ticker]')].map(r => r.dataset.ticker).filter(Boolean))];
+            if (!tickers.length) { setBadges('Sin posiciones', false); return; }
+            if (!marketOpenET()) setBadges('Mercado cerrado', false);
 
-            const tickers = positionTickers();
-            if (tickers.length === 0) { setBadges('Sin posiciones', false); return; }
-            if (!marketOpenET()) { setBadges('Mercado cerrado', false); }
-
-            let ws, reconnectDelay = 2000, closedByUs = false;
+            let reconnectDelay = 2000;
             function connect() {
-                ws = new WebSocket('wss://ws.finnhub.io?token=' + encodeURIComponent(TOKEN));
-                ws.onopen = () => {
+                _ws = new WebSocket('wss://ws.finnhub.io?token=' + encodeURIComponent(FINNHUB_TOKEN));
+                _ws.onopen = () => {
                     reconnectDelay = 2000;
                     setBadges(marketOpenET() ? 'En vivo' : 'Conectado · cerrado', marketOpenET());
-                    tickers.forEach(t => ws.send(JSON.stringify({ type: 'subscribe', symbol: t })));
+                    tickers.forEach(t => _ws.send(JSON.stringify({ type: 'subscribe', symbol: t })));
                 };
-                ws.onmessage = (ev) => {
+                _ws.onmessage = (ev) => {
                     let msg; try { msg = JSON.parse(ev.data); } catch { return; }
                     if (msg.type !== 'trade' || !msg.data) return;
                     const latest = {};
@@ -944,110 +867,88 @@
                     for (const sym in latest) applyPrice(sym, latest[sym]);
                     setBadges('En vivo', true);
                 };
-                ws.onclose = () => {
-                    if (closedByUs) return;
+                _ws.onclose = () => {
+                    if (_wsClosedByUs) return;
                     setBadges('Reconectando…', false);
                     setTimeout(connect, reconnectDelay);
                     reconnectDelay = Math.min(reconnectDelay * 2, 30000);
                 };
-                ws.onerror = () => { try { ws.close(); } catch (e) {} };
+                _ws.onerror = () => { try { _ws.close(); } catch (e) {} };
             }
             connect();
-            window.addEventListener('beforeunload', () => { closedByUs = true; try { ws && ws.close(); } catch (e) {} });
+        }
+
+        // ── App lifecycle ──
+        function showLogin() {
+            document.getElementById('login').style.display = 'flex';
+            document.getElementById('app').style.display = 'none';
+            document.getElementById('footer').style.display = 'none';
+            document.getElementById('headerRight').style.display = 'none';
+        }
+        async function showApp() {
+            const token = await getToken();
+            if (!token) { showLogin(); return; }
+            let views;
+            try { views = await fetchViews(token); }
+            catch (e) {
+                if (e.message === 'unauthorized') { clearSession(); showLogin(); return; }
+                document.getElementById('appContent').innerHTML = '<div class="card">Error cargando datos: ' + esc(e.message) + '</div>';
+            }
+            document.getElementById('login').style.display = 'none';
+            document.getElementById('app').style.display = 'block';
+            document.getElementById('footer').style.display = 'block';
+            document.getElementById('headerRight').style.display = 'flex';
+            if (views) { renderDashboard(views); startLivePrices(); }
+        }
+        async function refresh() {
+            const token = await getToken();
+            if (!token) return;
+            try {
+                const views = await fetchViews(token);
+                renderDashboard(views);
+                startLivePrices();
+            } catch (e) { if (e.message === 'unauthorized') { clearSession(); showLogin(); } }
+        }
+
+        (async function init() {
+            if (loadSession()) await showApp(); else showLogin();
         })();
-        {% endif %}
+        // Refresh when the tab/phone returns to the foreground + slow poll (view changes once/day).
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && loadSession()) refresh(); });
+        setInterval(() => { if (loadSession() && document.visibilityState === 'visible') refresh(); }, 600000);
 
-        {% if static_mode and supabase_url and supabase_anon_key %}
-        // ── Phase 2b: live refresh from Supabase (anon key, RLS read-only) ──
-        // The Pages snapshot is static, but paper-trading state in Supabase keeps
-        // moving. Poll nav_history and push fresh equity/return into the page so a
-        // phone left open (or reopened) updates without a re-render.
-        (function () {
-            const SB_URL = {{ supabase_url | tojson }};
-            const SB_ANON = {{ supabase_anon_key | tojson }};
-            const INITIAL = {
-                {% if paper %}'baseline': {{ paper.initial_capital }},{% endif %}
-                {% if paper_adaptive %}'adaptive': {{ paper_adaptive.initial_capital }},{% endif %}
-            };
-            const STRATS = Object.keys(INITIAL);
-            const REFRESH_MS = 60000;
-
-            function sbGet(path) {
-                return fetch(SB_URL + '/rest/v1/' + path, {
-                    headers: { apikey: SB_ANON, Authorization: 'Bearer ' + SB_ANON },
-                    cache: 'no-store',
-                }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
-            }
-
-            function signClass(el, positive) {
-                if (!el) return;
-                el.classList.remove('green', 'red');
-                el.classList.add(positive ? 'green' : 'red');
-            }
-
-            function updateStrategy(strat, nav) {
-                if (!nav || !nav.length) return;
-                const dates = nav.map(e => String(e.date).slice(0, 10));
-                const values = nav.map(e => Math.round(e.portfolio_value * 100) / 100);
-                const initial = INITIAL[strat];
-                const last = values[values.length - 1];
-                const ret = (last / initial - 1) * 100;
-                const profit = last - initial;
-                const up = ret >= 0;
-
-                const chart = window.scaiCharts['portfolioChart-' + strat];
-                if (chart) {
-                    chart.data.labels = dates;
-                    chart.data.datasets[0].data = values;
-                    chart.data.datasets[0].borderColor = up ? '#34d399' : '#f87171';
-                    if (chart.data.datasets[1]) {
-                        chart.data.datasets[1].data = new Array(dates.length).fill(initial);
-                    }
-                    chart.update('none');
-                }
-
-                const valEl = document.querySelector('[data-live="value-' + strat + '"]');
-                if (valEl) { valEl.textContent = '€' + last.toFixed(2); signClass(valEl, up); }
-                const retEl = document.querySelector('[data-live="return-' + strat + '"]');
-                if (retEl) { retEl.textContent = (ret >= 0 ? '+' : '') + ret.toFixed(1) + '%'; signClass(retEl, up); }
-                const profEl = document.querySelector('[data-live="profit-' + strat + '"]');
-                if (profEl) { profEl.textContent = (profit >= 0 ? '+' : '') + profit.toFixed(2) + '€ beneficio'; }
-                const badgeEl = document.querySelector('[data-live="badge-' + strat + '"]');
-                if (badgeEl) { badgeEl.textContent = (ret >= 0 ? '+' : '') + ret.toFixed(1) + '%'; signClass(badgeEl, up); }
-            }
-
-            function setLive(ok) {
-                const dot = document.getElementById('liveDot');
-                const label = document.getElementById('liveLabel');
-                if (dot) { dot.classList.toggle('ok', ok); dot.classList.toggle('stale', !ok); }
-                if (label) {
-                    const t = new Date().toLocaleTimeString('es-ES',
-                        { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                    label.textContent = ok ? ('En vivo · ' + t) : 'Sin conexión · reintentando';
-                }
-            }
-
-            function refresh() {
-                sbGet('nav_history?select=strategy,date,portfolio_value&order=date.asc')
-                    .then(all => {
-                        const byStrat = {};
-                        for (const row of all) {
-                            if (!byStrat[row.strategy]) byStrat[row.strategy] = [];
-                            byStrat[row.strategy].push(row);
-                        }
-                        STRATS.forEach(s => updateStrategy(s, byStrat[s]));
-                        setLive(true);
-                    })
-                    .catch(() => setLive(false));
-            }
-
-            refresh();
-            setInterval(refresh, REFRESH_MS);
-            // Instant update when the tab/phone returns to the foreground.
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible') refresh();
-            });
-        })();
+        {% if not static_mode %}
+        // ── Pipeline trigger (live server only) ──
+        let pollInterval = null;
+        function runPipeline() {
+            const btn = document.getElementById('btnPipeline'), spinner = document.getElementById('pipelineSpinner'),
+                  btnText = document.getElementById('btnText'), overlay = document.getElementById('pipelineOverlay'),
+                  logEl = document.getElementById('pipelineLog'), titleEl = document.getElementById('pipelineTitle');
+            btn.disabled = true; btn.classList.add('running'); spinner.style.display = 'inline-block'; btnText.textContent = 'Ejecutando...';
+            overlay.classList.add('active'); logEl.textContent = 'Iniciando pipeline...\n';
+            titleEl.textContent = 'Pipeline en ejecución...'; titleEl.style.color = 'var(--yellow)';
+            fetch('/api/run-pipeline', { method: 'POST' }).then(r => r.json()).then(data => {
+                logEl.textContent += 'Pipeline iniciado (PID: ' + data.pid + ')\n';
+                pollInterval = setInterval(checkPipelineStatus, 3000);
+            }).catch(err => { logEl.textContent += 'Error: ' + err.message + '\n'; resetButton(); });
+        }
+        function checkPipelineStatus() {
+            const logEl = document.getElementById('pipelineLog'), titleEl = document.getElementById('pipelineTitle');
+            fetch('/api/pipeline-status').then(r => r.json()).then(data => {
+                if (data.status === 'running') { if (data.log_tail) logEl.textContent = data.log_tail; logEl.scrollTop = logEl.scrollHeight; }
+                else if (data.status === 'finished') {
+                    clearInterval(pollInterval);
+                    if (data.log_tail) logEl.textContent = data.log_tail;
+                    if (data.exit_code === 0) { titleEl.textContent = 'Pipeline completado'; titleEl.style.color = 'var(--green)'; logEl.textContent += '\n\n✓ Completado. Recargando...'; setTimeout(() => location.reload(), 2000); }
+                    else { titleEl.textContent = 'Pipeline falló (' + data.exit_code + ')'; titleEl.style.color = 'var(--red)'; resetButton(); }
+                } else { clearInterval(pollInterval); resetButton(); }
+            }).catch(() => {});
+        }
+        function closePipelineModal() { document.getElementById('pipelineOverlay').classList.remove('active'); }
+        function resetButton() {
+            const btn = document.getElementById('btnPipeline'), spinner = document.getElementById('pipelineSpinner'), btnText = document.getElementById('btnText');
+            btn.disabled = false; btn.classList.remove('running'); spinner.style.display = 'none'; btnText.textContent = 'Actualizar datos';
+        }
         {% endif %}
     </script>
 </body>
