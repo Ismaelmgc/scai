@@ -1,6 +1,7 @@
 """SCAI Web Dashboard — Paper Trading UI with pipeline trigger."""
 from __future__ import annotations
 
+import base64
 import json
 import os
 import subprocess
@@ -26,8 +27,20 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 PAPER_TRADING_DIR = ROOT / "data" / "paper_trading"
 PAPER_TRADING_ADAPTIVE_DIR = ROOT / "data" / "paper_trading" / "adaptive"
 DATA_DIR = ROOT / "data" / "processed"
+_STATIC = Path(__file__).parent / "static"
+LOGO_PATH = _STATIC / "scai_bull.png"        # header mark: thin gold line-art bull
+FAVICON_PATH = _STATIC / "scai_favicon.png"  # browser tab: gold tile (legible at 16px)
 
 _pipeline_proc: subprocess.Popen | None = None
+
+
+def _asset_data_uri(path: Path) -> str:
+    """Base64 PNG data URI for a brand asset, embedded inline so the static
+    Pages snapshot stays a single self-contained file. "" if the asset is missing.
+    """
+    if not path.exists():
+        return ""
+    return f"data:image/png;base64,{base64.b64encode(path.read_bytes()).decode()}"
 
 
 def _load_ohlcv() -> pd.DataFrame:
@@ -228,6 +241,8 @@ async def dashboard(request: Request):
             # Live prices stream client-side via the Finnhub WebSocket (works on
             # the static Pages snapshot too, since WebSockets bypass CORS).
             "finnhub_token": finnhub.public_token(),
+            "logo": _asset_data_uri(LOGO_PATH),
+            "favicon": _asset_data_uri(FAVICON_PATH),
         },
     )
 

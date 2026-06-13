@@ -60,6 +60,8 @@ def main() -> None:
         supabase_url=supabase_url,
         supabase_anon_key=supabase_anon_key,
         finnhub_token=finnhub_token,
+        logo=server._asset_data_uri(server.LOGO_PATH),
+        favicon=server._asset_data_uri(server.FAVICON_PATH),
     )
     if supabase_url and supabase_anon_key:
         print("  Live refresh enabled (Supabase anon key embedded)")

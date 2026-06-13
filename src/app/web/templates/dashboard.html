@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SCAI — Paper Trading</title>
+    <title>SCAI</title>
+    {% if favicon %}<link rel="icon" type="image/png" href="{{ favicon }}">{% endif %}
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         :root {
@@ -58,19 +59,17 @@
         }
         .brand { display: flex; align-items: center; gap: 14px; }
         .logo-mark {
-            width: 46px; height: 46px; flex-shrink: 0;
+            width: 44px; height: 44px; flex-shrink: 0; object-fit: contain; display: block;
             filter: drop-shadow(0 0 10px rgba(231, 189, 71, 0.42));
             transition: transform 0.25s ease;
         }
         .brand:hover .logo-mark { transform: translateY(-1px) scale(1.04); }
-        .brand-text { display: flex; flex-direction: column; line-height: 1.12; }
         .brand-name {
             font-size: 23px; font-weight: 800; letter-spacing: -0.6px;
             background: var(--accent-grad);
             -webkit-background-clip: text; background-clip: text;
             color: transparent;
         }
-        .brand-tag { font-size: 11px; color: var(--text-secondary); font-weight: 500; letter-spacing: 0.2px; margin-top: 1px; }
         .header-right { display: flex; align-items: center; gap: 16px; }
         .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
         .status-dot.ok { background: var(--green); box-shadow: 0 0 8px var(--green); }
@@ -274,25 +273,8 @@
 <body>
     <div class="header">
         <div class="brand">
-            <svg class="logo-mark" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SCAI">
-                <defs>
-                    <linearGradient id="scaiStroke" x1="9" y1="12" x2="39" y2="33" gradientUnits="userSpaceOnUse">
-                        <stop stop-color="#fdeaa0"/>
-                        <stop offset="0.5" stop-color="#e7bd47"/>
-                        <stop offset="1" stop-color="#c79331"/>
-                    </linearGradient>
-                </defs>
-                <g stroke="url(#scaiStroke)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
-                    <!-- bull horns -->
-                    <path d="M9.5 12 C 10.5 19.5, 16.5 24, 24 24 C 31.5 24, 37.5 19.5, 38.5 12"/>
-                    <!-- head -->
-                    <circle cx="24" cy="33" r="8"/>
-                </g>
-            </svg>
-            <div class="brand-text">
-                <span class="brand-name">SCAI</span>
-                <span class="brand-tag">Small-Cap AI · Paper Trading</span>
-            </div>
+            {% if logo %}<img class="logo-mark" src="{{ logo }}" alt="SCAI">{% endif %}
+            <span class="brand-name">SCAI</span>
         </div>
         <div class="header-right">
             <div class="data-info">
