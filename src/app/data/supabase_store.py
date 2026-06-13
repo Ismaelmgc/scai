@@ -50,9 +50,26 @@ def _service_key() -> str:
     return _env("SUPABASE_SERVICE_KEY")
 
 
+def _anon_key() -> str:
+    return _env("SUPABASE_ANON_KEY")
+
+
+def _read_key() -> str:
+    """Key for reads: the service key when available (CI pipeline / local with
+    .env), else the anon key (Pages render step, which only carries the anon
+    key). RLS grants anon SELECT on every table, so reads work with either;
+    writes still require the service key."""
+    return _service_key() or _anon_key()
+
+
 def is_configured() -> bool:
     """True when URL + service key are present (writes possible)."""
     return bool(_base_url() and _service_key())
+
+
+def _read_configured() -> bool:
+    """True when reads are possible (URL + any key — service or anon)."""
+    return bool(_base_url() and _read_key())
 
 
 def public_config() -> tuple[str, str]:
@@ -62,11 +79,12 @@ def public_config() -> tuple[str, str]:
     read-only access. Returns ``("", "")`` when either is unset, so callers
     can skip emitting the live-refresh script.
     """
-    return _base_url(), _env("SUPABASE_ANON_KEY")
+    return _base_url(), _anon_key()
 
 
-def _headers(extra: dict[str, str] | None = None) -> dict[str, str]:
-    key = _service_key()
+def _headers(extra: dict[str, str] | None = None,
+             key: str | None = None) -> dict[str, str]:
+    key = key or _service_key()
     h = {
         "apikey": key,
         "Authorization": f"Bearer {key}",
@@ -103,12 +121,16 @@ def write_state(strategy: str, state: dict) -> None:
 
 
 def read_state(strategy: str) -> dict | None:
-    """Fetch the portfolio state row for a strategy, or None if absent."""
-    if not is_configured():
+    """Fetch the portfolio state row for a strategy, or None if absent.
+
+    Reads with the anon key when no service key is present (Pages render),
+    relying on the RLS read policy.
+    """
+    if not _read_configured():
         return None
     url = f"{_base_url()}/rest/v1/portfolio_state"
     params = {"strategy": f"eq.{strategy}", "select": "state", "limit": "1"}
-    r = httpx.get(url, params=params, headers=_headers(), timeout=_TIMEOUT)
+    r = httpx.get(url, params=params, headers=_headers(key=_read_key()), timeout=_TIMEOUT)
     r.raise_for_status()
     data = r.json()
     return data[0]["state"] if data else None
@@ -161,14 +183,14 @@ def write_dashboard_view(strategy: str, view: dict) -> None:
 
 def _get(table: str, params: dict) -> list[dict]:
     r = httpx.get(f"{_base_url()}/rest/v1/{table}", params=params,
-                  headers=_headers(), timeout=_TIMEOUT)
+                  headers=_headers(key=_read_key()), timeout=_TIMEOUT)
     r.raise_for_status()
     return r.json()
 
 
 def read_nav(strategy: str) -> list[dict]:
     """Daily NAV points (date, portfolio_value) ascending, for the equity chart."""
-    if not is_configured():
+    if not _read_configured():
         return []
     return _get("nav_history", {
         "strategy": f"eq.{strategy}",
@@ -179,7 +201,7 @@ def read_nav(strategy: str) -> list[dict]:
 
 def read_signals(strategy: str, limit: int = 50) -> list[dict]:
     """Most recent signals for a strategy (newest first)."""
-    if not is_configured():
+    if not _read_configured():
         return []
     return _get("signals", {
         "strategy": f"eq.{strategy}",

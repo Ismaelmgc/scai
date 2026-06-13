@@ -100,3 +100,43 @@ def test_write_dashboard_view_noop_when_unconfigured(monkeypatch):
     monkeypatch.setattr(s.httpx, "post",
                         lambda *a, **k: (_ for _ in ()).throw(AssertionError("posted")))
     s.write_dashboard_view("baseline", {"x": 1})  # no exception, no call
+
+
+def test_read_key_prefers_service_then_anon(monkeypatch):
+    monkeypatch.setattr(s, "_service_key", lambda: "svc")
+    monkeypatch.setattr(s, "_anon_key", lambda: "anon")
+    assert s._read_key() == "svc"
+    monkeypatch.setattr(s, "_service_key", lambda: "")
+    assert s._read_key() == "anon"
+
+
+def test_reads_work_with_anon_only(monkeypatch):
+    """Pages render carries only the anon key — reads must still work (RLS)."""
+    monkeypatch.setattr(s, "_base_url", lambda: "https://x.supabase.co")
+    monkeypatch.setattr(s, "_service_key", lambda: "")
+    monkeypatch.setattr(s, "_anon_key", lambda: "anon-key")
+
+    captured = {}
+
+    def _get(url, params, headers, timeout):
+        captured.update(headers=headers)
+        return _FakeResp()
+
+    monkeypatch.setattr(s.httpx, "get", _get)
+    assert s.is_configured() is False          # writes blocked without service key
+    assert s._read_configured() is True        # reads allowed with anon key
+    assert s.read_state("baseline") == {"cash": 1000.0}
+    assert captured["headers"]["apikey"] == "anon-key"
+
+
+def test_writes_noop_with_anon_only(monkeypatch):
+    """Anon key alone must never attempt a write (RLS would reject it anyway)."""
+    monkeypatch.setattr(s, "_base_url", lambda: "https://x.supabase.co")
+    monkeypatch.setattr(s, "_service_key", lambda: "")
+    monkeypatch.setattr(s, "_anon_key", lambda: "anon-key")
+
+    def _boom(*a, **k):
+        raise AssertionError("write attempted with anon-only config")
+
+    monkeypatch.setattr(s.httpx, "post", _boom)
+    s.write_state("baseline", {"cash": 1000.0})  # no-op, no exception
