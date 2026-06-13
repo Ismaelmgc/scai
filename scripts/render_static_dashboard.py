@@ -11,6 +11,8 @@ Usage:
 """
 from __future__ import annotations
 
+import json
+import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -60,6 +62,8 @@ def main() -> None:
         supabase_url=supabase_url,
         supabase_anon_key=supabase_anon_key,
         finnhub_token=finnhub_token,
+        logo=server._asset_data_uri(server.LOGO_PATH),
+        favicon=server._asset_data_uri(server.FAVICON_PATH),
     )
     if supabase_url and supabase_anon_key:
         print("  Live refresh enabled (Supabase anon key embedded)")
@@ -75,6 +79,34 @@ def main() -> None:
     (out_dir / "index.html").write_text(html, encoding="utf-8")
     (out_dir / ".nojekyll").write_text("", encoding="utf-8")
     print(f"  Wrote {out_dir / 'index.html'} ({len(html):,} bytes)")
+
+    # PWA: copy icons + write the web manifest alongside index.html so the Pages
+    # site is installable on a phone home screen.
+    static_dir = ROOT / "src" / "app" / "web" / "static"
+    icons = []
+    for name in ("icon-180.png", "icon-192.png", "icon-512.png"):
+        src_icon = static_dir / name
+        if src_icon.exists():
+            shutil.copyfile(src_icon, out_dir / name)
+            icons.append(name)
+    manifest = {
+        "name": "SCAI",
+        "short_name": "SCAI",
+        "description": "Dashboard de paper trading — small-caps US",
+        "start_url": "./",
+        "scope": "./",
+        "display": "standalone",
+        "background_color": "#0a0c12",
+        "theme_color": "#0a0c12",
+        "icons": [
+            {"src": "icon-192.png", "sizes": "192x192",
+             "type": "image/png", "purpose": "any maskable"},
+            {"src": "icon-512.png", "sizes": "512x512",
+             "type": "image/png", "purpose": "any maskable"},
+        ],
+    }
+    (out_dir / "manifest.webmanifest").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    print(f"  PWA: manifest + {len(icons)} icons copied ({', '.join(icons)})")
 
 
 if __name__ == "__main__":
