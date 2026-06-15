@@ -62,13 +62,10 @@ jobs:
       - name: Render static dashboard
         env:
           PYTHONPATH: src
-          # Anon (publishable) key + URL embedded in the Pages snapshot so it can
-          # poll Supabase live (Phase 2b). RLS keeps the anon key read-only.
+          # Anon (publishable) key + URL embedded in the login shell so it can
+          # authenticate and read Supabase. RLS restricts reads to logged-in users.
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          # Finnhub token embedded so the snapshot streams live prices over the
-          # Finnhub WebSocket (free, real-time, no CORS issue for WebSockets).
-          FINNHUB_TOKEN: ${{ secrets.FINNHUB_TOKEN }}
         run: python scripts/render_static_dashboard.py
 
       - name: Commit updated market data & model

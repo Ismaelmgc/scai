@@ -433,7 +433,6 @@
         //    data is protected by Supabase Auth + RLS, not by hiding the key) ──
         const SB_URL = {{ supabase_url | tojson }};
         const SB_ANON = {{ supabase_anon_key | tojson }};
-        const FINNHUB_TOKEN = {{ finnhub_token | tojson }};
         const STATIC_MODE = {{ static_mode | tojson }};
         const LS_KEY = 'scai_session';
 
@@ -580,7 +579,7 @@
                     <td class="text-right ${pc(pos.pnl_pct)}" data-label="P/L">${arrow(pos.pnl_pct)} ${f1(pos.pnl_pct)}% <span style="font-weight: 400; opacity: 0.7;">(€${f2(pos.profit)})</span></td>
                     <td class="text-right" data-label="Trail Stop">$${m2(pos.trail_trigger)} <span style="color: var(--text-muted); font-size: 11px;">(${Math.round(pos.trailing_stop_pct)}%)</span></td>
                 </tr>`).join('');
-            const liveBadge = FINNHUB_TOKEN ? `<span class="live-badge" id="liveBadge-${sid}"><span class="status-dot stale"></span><span class="live-label">Conectando…</span></span>` : '';
+            const liveBadge = `<span class="live-badge" id="liveBadge-${sid}"><span class="status-dot stale"></span><span class="live-label">—</span></span>`;
             return `
             <div class="card">
               <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
@@ -797,93 +796,77 @@
             });
         }
 
-        // ── Live prices via Finnhub WebSocket (real-time, no CORS) ──
-        let _ws = null, _wsClosedByUs = false;
-        function stopLivePrices() { _wsClosedByUs = true; try { _ws && _ws.close(); } catch (e) {} _ws = null; }
+        // ── Live prices: read the `live_prices` table. A Cloudflare Worker polls
+        //    Finnhub REST → Supabase every minute during market hours (the free
+        //    WebSocket doesn't stream small-caps; REST does, server-side only).
+        //    Poll every 60s and fill the $ Live / % Live cells; the badge reflects
+        //    freshness from updated_at. ──
+        let _liveTimer = null;
+        function stopLivePrices() { if (_liveTimer) { clearInterval(_liveTimer); _liveTimer = null; } }
+        function setBadges(text, ok) {
+            document.querySelectorAll('[id^="liveBadge-"]').forEach(b => {
+                const dot = b.querySelector('.status-dot');
+                if (dot) { dot.classList.toggle('ok', ok); dot.classList.toggle('stale', !ok); }
+                const lbl = b.querySelector('.live-label');
+                if (lbl) lbl.textContent = text;
+            });
+            const hd = document.getElementById('liveDot'), hl = document.getElementById('liveLabel');
+            if (hd) { hd.classList.toggle('ok', ok); hd.classList.toggle('stale', !ok); }
+            if (hl) hl.textContent = text;
+        }
+        function flash(cell, up) {
+            if (!cell) return;
+            cell.classList.remove('flash-up', 'flash-down');
+            void cell.offsetWidth;
+            cell.classList.add(up ? 'flash-up' : 'flash-down');
+        }
+        function applyPrice(ticker, price) {
+            document.querySelectorAll('.positions-table tbody tr[data-ticker="' + ticker + '"]').forEach(row => {
+                const entry = parseFloat(row.dataset.entry);
+                const liveCell = row.querySelector('.td-live');
+                if (liveCell) {
+                    const prev = parseFloat((liveCell.textContent || '').replace('$', ''));
+                    liveCell.textContent = '$' + price.toFixed(2);
+                    liveCell.style.color = '#e8c456'; liveCell.style.fontWeight = '600';
+                    if (!isNaN(prev) && prev !== price) flash(liveCell, price >= prev);
+                }
+                const pctCell = row.querySelector('.td-live-pct');
+                if (pctCell && entry) {
+                    const pnl = (price / entry - 1) * 100;
+                    pctCell.innerHTML = '<span class="arrow">' + (pnl >= 0 ? '▲' : '▼') + '</span> ' + (pnl >= 0 ? '+' : '') + pnl.toFixed(1) + '%';
+                    pctCell.className = 'text-right td-live-pct ' + (pnl >= 0 ? 'profit' : 'loss');
+                    pctCell.style.fontWeight = '600';
+                }
+            });
+        }
         function startLivePrices() {
-            if (!FINNHUB_TOKEN) return;
-            stopLivePrices(); _wsClosedByUs = false;
-
-            function setBadges(text, ok) {
-                document.querySelectorAll('[id^="liveBadge-"]').forEach(b => {
-                    const dot = b.querySelector('.status-dot');
-                    if (dot) { dot.classList.toggle('ok', ok); dot.classList.toggle('stale', !ok); }
-                    const lbl = b.querySelector('.live-label');
-                    if (lbl) lbl.textContent = text;
-                });
-                const hd = document.getElementById('liveDot'), hl = document.getElementById('liveLabel');
-                if (hd) { hd.classList.toggle('ok', ok); hd.classList.toggle('stale', !ok); }
-                if (hl) hl.textContent = text;
+            stopLivePrices();
+            if (!document.querySelector('.positions-table tbody tr[data-ticker]')) { setBadges('Sin posiciones', false); return; }
+            async function pull() {
+                const token = await getToken();
+                if (!token) return;
+                let rows;
+                try {
+                    const r = await fetch(SB_URL + '/rest/v1/live_prices?select=ticker,price,updated_at', {
+                        headers: { apikey: SB_ANON, Authorization: 'Bearer ' + token }, cache: 'no-store',
+                    });
+                    if (!r.ok) { setBadges('Sin conexión en vivo', false); return; }
+                    rows = await r.json();
+                } catch (e) { setBadges('Sin conexión en vivo', false); return; }
+                if (!rows || !rows.length) { setBadges('Esperando precios', false); return; }
+                let newest = 0;
+                for (const row of rows) {
+                    applyPrice(row.ticker, Number(row.price));
+                    const ts = Date.parse(row.updated_at) || 0;
+                    if (ts > newest) newest = ts;
+                }
+                const ageMin = (Date.now() - newest) / 60000;
+                if (ageMin < 3) setBadges('En vivo', true);
+                else if (ageMin < 60) setBadges('Hace ' + Math.round(ageMin) + ' min', false);
+                else setBadges('Cierre anterior', false);
             }
-            function flash(cell, up) {
-                if (!cell) return;
-                cell.classList.remove('flash-up', 'flash-down');
-                void cell.offsetWidth;
-                cell.classList.add(up ? 'flash-up' : 'flash-down');
-            }
-            function applyPrice(ticker, price) {
-                document.querySelectorAll('.positions-table tbody tr[data-ticker="' + ticker + '"]').forEach(row => {
-                    const entry = parseFloat(row.dataset.entry);
-                    const liveCell = row.querySelector('.td-live');
-                    if (liveCell) {
-                        const prev = parseFloat((liveCell.textContent || '').replace('$', ''));
-                        liveCell.textContent = '$' + price.toFixed(2);
-                        liveCell.style.color = '#e8c456'; liveCell.style.fontWeight = '600';
-                        if (!isNaN(prev) && prev !== price) flash(liveCell, price >= prev);
-                    }
-                    const pctCell = row.querySelector('.td-live-pct');
-                    if (pctCell && entry) {
-                        const pnl = (price / entry - 1) * 100;
-                        pctCell.innerHTML = '<span class="arrow">' + (pnl >= 0 ? '▲' : '▼') + '</span> ' + (pnl >= 0 ? '+' : '') + pnl.toFixed(1) + '%';
-                        pctCell.className = 'text-right td-live-pct ' + (pnl >= 0 ? 'profit' : 'loss');
-                        pctCell.style.fontWeight = '600';
-                    }
-                });
-            }
-            function marketOpenET() {
-                const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-                const day = et.getDay();
-                if (day === 0 || day === 6) return false;
-                const mins = et.getHours() * 60 + et.getMinutes();
-                return mins >= 9 * 60 + 30 && mins <= 16 * 60;
-            }
-            const tickers = [...new Set([...document.querySelectorAll('.positions-table tbody tr[data-ticker]')].map(r => r.dataset.ticker).filter(Boolean))];
-            if (!tickers.length) { setBadges('Sin posiciones', false); return; }
-            // Finnhub free tier: only open the socket DURING market hours. Outside
-            // hours there are no trades and idle sockets get dropped → a reconnect
-            // storm that trips the free connection/rate limit (HTTP 429) and shows
-            // "Reconectando…" forever. refresh()/visibilitychange reconnect once open.
-            if (!marketOpenET()) { setBadges('Mercado cerrado', false); return; }
-
-            let attempts = 0, reconnectDelay = 3000;
-            function connect() {
-                if (_wsClosedByUs) return;
-                _ws = new WebSocket('wss://ws.finnhub.io?token=' + encodeURIComponent(FINNHUB_TOKEN));
-                _ws.onopen = () => {
-                    attempts = 0; reconnectDelay = 3000;
-                    setBadges('En vivo', true);
-                    tickers.forEach(t => _ws.send(JSON.stringify({ type: 'subscribe', symbol: t })));
-                };
-                _ws.onmessage = (ev) => {
-                    let msg; try { msg = JSON.parse(ev.data); } catch { return; }
-                    if (msg.type !== 'trade' || !msg.data) return;
-                    const latest = {};
-                    for (const tr of msg.data) latest[tr.s] = tr.p;
-                    for (const sym in latest) applyPrice(sym, latest[sym]);
-                    setBadges('En vivo', true);
-                };
-                _ws.onclose = () => {
-                    if (_wsClosedByUs) return;
-                    if (!marketOpenET()) { setBadges('Mercado cerrado', false); return; }
-                    // Cap retries with a long backoff so a free-tier 429 doesn't loop forever.
-                    if (++attempts > 6) { setBadges('Sin conexión en vivo', false); return; }
-                    setBadges('Reconectando…', false);
-                    setTimeout(connect, reconnectDelay);
-                    reconnectDelay = Math.min(reconnectDelay * 2, 60000);
-                };
-                _ws.onerror = () => { try { _ws.close(); } catch (e) {} };
-            }
-            connect();
+            pull();
+            _liveTimer = setInterval(pull, 60000);
         }
 
         // ── App lifecycle ──
