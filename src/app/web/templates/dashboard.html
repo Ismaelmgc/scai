@@ -295,8 +295,10 @@
            mobile). Pairs with maintainAspectRatio:false in createPortfolioChart. */
         .chart-wrap { position: relative; height: 300px; }
 
-        /* Signal history "Ver más": extra rows hidden until the table gets .show-all */
-        .sig-extra { display: none; }
+        /* Signal history "Ver más": extra rows hidden until the table gets .show-all.
+           Scoped to .responsive-table so it outranks the mobile `.responsive-table tr
+           { display: block }` rule, which otherwise forces every row visible. */
+        .responsive-table .sig-extra { display: none; }
         .responsive-table.show-all .sig-extra { display: table-row; }
         .btn-more {
             margin-top: 14px; width: 100%;
