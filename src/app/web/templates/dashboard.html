@@ -849,14 +849,19 @@
             }
             const tickers = [...new Set([...document.querySelectorAll('.positions-table tbody tr[data-ticker]')].map(r => r.dataset.ticker).filter(Boolean))];
             if (!tickers.length) { setBadges('Sin posiciones', false); return; }
-            if (!marketOpenET()) setBadges('Mercado cerrado', false);
+            // Finnhub free tier: only open the socket DURING market hours. Outside
+            // hours there are no trades and idle sockets get dropped → a reconnect
+            // storm that trips the free connection/rate limit (HTTP 429) and shows
+            // "Reconectando…" forever. refresh()/visibilitychange reconnect once open.
+            if (!marketOpenET()) { setBadges('Mercado cerrado', false); return; }
 
-            let reconnectDelay = 2000;
+            let attempts = 0, reconnectDelay = 3000;
             function connect() {
+                if (_wsClosedByUs) return;
                 _ws = new WebSocket('wss://ws.finnhub.io?token=' + encodeURIComponent(FINNHUB_TOKEN));
                 _ws.onopen = () => {
-                    reconnectDelay = 2000;
-                    setBadges(marketOpenET() ? 'En vivo' : 'Conectado · cerrado', marketOpenET());
+                    attempts = 0; reconnectDelay = 3000;
+                    setBadges('En vivo', true);
                     tickers.forEach(t => _ws.send(JSON.stringify({ type: 'subscribe', symbol: t })));
                 };
                 _ws.onmessage = (ev) => {
@@ -869,9 +874,12 @@
                 };
                 _ws.onclose = () => {
                     if (_wsClosedByUs) return;
+                    if (!marketOpenET()) { setBadges('Mercado cerrado', false); return; }
+                    // Cap retries with a long backoff so a free-tier 429 doesn't loop forever.
+                    if (++attempts > 6) { setBadges('Sin conexión en vivo', false); return; }
                     setBadges('Reconectando…', false);
                     setTimeout(connect, reconnectDelay);
-                    reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+                    reconnectDelay = Math.min(reconnectDelay * 2, 60000);
                 };
                 _ws.onerror = () => { try { _ws.close(); } catch (e) {} };
             }
