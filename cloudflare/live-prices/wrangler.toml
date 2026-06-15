@@ -6,7 +6,7 @@ compatibility_date = "2024-09-01"
 #   wrangler secret put SUPABASE_SERVICE_KEY
 #   wrangler secret put FINNHUB_TOKEN
 [vars]
-SUPABASE_URL = "https://YOUR-PROJECT.supabase.co"
+SUPABASE_URL = "https://cdkxfjvbgrdzjmhxkytm.supabase.co"
 
 # Every minute during ~US market hours (UTC). The worker also gates precisely by
 # Eastern Time, so the wider UTC window (covers both EST and EDT) just over-
