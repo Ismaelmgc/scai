@@ -295,6 +295,17 @@
            mobile). Pairs with maintainAspectRatio:false in createPortfolioChart. */
         .chart-wrap { position: relative; height: 300px; }
 
+        /* Signal history "Ver más": extra rows hidden until the table gets .show-all */
+        .sig-extra { display: none; }
+        .responsive-table.show-all .sig-extra { display: table-row; }
+        .btn-more {
+            margin-top: 14px; width: 100%;
+            background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary);
+            border-radius: 8px; padding: 9px 18px; font-size: 13px; font-weight: 600;
+            cursor: pointer; font-family: inherit; transition: all 0.2s;
+        }
+        .btn-more:hover { color: var(--text-primary); border-color: var(--border-light); background: var(--bg-hover); }
+
         .footer { text-align: center; padding: 24px; color: var(--text-muted); font-size: 11px; letter-spacing: 0.3px; }
 
         /* Strategy Tabs — pill segmented control */
@@ -355,6 +366,7 @@
             .metric-chip { min-width: 100px; }
             .card { padding: 18px 16px; }
             .chart-wrap { height: 240px; }
+            .responsive-table.show-all .sig-extra { display: block; }
 
             /* Tables collapse into stacked cards (label/value rows) */
             .responsive-table thead { display: none; }
@@ -673,21 +685,21 @@
             </div>`;
         }
 
-        function signalsHTML(sigs) {
+        function signalsHTML(sigs, sid) {
             if (!sigs || !sigs.length) return '';
-            // Keep it light (especially on mobile): just the 5 highest-score
-            // signals, most recent first as a tiebreak.
+            // Light by default (especially on mobile): the 5 highest-score signals,
+            // most recent first as a tiebreak. "Ver más" reveals up to 10 more.
             const top = [...sigs]
                 .sort((a, b) => (b.score - a.score) || String(b.date).localeCompare(String(a.date)))
-                .slice(0, 5);
-            const rows = top.map(s => {
+                .slice(0, 15);
+            const rows = top.map((s, i) => {
                 let st = '<span class="tag tag-expiry">Skip</span>';
                 if (s.was_traded) st = '<span class="tag tag-buy">Ejecutada</span>';
                 else if (s.skip_reason) st = `<span class="tag tag-skip">${esc(s.skip_reason)}</span>`;
                 const ret = (s.actual_ret != null)
                     ? `<span class="${pc(s.actual_ret)}">${f1(s.actual_ret)}%</span>`
                     : '<span style="color: var(--text-muted);">pendiente</span>';
-                return `<tr>
+                return `<tr class="${i >= 5 ? 'sig-extra' : ''}">
                     <td data-label="Fecha">${esc(s.date)}</td>
                     <td class="ticker" data-label="Ticker">${esc(s.ticker)}</td>
                     <td class="text-right" data-label="Score">${Number(s.score).toFixed(4)}</td>
@@ -695,14 +707,28 @@
                     <td class="text-right" data-label="Retorno real (20d)">${ret}</td>
                 </tr>`;
             }).join('');
+            const extra = Math.max(0, top.length - 5);
+            const moreBtn = extra
+                ? `<button class="btn-more" id="moreBtn-${sid}" onclick="toggleSignals('${sid}')">Ver más (${extra})</button>`
+                : '';
             return `
             <div class="card">
-              <h2>Historial de Señales <span class="badge">top ${top.length} por score</span></h2>
-              <table class="responsive-table">
+              <h2>Historial de Señales <span class="badge">top ${Math.min(top.length, 5)} por score</span></h2>
+              <table class="responsive-table" id="sigTable-${sid}">
                 <thead><tr><th>Fecha</th><th>Ticker</th><th class="text-right">Score</th><th>Estado</th><th class="text-right">Retorno real (20d)</th></tr></thead>
                 <tbody>${rows}</tbody>
               </table>
+              ${moreBtn}
             </div>`;
+        }
+
+        function toggleSignals(sid) {
+            const tbl = document.getElementById('sigTable-' + sid);
+            const btn = document.getElementById('moreBtn-' + sid);
+            if (!tbl || !btn) return;
+            const expanded = tbl.classList.toggle('show-all');
+            const extra = tbl.querySelectorAll('.sig-extra').length;
+            btn.textContent = expanded ? 'Ver menos' : ('Ver más (' + extra + ')');
         }
 
         function panelHTML(sid, view, active) {
@@ -710,7 +736,7 @@
             const chart = (p.chart_dates && p.chart_dates.length)
                 ? `<div class="card"><h2>Evolución del Portfolio</h2><div class="chart-wrap"><canvas id="portfolioChart-${sid}"></canvas></div></div>` : '';
             return `<div class="strategy-panel${active ? ' active' : ''}" id="panel-${sid}">
-                ${kpiHTML(p, sid)}${metricsHTML(p)}${chart}${positionsHTML(p, sid)}${pendingSummaryHTML(p)}${closedHTML(p)}${signalsHTML(view.signals)}
+                ${kpiHTML(p, sid)}${metricsHTML(p)}${chart}${positionsHTML(p, sid)}${pendingSummaryHTML(p)}${closedHTML(p)}${signalsHTML(view.signals, sid)}
             </div>`;
         }
 
