@@ -28,7 +28,7 @@ jobs:
       - name: Refresh universe
         env:
           SCAI_POLYGON_API_KEY: ${{ secrets.SCAI_POLYGON_API_KEY }}
-          MASSIVE_CALLS_PER_MINUTE: "5"   # Polygon free tier (paid plan cancelled)
+          MASSIVE_CALLS_PER_MINUTE: "50"  # paid Polygon until 2026-06-19; set to 5 after (free tier)
           PYTHONPATH: src
           PYTHONIOENCODING: utf-8
         run: python scripts/refresh_universe.py

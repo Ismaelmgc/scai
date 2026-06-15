@@ -53,7 +53,7 @@ PYTHONPATH=src pytest tests/unit -v --tb=short
 ## Datos y entorno
 
 - Universo OHLCV ~1.000 tickers (activos + deslistados), ~830K filas, histórico ~2021→presente. Cifras exactas: consultar el parquet, no fiarse de números hardcodeados (envejecen).
-- `.env`: `SCAI_POLYGON_API_KEY` (plan **free** desde 2026-06-15 → `MASSIVE_CALLS_PER_MINUTE=5`; era 50 en el plan de pago), `SCAI_SEED=42`, `SCAI_ENV`, `FINNHUB_TOKEN` (precios en vivo, free).
+- `.env`: `SCAI_POLYGON_API_KEY` (plan de pago hasta **2026-06-19** → `MASSIVE_CALLS_PER_MINUTE=50`; tras esa fecha pasar a **free** → `=5`), `SCAI_SEED=42`, `SCAI_ENV`, `FINNHUB_TOKEN` (precios en vivo, free).
 
 ## Fuentes de datos (Polygon de pago → free)
 
