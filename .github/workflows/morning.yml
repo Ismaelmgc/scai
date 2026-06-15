@@ -1,0 +1,46 @@
+name: SCAI morning fill
+
+# Fills pending BUY signals at the day's open (intraday), so positions show up in
+# the morning instead of after the close. The entry price is the open either way,
+# so this only changes *when* it's recorded, not the price — consistent with the
+# backtest. Exits stay close-based (handled by the EOD pipeline in daily.yml).
+#
+# Two crons cover both EST and EDT; the script gates precisely by Eastern Time and
+# is idempotent (once filled, pending is empty → re-runs and the EOD pipeline are
+# no-ops). No Polygon (uses the committed OHLCV + Finnhub REST opens).
+
+on:
+  schedule:
+    - cron: "45 13 * * 1-5" # 09:45 ET in summer (EDT)
+    - cron: "45 14 * * 1-5" # 09:45 ET in winter (EST)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scai-morning
+  cancel-in-progress: false
+
+jobs:
+  fill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Fill pending at open
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          FINNHUB_TOKEN: ${{ secrets.FINNHUB_TOKEN }}
+          PYTHONPATH: src
+          PYTHONIOENCODING: utf-8
+        run: python scripts/morning_execute.py
