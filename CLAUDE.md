@@ -38,6 +38,7 @@ PYTHONPATH=src pytest tests/unit -v --tb=short
 ## Archivos clave
 
 - `scripts/daily_pipeline.py` — ★ producción (V3 + dual paper trading). Reentrena cada 7 días **sobre todo el OHLCV almacenado** (incluye deslistados → evita survivorship bias).
+- `scripts/morning_execute.py` — job intradía (`morning.yml`, tras la apertura): llena los BUY pendientes al `open` (Finnhub REST) y refresca `dashboard_view`. SOLO `execute_pending` (no exits/señales/día-idx) → estado idéntico al flujo de cierre; idempotente. Salidas se quedan a cierre (backtest 2026-06-15: intradía hunde Sharpe 2.79→1.15 por mechas de small-caps).
 - `scripts/run_smallcap_pipeline.py` — pipeline de análisis/backtest (~2000 líneas).
 - `src/app/features/pipeline.py` — `build_feature_matrix()`.
 - `src/app/data/store/parquet_store.py` — ParquetStore (read/write/upsert vía DuckDB).
