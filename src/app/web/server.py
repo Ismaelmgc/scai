@@ -21,7 +21,6 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
 
 from app.data import supabase_store  # noqa: E402
-from app.data.free_sources import finnhub  # noqa: E402
 
 app = FastAPI(title="SCAI Dashboard")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -50,8 +49,8 @@ def shell_context(static_mode: bool) -> dict:
         "static_mode": static_mode,
         "supabase_url": supabase_url,
         "supabase_anon_key": supabase_anon_key,
-        # Live prices stream client-side via the Finnhub WebSocket (post-login).
-        "finnhub_token": finnhub.public_token(),
+        # Live prices come from the `live_prices` table (Cloudflare Worker polls
+        # Finnhub REST → Supabase), read post-login — no Finnhub token in the client.
         "logo": _asset_data_uri(LOGO_PATH),
         "favicon": _asset_data_uri(FAVICON_PATH),
     }

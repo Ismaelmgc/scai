@@ -40,8 +40,6 @@ def main() -> None:
         print("  Login enabled (Supabase URL + anon key embedded)")
     else:
         print("  WARNING: no Supabase config — login will not work")
-    if ctx["finnhub_token"]:
-        print("  Live prices enabled (Finnhub token embedded)")
 
     out_dir = ROOT / "site"
     out_dir.mkdir(exist_ok=True)

@@ -61,12 +61,25 @@ create table if not exists dashboard_view (
   updated_at timestamptz not null default now()
 );
 
+-- Live prices for open positions (UPSERT by ticker → constant size, ~16 rows).
+-- A Cloudflare Worker cron polls Finnhub REST during market hours and upserts
+-- here; the logged-in client reads it to fill the $ Live / % Live columns.
+-- Finnhub's free WebSocket doesn't stream small-caps, but its REST /quote does
+-- (server-side only — no CORS), hence the worker.
+create table if not exists live_prices (
+  ticker         text primary key,
+  price          numeric not null,
+  change_percent numeric,
+  updated_at     timestamptz not null default now()
+);
+
 -- Row Level Security: enable on all tables.
 alter table portfolio_state enable row level security;
 alter table trades          enable row level security;
 alter table signals         enable row level security;
 alter table nav_history     enable row level security;
 alter table dashboard_view  enable row level security;
+alter table live_prices     enable row level security;
 
 -- Reads require a logged-in user (Supabase Auth). The anon key alone (embedded
 -- in the public HTML) can no longer read anything. To rotate from the old public
@@ -80,3 +93,4 @@ create policy "auth read trades"          on trades          for select to authe
 create policy "auth read signals"         on signals         for select to authenticated using (true);
 create policy "auth read nav_history"     on nav_history     for select to authenticated using (true);
 create policy "auth read dashboard_view"  on dashboard_view  for select to authenticated using (true);
+create policy "auth read live_prices"     on live_prices     for select to authenticated using (true);
