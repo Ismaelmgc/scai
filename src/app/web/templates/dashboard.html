@@ -590,13 +590,14 @@
                     <td class="ticker" data-label="Ticker">${esc(pos.ticker)}</td>
                     <td data-label="Entrada">${esc(pos.entry_date)}</td>
                     <td class="text-right" data-label="$ Entrada">$${Number(pos.entry_price).toFixed(4)}</td>
-                    <td class="text-right td-price" data-label="$ Actual">$${m2(pos.current_price)}</td>
+                    <td class="text-right td-price" data-label="$ Último cierre">$${m2(pos.current_price)}</td>
                     <td class="text-right td-live" data-label="$ Live">—</td>
-                    <td class="text-right td-live-pct" data-label="Hoy">—</td>
+                    <td class="text-right td-live-pct" data-label="%Live">—</td>
                     <td class="text-right" data-label="Acciones">${pos.shares}</td>
                     <td class="text-right" data-label="Invertido">€${m2(pos.invested)}</td>
                     <td class="text-right" data-label="Valor" style="font-weight: 600;">€${m2(pos.current_value)}</td>
                     <td class="text-right ${pc(pos.pnl_pct)}" data-label="P/L">${arrow(pos.pnl_pct)} ${f1(pos.pnl_pct)}% <span style="font-weight: 400; opacity: 0.7;">(€${f2(pos.profit)})</span></td>
+                    <td class="text-right td-live-pl" data-label="P/L Live">—</td>
                     <td class="text-right" data-label="Trail Stop">$${m2(pos.trail_trigger)} <span style="color: var(--text-muted); font-size: 11px;">(${Math.round(pos.trailing_stop_pct)}%)</span></td>
                 </tr>`).join('');
             const liveBadge = `<span class="live-badge" id="liveBadge-${sid}"><span class="status-dot stale"></span><span class="live-label">—</span></span>`;
@@ -608,9 +609,9 @@
               </div>
               <table class="positions-table responsive-table" id="posTable-${sid}">
                 <thead><tr>
-                  <th>Ticker</th><th>Entrada</th><th class="text-right">$ Entrada</th><th class="text-right">$ Actual</th>
-                  <th class="text-right">$ Live</th><th class="text-right">Hoy</th><th class="text-right">Acciones</th>
-                  <th class="text-right">Invertido</th><th class="text-right">Valor</th><th class="text-right">P/L</th><th class="text-right">Trail Stop</th>
+                  <th>Ticker</th><th>Entrada</th><th class="text-right">$ Entrada</th><th class="text-right">$ Último cierre</th>
+                  <th class="text-right">$ Live</th><th class="text-right">%Live</th><th class="text-right">Acciones</th>
+                  <th class="text-right">Invertido</th><th class="text-right">Valor</th><th class="text-right">P/L</th><th class="text-right">P/L Live</th><th class="text-right">Trail Stop</th>
                 </tr></thead>
                 <tbody>${rows}</tbody>
               </table>
@@ -875,14 +876,26 @@
                     liveCell.style.color = '#e8c456'; liveCell.style.fontWeight = '600';
                     if (!isNaN(prev) && prev !== price) flash(liveCell, price >= prev);
                 }
-                // "Hoy": intraday move vs the previous close ($ Actual). This is the
-                // honest day direction — the total P/L vs entry lives in the P/L column.
+                // %Live: intraday move vs the previous close ($ Último cierre).
                 const pctCell = row.querySelector('.td-live-pct');
                 if (pctCell && prevClose) {
                     const day = (price / prevClose - 1) * 100;
                     pctCell.innerHTML = '<span class="arrow">' + (day >= 0 ? '▲' : '▼') + '</span> ' + (day >= 0 ? '+' : '') + day.toFixed(1) + '%';
                     pctCell.className = 'text-right td-live-pct ' + (day >= 0 ? 'profit' : 'loss');
                     pctCell.style.fontWeight = '600';
+                }
+                // P/L Live: total return since entry using the live price (= the P/L
+                // column but live), so you see where the trade stands right now.
+                const entry = parseFloat(row.dataset.entry);
+                const shares = parseFloat(row.dataset.shares);
+                const plCell = row.querySelector('.td-live-pl');
+                if (plCell && entry) {
+                    const pl = (price / entry - 1) * 100;
+                    const profit = shares ? shares * (price - entry) : 0;
+                    plCell.innerHTML = '<span class="arrow">' + (pl >= 0 ? '▲' : '▼') + '</span> ' + (pl >= 0 ? '+' : '') + pl.toFixed(1)
+                        + '% <span style="font-weight:400;opacity:0.7;">(€' + (profit >= 0 ? '+' : '') + profit.toFixed(2) + ')</span>';
+                    plCell.className = 'text-right td-live-pl ' + (pl >= 0 ? 'profit' : 'loss');
+                    plCell.style.fontWeight = '600';
                 }
             });
         }
