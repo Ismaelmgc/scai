@@ -232,6 +232,8 @@ def _evaluate_fold(
     use_spread_cost: bool,
     overlay_col: str | None = None,
     overlay_exclude_q: float = 0.0,
+    skip_dates: set | None = None,
+    top_k: int = TOP_K,
 ) -> dict:
     """Trade simulation + tradable IC for one fold's predictions.
 
@@ -268,6 +270,10 @@ def _evaluate_fold(
     n_skipped = 0
     candidate_counts = []
     for reb_date in rebalance_dates:
+        # Regime gate: in a risk-off regime, hold cash this rebalance (no trade).
+        if skip_dates is not None and reb_date in skip_dates:
+            n_skipped += 1
+            continue
         day = test_data[test_data.date == reb_date]
         if filtering:
             day = day[tradable_mask(day, min_price or 0.0, min_adv_usd or 0.0)]
@@ -278,12 +284,12 @@ def _evaluate_fold(
                 thr = valid[overlay_col].quantile(1 - overlay_exclude_q)
                 day = day[day[overlay_col].isna() | (day[overlay_col] < thr)]
         candidate_counts.append(len(day))
-        if len(day) < TOP_K:
+        if len(day) < top_k:
             n_skipped += 1
             continue
-        top_k = day.sort_values("pred", ascending=False).head(TOP_K)
+        picks = day.sort_values("pred", ascending=False).head(top_k)
         period_rets = []
-        for _, row in top_k.iterrows():
+        for _, row in picks.iterrows():
             ticker = row["ticker"]
             t_oh = ohlcv[(ohlcv.ticker == ticker) & (ohlcv.date >= reb_date)]
             if len(t_oh) < 2:
