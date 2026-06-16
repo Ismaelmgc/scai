@@ -230,11 +230,19 @@ def _evaluate_fold(
     policy: ExitPolicy,
     cost_bps: float,
     use_spread_cost: bool,
+    overlay_col: str | None = None,
+    overlay_exclude_q: float = 0.0,
 ) -> dict:
     """Trade simulation + tradable IC for one fold's predictions.
 
     Shared by run_walkforward (fresh predictions) and replay_walkforward
     (cached predictions). Filtering applies to SELECTION only.
+
+    Optional selection overlay: if ``overlay_col`` is given, at each rebalance
+    drop the top ``overlay_exclude_q`` fraction of tradable candidates by that
+    column (e.g. exclude the most heavily-shorted names by days-to-cover) BEFORE
+    picking the top-K. NaN values are kept (no signal → no exclusion). Default
+    off → identical behaviour to before (production/other callers unaffected).
     """
     filtering = min_price is not None or min_adv_usd is not None
     test_dates_sorted = sorted(test_data.date.unique())
@@ -263,6 +271,12 @@ def _evaluate_fold(
         day = test_data[test_data.date == reb_date]
         if filtering:
             day = day[tradable_mask(day, min_price or 0.0, min_adv_usd or 0.0)]
+        # Selection overlay: drop the most-shorted (top-q by overlay_col).
+        if overlay_col and overlay_exclude_q > 0 and overlay_col in day.columns:
+            valid = day[day[overlay_col].notna()]
+            if len(valid) >= TOP_K:
+                thr = valid[overlay_col].quantile(1 - overlay_exclude_q)
+                day = day[day[overlay_col].isna() | (day[overlay_col] < thr)]
         candidate_counts.append(len(day))
         if len(day) < TOP_K:
             n_skipped += 1
