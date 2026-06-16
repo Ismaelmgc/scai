@@ -39,6 +39,7 @@ PYTHONPATH=src pytest tests/unit -v --tb=short
 
 - `scripts/daily_pipeline.py` — ★ producción (V3 + dual paper trading). Reentrena cada 7 días **sobre todo el OHLCV almacenado** (incluye deslistados → evita survivorship bias).
 - `scripts/morning_execute.py` — job intradía (`morning.yml`, tras la apertura): llena los BUY pendientes al `open` (Finnhub REST) y refresca `dashboard_view`. SOLO `execute_pending` (no exits/señales/día-idx) → estado idéntico al flujo de cierre; idempotente. Salidas se quedan a cierre (backtest 2026-06-15: intradía hunde Sharpe 2.79→1.15 por mechas de small-caps).
+- `scripts/monitor_live_ic.py` — monitor de generalización en vivo (`monitor.yml`, semanal). Calcula la IC en vivo (Spearman score↔ret20d real, por fecha) + WR de los traded vs banda backtest; el retrain NO valida nada, esto es la única alarma out-of-sample. Veredicto DEGRADADO → exit 2 → run en rojo → email de GitHub. WARM-UP hasta que maduren ~20 sesiones. De paso backfillea `actual_ret_20d` en Supabase (que el pipeline nunca re-sube → arregla la columna del dashboard).
 - `scripts/run_smallcap_pipeline.py` — pipeline de análisis/backtest (~2000 líneas).
 - `src/app/features/pipeline.py` — `build_feature_matrix()`.
 - `src/app/data/store/parquet_store.py` — ParquetStore (read/write/upsert vía DuckDB).
