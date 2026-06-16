@@ -1,0 +1,44 @@
+name: SCAI live-IC monitor
+
+# Weekly check that the model still generalises in production. The pipeline
+# retrains but never validates, so this is the only out-of-sample alarm: it
+# measures realised IC / hit-rate on the signals we actually generated.
+#
+# A DEGRADED verdict exits non-zero → this run goes red → GitHub emails the
+# repo owner. That failure IS the alert; there's nothing else to wire up.
+# Expect "WARM-UP" (green, no verdict) until ~20 trading days of signal history
+# have matured.
+
+on:
+  schedule:
+    - cron: "0 13 * * 1" # Mondays 13:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scai-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Live-IC monitor
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          PYTHONPATH: src
+          PYTHONIOENCODING: utf-8
+        run: python scripts/monitor_live_ic.py

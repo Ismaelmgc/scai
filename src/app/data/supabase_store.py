@@ -157,6 +157,21 @@ def upsert_signals(strategy: str, signals: list[dict]) -> None:
     _post("signals", rows, on_conflict="strategy,signal_date,ticker")
 
 
+def update_signal_outcomes(strategy: str, outcomes: list[dict]) -> None:
+    """Patch ``actual_ret_20d`` on existing signal rows once the 20d horizon has
+    elapsed. Only those three keys are sent, so the merge-upsert leaves score /
+    recommendation / skip_reason untouched (PostgREST updates only payload cols).
+
+    outcomes: list of {signal_date, ticker, actual_ret_20d}.
+    """
+    if not is_configured() or not outcomes:
+        return
+    rows = [{"strategy": strategy, "signal_date": o["signal_date"],
+             "ticker": o["ticker"], "actual_ret_20d": o["actual_ret_20d"]}
+            for o in outcomes]
+    _post("signals", rows, on_conflict="strategy,signal_date,ticker")
+
+
 def upsert_nav(strategy: str, date: str, portfolio_value: float) -> None:
     """Upsert one daily NAV point for the equity chart."""
     if not is_configured():
@@ -209,3 +224,29 @@ def read_signals(strategy: str, limit: int = 50) -> list[dict]:
         "order": "signal_date.desc,score.desc",
         "limit": str(limit),
     })
+
+
+def read_signals_since(strategy: str, since_date: str, page: int = 1000) -> list[dict]:
+    """All signals for a strategy on/after ``since_date`` (full cross-section).
+
+    Paginated so it returns the whole window even past PostgREST's 1000-row cap —
+    the daily cross-section is ~320 names, so a few weeks already exceeds one page.
+    Used by the live-IC monitor, which needs every scored name per date.
+    """
+    if not _read_configured():
+        return []
+    out: list[dict] = []
+    offset = 0
+    while True:
+        batch = _get("signals", {
+            "strategy": f"eq.{strategy}",
+            "signal_date": f"gte.{since_date}",
+            "select": "signal_date,ticker,score,was_traded,actual_ret_20d",
+            "order": "signal_date.asc,ticker.asc",
+            "limit": str(page),
+            "offset": str(offset),
+        })
+        out.extend(batch)
+        if len(batch) < page:
+            return out
+        offset += page
