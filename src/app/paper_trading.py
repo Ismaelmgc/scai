@@ -238,7 +238,9 @@ class PaperTrader:
             # Fractional shares: each name lands at exactly its equal-weight target,
             # so no cash sits idle from integer rounding (a $66 stock no longer
             # buys "1 share and leaves the rest"). Matches the backtest, which
-            # allocates continuously. Rounded to 6dp (broker fractional precision).
+            # allocates continuously. Rounded to 4dp = IBKR's fractional precision
+            # (IBKR tracks positions to 0.0001 share), so this is directly
+            # executable there via a dollar-amount order.
             alloc = sig["position_size_pct"] * self._portfolio_value(prices)
             shares = alloc / entry_price
             if shares <= 0:
@@ -254,7 +256,7 @@ class PaperTrader:
             if cost > self.state.cash:
                 shares = self.state.cash / entry_price
                 cost = shares * entry_price
-            shares = round(shares, 6)
+            shares = round(shares, 4)
             cost = shares * entry_price
             if shares <= 0:
                 continue
