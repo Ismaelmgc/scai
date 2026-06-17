@@ -365,6 +365,7 @@ def run_walkforward(
     use_spread_cost: bool = False,
     cache_dir: str | Path | None = None,
     n_bins: int = 16,
+    num_boost_round: int = 400,
 ) -> RunResult:
     """Run 16-fold walk-forward; return per-fold + aggregate metrics.
 
@@ -411,7 +412,7 @@ def run_walkforward(
         else:
             ds = lgb.Dataset(X_tr, y_tr, feature_name=feat_cols, free_raw_data=True)
 
-        model = lgb.train(params, ds, num_boost_round=400,
+        model = lgb.train(params, ds, num_boost_round=num_boost_round,
                           callbacks=[lgb.log_evaluation(0)])
 
         test_mask = (features.date >= fold["test_start"]) & (features.date < fold["test_end"])
