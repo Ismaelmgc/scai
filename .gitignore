@@ -79,3 +79,4 @@ data/earnings.parquet
 data/v3_benchmarks/v4_feat_*.json
 data/v3_benchmarks/v4_rm_*.json
 data/research_breadth/
+data/research/
