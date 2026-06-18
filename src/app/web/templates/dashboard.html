@@ -751,7 +751,7 @@
             }
             const tabs = order.length > 1 ? '<div class="strategy-tabs">' + order.map(([id, name], i) => {
                 const p = views[id].paper;
-                return `<button class="strategy-tab${i === 0 ? ' active' : ''}" onclick="switchTab('${id}')">${name} <span class="tab-badge ${cls(p.total_return)}">${f1(p.total_return)}%</span></button>`;
+                return `<button class="strategy-tab${i === 0 ? ' active' : ''}" onclick="switchTab('${id}')">${name} <span class="tab-badge ${cls(p.total_return)}" data-live="tab-${id}">${f1(p.total_return)}%</span></button>`;
             }).join('') + '</div>' : '';
             const panels = order.map(([id], i) => panelHTML(id, views[id], i === 0)).join('');
             document.getElementById('appContent').innerHTML = tabs + panels;
@@ -761,9 +761,12 @@
             document.getElementById('dataInfo').innerHTML = `<span class="status-dot ok"></span>Datos: ${esc(di.latest_date || '')} · ${di.n_tickers || 0} tickers`;
             document.getElementById('footer').textContent = `SCAI Paper Trading · Modelo V3 LambdaRank · ${di.n_tickers || 0} tickers`;
 
-            // Charts (after DOM exists)
+            // Charts (after DOM exists). Stash each strategy's snapshot so the live
+            // poller can recompute the tab %, KPI card and chart from live prices.
+            window._scaiPaper = {};
             for (const [id] of order) {
                 const p = views[id].paper;
+                window._scaiPaper[id] = p;
                 if (p.chart_dates && p.chart_dates.length) {
                     createPortfolioChart('portfolioChart-' + id, p.chart_dates, p.chart_values, p.initial_capital, p.spy_values);
                 }
@@ -848,6 +851,7 @@
         //    Poll every 60s and fill the $ Live / % Live cells; the badge reflects
         //    freshness from updated_at. ──
         let _liveTimer = null;
+        let _livePrices = {};   // ticker -> last live price from the live_prices table
         function stopLivePrices() { if (_liveTimer) { clearInterval(_liveTimer); _liveTimer = null; } }
         function setBadges(text, ok) {
             document.querySelectorAll('[id^="liveBadge-"]').forEach(b => {
@@ -899,6 +903,57 @@
                 }
             });
         }
+        // ── Live aggregates: recompute each strategy's portfolio value, total
+        //    return, tab % and the chart's trailing point from the open positions
+        //    + live prices. A name with no live price falls back to its last
+        //    close, so before any live tick the aggregates equal the published
+        //    snapshot (cash + Σ shares·close). ──
+        function setLiveAgg(key, text, signVal) {
+            const el = document.querySelector('[data-live="' + key + '"]');
+            if (!el) return;
+            el.textContent = text;
+            if (signVal != null) { el.classList.remove('green', 'red'); el.classList.add(signVal >= 0 ? 'green' : 'red'); }
+        }
+        function updateChartLive(sid, totalValue) {
+            const chart = window.scaiCharts && window.scaiCharts['portfolioChart-' + sid];
+            const p = window._scaiPaper && window._scaiPaper[sid];
+            if (!chart || !p || !p.chart_values || !p.chart_values.length) return;
+            // Rebuild from the immutable snapshot + one trailing "Ahora" point so
+            // repeated polls stay idempotent (no runaway appends).
+            const labels = p.chart_dates.concat(['Ahora']);
+            chart.data.labels = labels;
+            chart.data.datasets[0].data = p.chart_values.concat([totalValue]);
+            if (chart.data.datasets[1]) chart.data.datasets[1].data = Array(labels.length).fill(p.initial_capital);
+            if (chart.data.datasets[2] && p.spy_values && p.spy_values.length) {
+                chart.data.datasets[2].data = p.spy_values.concat([p.spy_values[p.spy_values.length - 1]]);
+            }
+            chart.update('none');
+        }
+        function updateLiveAggregates() {
+            if (!window._scaiPaper) return;
+            for (const sid in window._scaiPaper) {
+                const p = window._scaiPaper[sid];
+                const panel = document.getElementById('panel-' + sid);
+                if (!panel || !p) continue;
+                let posValue = 0;
+                panel.querySelectorAll('.positions-table tbody tr[data-ticker]').forEach(row => {
+                    const shares = parseFloat(row.dataset.shares) || 0;
+                    const prevClose = parseFloat(row.dataset.prevclose) || 0;
+                    const lp = _livePrices[row.dataset.ticker];
+                    const px = (lp != null && isFinite(lp)) ? lp : prevClose;
+                    posValue += shares * px;
+                });
+                const totalValue = (p.cash || 0) + posValue;
+                const totalReturn = p.initial_capital ? (totalValue / p.initial_capital - 1) * 100 : 0;
+                const profit = totalValue - (p.initial_capital || 0);
+                setLiveAgg('value-' + sid, '€' + m2(totalValue), totalReturn);
+                setLiveAgg('return-' + sid, f1(totalReturn) + '%', totalReturn);
+                setLiveAgg('tab-' + sid, f1(totalReturn) + '%', totalReturn);
+                const prof = document.querySelector('[data-live="profit-' + sid + '"]');
+                if (prof) prof.textContent = f2(profit) + '€ beneficio';
+                updateChartLive(sid, totalValue);
+            }
+        }
         function startLivePrices() {
             stopLivePrices();
             if (!document.querySelector('.positions-table tbody tr[data-ticker]')) { setBadges('Sin posiciones', false); return; }
@@ -916,10 +971,12 @@
                 if (!rows || !rows.length) { setBadges('Esperando precios', false); return; }
                 let newest = 0;
                 for (const row of rows) {
+                    _livePrices[row.ticker] = Number(row.price);
                     applyPrice(row.ticker, Number(row.price));
                     const ts = Date.parse(row.updated_at) || 0;
                     if (ts > newest) newest = ts;
                 }
+                updateLiveAggregates();   // live tab %, KPI card and chart point
                 const ageMin = (Date.now() - newest) / 60000;
                 if (ageMin < 3) setBadges('En vivo', true);
                 else if (ageMin < 60) setBadges('Hace ' + Math.round(ageMin) + ' min', false);
