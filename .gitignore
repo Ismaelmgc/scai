@@ -67,3 +67,15 @@ htmlcov/
 # Jupyter
 .ipynb_checkpoints/
 data/v3_benchmarks/cache/
+
+# Research-only datasets + per-experiment benchmark results (regenerable; never
+# merge to main — findings live in memory/v4-research-program.md + git history).
+data/accum_features.parquet
+data/residmom_features.parquet
+data/pead_features.parquet
+data/short_interest.parquet
+data/insider_form4.parquet
+data/earnings.parquet
+data/v3_benchmarks/v4_feat_*.json
+data/v3_benchmarks/v4_rm_*.json
+data/research_breadth/
