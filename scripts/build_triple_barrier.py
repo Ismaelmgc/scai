@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "v3"))
 
-from _v3_harness import ExitPolicy, HOLD_DAYS, _simulate_trade  # noqa: E402
+from _v3_harness import HOLD_DAYS, ExitPolicy, _simulate_trade  # noqa: E402
 
 OUT = ROOT / "data" / "research" / "tb_labels.parquet"
 DECISION_FP = ROOT / "data" / "v3_benchmarks" / "v4_filter_decision.json"
