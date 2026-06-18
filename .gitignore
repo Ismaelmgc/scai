@@ -80,3 +80,6 @@ data/v3_benchmarks/v4_feat_*.json
 data/v3_benchmarks/v4_rm_*.json
 data/research_breadth/
 data/research/
+
+# large-cap intraday experiment (research, never merged)
+data/largecap/
