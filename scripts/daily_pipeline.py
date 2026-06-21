@@ -207,16 +207,31 @@ def update_ohlcv(cfg, predict_to: str) -> pd.DataFrame:
     client = MassiveClient(calls_per_minute=cpm)
     aggs = AggregatesAPI(client)
 
-    # Import download_ohlcv from main pipeline
+    # Import the downloaders from the main pipeline
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from run_smallcap_pipeline import download_ohlcv
+    from run_smallcap_pipeline import download_ohlcv, download_ohlcv_grouped
 
-    ohlcv = download_ohlcv(
-        aggs, tickers,
-        train_start=(last_date - timedelta(days=5)).isoformat(),
-        predict_to=predict_to,
-        existing_ohlcv=ohlcv,
-    )
+    # Per-ticker pull for the small set grouped_daily can't cover from the global
+    # frontier: brand-new tickers (no bars) + individually stale ones (own last bar
+    # behind the rest, e.g. post-halt). Restricted to ACTIVE tickers — the 728
+    # delisted names are perpetually "stale" but must never be re-fetched. Done
+    # first so each one's own gap is filled, then grouped tops up recent sessions.
+    new_tickers = [t for t in tickers if t not in last_per_ticker.index]
+    catch_up = sorted(set(new_tickers) | (set(stale_tickers.index) & set(tickers)))
+    if catch_up:
+        print(f"  per-ticker backfill: {len(catch_up)} new/stale "
+              f"({', '.join(catch_up[:10])}{'…' if len(catch_up) > 10 else ''})")
+        ohlcv = download_ohlcv(
+            aggs, catch_up,
+            train_start=(last_date - timedelta(days=5)).isoformat(),
+            predict_to=predict_to,
+            existing_ohlcv=ohlcv,
+        )
+
+    # Bulk incremental for the WHOLE universe via grouped_daily: ~1 call/session
+    # (whole market, filtered to our tickers) instead of one call per ticker —
+    # ~12s vs ~1h on the free Polygon tier (5/min). See download_ohlcv_grouped.
+    ohlcv = download_ohlcv_grouped(aggs, tickers, ohlcv, predict_to)
 
     # Also update SPY
     existing_spy = store.read("smallcap_spy") if store.exists("smallcap_spy") else None
