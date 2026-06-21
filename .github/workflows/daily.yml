@@ -52,7 +52,7 @@ jobs:
           SCAI_POLYGON_API_KEY: ${{ secrets.SCAI_POLYGON_API_KEY }}
           SCAI_SEED: "42"
           SCAI_ENV: production
-          MASSIVE_CALLS_PER_MINUTE: "50"  # paid Polygon until 2026-06-19; set to 5 after (free tier, ~1h, won't fail)
+          MASSIVE_CALLS_PER_MINUTE: "5"  # free tier since 2026-06-19 (5/min; ~1h for 320 tickers, recent bars OK, >2y history 403s but that's already in the parquet)
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           PYTHONPATH: src
