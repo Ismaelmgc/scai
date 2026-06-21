@@ -601,6 +601,7 @@ def download_ohlcv(aggs, tickers, train_start, predict_to, existing_ohlcv=None):
 
     all_dfs = []
     failed = []
+    errors = 0
     skipped = 0
     downloaded = 0
     target_end = pd.Timestamp(predict_to)
@@ -632,9 +633,20 @@ def download_ohlcv(aggs, tickers, train_start, predict_to, existing_ohlcv=None):
             from_date = train_start
             label = "full"
 
-        bars = aggs.get_custom_bars(
-            ticker, from_date=from_date, to_date=predict_to, adjusted=True,
-        )
+        try:
+            bars = aggs.get_custom_bars(
+                ticker, from_date=from_date, to_date=predict_to, adjusted=True,
+            )
+        except Exception as e:
+            # A per-ticker HTTP error (e.g. 403 after a plan downgrade, or a
+            # transient 5xx) must NOT abort the whole daily run — skip and carry
+            # on, exactly like the SPY download below already does. The run then
+            # completes on whatever bars succeeded (or on the existing data).
+            errors += 1
+            failed.append(f"{ticker}(err)")
+            if errors <= 3:
+                print(f"    ✗ {ticker:6s} — download error: {str(e)[:90]}")
+            continue
 
         if label == "full" and (not bars or len(bars) < 30):
             failed.append(f"{ticker}({len(bars) if bars else 0})")
@@ -667,6 +679,10 @@ def download_ohlcv(aggs, tickers, train_start, predict_to, existing_ohlcv=None):
 
     if skipped:
         print(f"    ⏩ {skipped} tickers already up-to-date (skipped)")
+    if errors:
+        print(f"\n  ⚠ {errors} tickers errored on download (HTTP/auth, e.g. 403 after a "
+              f"plan downgrade) — ran with the bars that succeeded. If this is most of "
+              f"the universe, the data source/plan needs attention.")
     if failed:
         print(f"\n  ⚠ Failed/insufficient: {', '.join(failed)}")
 
