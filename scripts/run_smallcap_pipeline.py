@@ -684,6 +684,68 @@ def download_ohlcv(aggs, tickers, train_start, predict_to, existing_ohlcv=None):
         return new_data
 
 
+def download_ohlcv_grouped(aggs, tickers, existing_ohlcv, predict_to):
+    """Incremental OHLCV update via the grouped-daily endpoint.
+
+    One call returns the WHOLE US market for a single date, so refreshing the
+    latest session(s) for the entire universe costs ~1 call PER DAY instead of one
+    call PER TICKER — the difference between ~12s and ~1h on the free tier (5/min).
+
+    It only fills sessions AFTER the latest bar already stored (the common daily
+    case is a single missing session). Per-ticker stragglers and brand-new tickers
+    that need deeper history are handled by download_ohlcv() separately. Returns
+    the combined frame (existing + new), deduped, or existing unchanged.
+    """
+    import time as _time
+
+    ticker_set = set(tickers)
+    existing_ohlcv = existing_ohlcv.copy()
+    existing_ohlcv["date"] = pd.to_datetime(existing_ohlcv["date"])
+    last_date = existing_ohlcv["date"].max().date()
+    target = pd.Timestamp(predict_to).date()
+
+    # Business days strictly after the last stored bar, up to the target.
+    days = [d.date() for d in pd.bdate_range(last_date + pd.Timedelta(days=1), target)]
+    if not days:
+        print("  grouped: already current, nothing to fetch")
+        return existing_ohlcv
+
+    print(f"  grouped: {len(days)} session(s) {days[0]} → {days[-1]} "
+          f"(1 call/day, whole market → filter {len(ticker_set)} tickers)")
+    rows, errors, got = [], 0, 0
+    t0 = _time.monotonic()
+    for d in days:
+        try:
+            bars = aggs.get_grouped_daily(d, adjusted=True)
+        except Exception as e:
+            errors += 1
+            if errors <= 3:
+                print(f"    ✗ {d} — grouped error: {str(e)[:90]}")
+            continue
+        if not bars:
+            continue  # weekend/holiday → no session
+        got += 1
+        for b in bars:
+            if b.ticker in ticker_set:
+                rows.append({
+                    "date": pd.Timestamp(b.trading_date), "ticker": b.ticker,
+                    "open": b.open, "high": b.high, "low": b.low,
+                    "close": b.close, "volume": b.volume,
+                    "vwap": b.vwap, "transactions": b.transactions,
+                })
+    if errors:
+        print(f"    ⚠ {errors} session(s) errored (HTTP/auth) — used the rest. If "
+              f"all errored, the plan/data source needs attention.")
+    print(f"    ✓ {got} session(s), {len(rows):,} ticker-rows ({_time.monotonic()-t0:.0f}s)")
+
+    if not rows:
+        return existing_ohlcv
+    combined = pd.concat([existing_ohlcv, pd.DataFrame(rows)], ignore_index=True)
+    combined["date"] = pd.to_datetime(combined["date"])
+    combined = combined.drop_duplicates(subset=["date", "ticker"], keep="last")
+    return combined.sort_values(["ticker", "date"]).reset_index(drop=True)
+
+
 def download_corporate_actions(ca, tickers, existing_splits=None, existing_divs=None):
     """Download splits and dividends incrementally.
 
