@@ -229,7 +229,7 @@ def main():
             denom = lev - m * lev
             return max(0.0, min(1.0, (1 - m * lev) / denom)) if denom else 1.0
         cd = "—" if lev == 1 else f"{call_drop(0.25):.0%}@m25 / {call_drop(0.40):.0%}@m40"
-        print(f"  {lev:>4.2f} {tot.mean():+9.1%} {mo:+7.1%} {sh.mean():7.2f} {dd.mean():7.1%} {cd:>22}")
+        print(f"  {lev:>4.2f} {tot.mean():+8.1%} {mo:+7.1%} {sh.mean():6.2f} {dd.mean():7.1%} {cd:>20}")
 
     print("\n  sizing/regime: CI>0 vs equal = real gain.  leverage scales return AND "
           f"drawdown (no alpha).  Runtime {(time.time()-t0)/60:.1f} min")
