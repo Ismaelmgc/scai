@@ -590,6 +590,38 @@ def _days_since_train() -> int:
 
 # ── Step 4: Generate today's signals ──────────────────────
 
+def conviction_sizes(data: pd.DataFrame, top_k: int) -> pd.Series:
+    """Conviction-linear position sizing over the tradable top-K.
+
+    Returns a position_size_pct Series aligned to `data`'s index. `data` must
+    carry `v2_score` and a boolean `_tradable` column, sorted by score desc.
+    Among the top-K tradable names, weight ∝ max(z, 0.1) where z is the
+    cross-sectional z-score of v2_score over the FULL tradable universe (so the
+    tilt reflects each name's standing vs the whole field, not just within the
+    top-K); normalized to sum to 1. Non-BUYs get 0. Degenerate cases (no spread
+    in scores, single name) fall back to equal-weight.
+
+    Replaces the old flat 1/K. The pred carries within-top-8 information (the
+    #1-ranked beats the #8 on average), so tilting capital toward conviction
+    adds return without touching drawdown: +1.6%/fold vs equal-weight, Sharpe
+    1.60->1.74, paired-bootstrap CI[+0.3%,+2.9%]>0, 12/16 folds. Validated in
+    scripts/v3/43_capital_deployment.py on the v4_fs_base28 prediction cache.
+    """
+    sizes = pd.Series(0.0, index=data.index)
+    tradable = data[data["_tradable"]]
+    if tradable.empty:
+        return sizes
+    buys = tradable.head(top_k)
+    sd = float(tradable["v2_score"].std())
+    if not (sd > 0) or len(buys) < 2:
+        sizes.loc[buys.index] = 1.0 / len(buys)
+        return sizes
+    z = (buys["v2_score"] - float(tradable["v2_score"].mean())) / sd
+    conv = z.clip(lower=0.1)
+    sizes.loc[buys.index] = conv / conv.sum()
+    return sizes
+
+
 def generate_today_signals(model, predict_data, ohlcv, today: str) -> pd.DataFrame:
     """Generate V2 signals: rank stocks by predicted sector-relative return."""
     today_ts = pd.Timestamp(today)
@@ -632,10 +664,11 @@ def generate_today_signals(model, predict_data, ohlcv, today: str) -> pd.DataFra
 
     # Rank by predicted sector-relative return (higher = better)
     today_data = today_data.sort_values("v2_score", ascending=False)
+    pos_sizes = conviction_sizes(today_data, V2_TOP_K)
 
     records = []
     n_buys = 0
-    for _, row in today_data.iterrows():
+    for idx, row in today_data.iterrows():
         ticker = str(row.get("ticker", ""))
         dt_str = str(latest.date())
 
@@ -646,7 +679,7 @@ def generate_today_signals(model, predict_data, ohlcv, today: str) -> pd.DataFra
             rejection = "untradable: below min price/liquidity"
         elif n_buys < V2_TOP_K:
             recommendation = "BUY"
-            position_size = 1.0 / V2_TOP_K  # Equal weight
+            position_size = float(pos_sizes.loc[idx])  # conviction-linear weight
             n_buys += 1
         else:
             recommendation = "HOLD"
@@ -711,10 +744,11 @@ def _generate_signals_for_date(model, features: pd.DataFrame, ohlcv: pd.DataFram
 
     # Same tradability gate as generate_today_signals (selection only)
     day_data["_tradable"] = tradable_mask(day_data)
+    pos_sizes = conviction_sizes(day_data, V2_TOP_K)
 
     records = []
     n_buys = 0
-    for _, row in day_data.iterrows():
+    for idx, row in day_data.iterrows():
         ticker = str(row.get("ticker", ""))
         rejection = ""
         if not bool(row["_tradable"]):
@@ -723,7 +757,7 @@ def _generate_signals_for_date(model, features: pd.DataFrame, ohlcv: pd.DataFram
             rejection = "untradable: below min price/liquidity"
         elif n_buys < V2_TOP_K:
             recommendation = "BUY"
-            position_size = 1.0 / V2_TOP_K
+            position_size = float(pos_sizes.loc[idx])  # conviction-linear weight
             n_buys += 1
         else:
             recommendation = "HOLD"
