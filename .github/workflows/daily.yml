@@ -4,20 +4,26 @@ name: SCAI daily
 # commits the updated paper-trading state back to the repo, and publishes a
 # static snapshot of the dashboard to GitHub Pages.
 #
-# Timing: GitHub cron is UTC. Runs in the MORNING (11:05 UTC ≈ 06:05 EST /
-# 07:05 EDT) — NOT the prior evening — because on the free Polygon tier a
-# session's EOD bar is only published the next day (T+1); a same-evening run gets
-# a 403 for the in-progress day. By morning, yesterday's close is available, so
-# the pipeline ingests it, generates signals, and morning.yml (09:45 ET) fills at
-# today's open — same economics as the old paid same-day evening run, no lag.
-# 11:05 UTC is safely after the overnight publish and before the open year-round.
-# The pipeline is idempotent (skips if it already ran for the session), so a
-# delayed or duplicate trigger is harmless. Use the "Run workflow" button
-# (workflow_dispatch) to trigger a run on demand.
+# Timing: GitHub cron is UTC. Runs in the OVERNIGHT window (04:00 UTC ≈ 00:00 ET).
+# The pipeline targets predict_to = yesterday (D-1) and never needs the current
+# day's bar, so it only needs the PREVIOUS session's EOD bar. That bar is NOT a
+# T+1-delayed thing (earlier belief was wrong): Polygon's only gate is "today's
+# data before end of day" (the in-progress day's grouped bar simply doesn't exist
+# until after the 20:00 UTC close). D-1's bar is fully consolidated within a few
+# hours of its close — verified available overnight (12.3k tickers). So running at
+# 04:00 UTC ingests D-1's close, generates signals, and morning.yml fills at
+# today's open — same economics, no lag.
+# Why overnight, not 11:05: GitHub delays scheduled runs ~3h (up to 5h). At 11:05
+# that pushed the actual run PAST the 13:30 UTC open. At 04:00, even a 5h delay +
+# ~1h runtime finishes by ~10:00 UTC — a 3.5h cushion before the open. Floor is
+# ~02:00 UTC (margin after D-1 close + Polygon consolidation); ceiling ~08:00 UTC
+# (must clear the open with the delay). The pipeline is idempotent (skips if it
+# already ran for the session), so a delayed or duplicate trigger is harmless.
+# Use the "Run workflow" button (workflow_dispatch) to trigger a run on demand.
 
 on:
   schedule:
-    - cron: "5 11 * * 1-5" # weekday mornings, 11:05 UTC (after free's T+1 EOD publish, before open)
+    - cron: "0 4 * * 1-5" # weekday overnight, 04:00 UTC (after D-1 EOD publish, well before the open even with GitHub's delay)
   workflow_dispatch: {}
 
 permissions:
