@@ -8,8 +8,13 @@ compatibility_date = "2024-09-01"
 [vars]
 SUPABASE_URL = "https://cdkxfjvbgrdzjmhxkytm.supabase.co"
 
-# Every minute during ~US market hours (UTC). The worker also gates precisely by
-# Eastern Time, so the wider UTC window (covers both EST and EDT) just over-
-# schedules harmlessly and exits early off-hours. Weekdays only.
+# Every minute during ~US market hours (UTC), EVERY day. The worker gates
+# precisely by Eastern Time (marketOpenET): it exits early outside 09:30-16:00 ET
+# AND on weekends, so the wider UTC window just over-schedules harmlessly. We do
+# NOT restrict the day-of-week field here: Cloudflare interprets "1-5" as
+# Sunday-Thursday (off-by-one vs Mon-Fri), which silently skipped Fridays and ran
+# Sundays (2026-06-26 had no live prices). Running all 7 days + the ET gate is the
+# robust fix — correct regardless of Cloudflare's DOW convention, and weekend
+# invocations return immediately (well under the 100k/day free limit).
 [triggers]
-crons = ["* 13-21 * * 1-5"]
+crons = ["* 13-21 * * *"]
