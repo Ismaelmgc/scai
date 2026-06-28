@@ -904,32 +904,46 @@
             });
         }
         // ── Live aggregates: recompute each strategy's portfolio value, total
-        //    return, tab % and the chart's trailing point from the open positions
-        //    + live prices. A name with no live price falls back to its last
-        //    close, so before any live tick the aggregates equal the published
-        //    snapshot (cash + Σ shares·close). ──
+        //    return, tab % and the chart's trailing point from the open positions.
+        //    Positions are valued at the live price ONLY while the US market is
+        //    open; once it closes, the last close is the source of truth, so the
+        //    cards/tab/chart stay equal to the published snapshot (no drift from a
+        //    stale or vendor-different live_prices row over nights/weekends). ──
+        // US market open? (ET 09:30-16:00, Mon-Fri). Mirrors the live-prices
+        // worker's own gate. Holidays aren't modelled (same limitation as the
+        // worker), but then live_prices simply isn't refreshed so it falls back too.
+        function marketOpenET() {
+            const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+            const day = et.getDay();
+            if (day === 0 || day === 6) return false;
+            const mins = et.getHours() * 60 + et.getMinutes();
+            return mins >= 9 * 60 + 30 && mins <= 16 * 60;
+        }
         function setLiveAgg(key, text, signVal) {
             const el = document.querySelector('[data-live="' + key + '"]');
             if (!el) return;
             el.textContent = text;
             if (signVal != null) { el.classList.remove('green', 'red'); el.classList.add(signVal >= 0 ? 'green' : 'red'); }
         }
-        function updateChartLive(sid, totalValue) {
+        function updateChartLive(sid, totalValue, open) {
             const chart = window.scaiCharts && window.scaiCharts['portfolioChart-' + sid];
             const p = window._scaiPaper && window._scaiPaper[sid];
             if (!chart || !p || !p.chart_values || !p.chart_values.length) return;
-            // Rebuild from the immutable snapshot + one trailing "Ahora" point so
-            // repeated polls stay idempotent (no runaway appends).
-            const labels = p.chart_dates.concat(['Ahora']);
+            // Market closed → show the published snapshot as-is. Open → append one
+            // trailing "Ahora" point from the live value, rebuilt from the immutable
+            // snapshot each poll so repeated polls stay idempotent (no runaway appends).
+            const labels = open ? p.chart_dates.concat(['Ahora']) : p.chart_dates.slice();
             chart.data.labels = labels;
-            chart.data.datasets[0].data = p.chart_values.concat([totalValue]);
+            chart.data.datasets[0].data = open ? p.chart_values.concat([totalValue]) : p.chart_values.slice();
             if (chart.data.datasets[1]) chart.data.datasets[1].data = Array(labels.length).fill(p.initial_capital);
             if (chart.data.datasets[2] && p.spy_values && p.spy_values.length) {
-                chart.data.datasets[2].data = p.spy_values.concat([p.spy_values[p.spy_values.length - 1]]);
+                chart.data.datasets[2].data = open
+                    ? p.spy_values.concat([p.spy_values[p.spy_values.length - 1]])
+                    : p.spy_values.slice();
             }
             chart.update('none');
         }
-        function updateLiveAggregates() {
+        function updateLiveAggregates(open) {
             if (!window._scaiPaper) return;
             for (const sid in window._scaiPaper) {
                 const p = window._scaiPaper[sid];
@@ -940,7 +954,9 @@
                     const shares = parseFloat(row.dataset.shares) || 0;
                     const prevClose = parseFloat(row.dataset.prevclose) || 0;
                     const lp = _livePrices[row.dataset.ticker];
-                    const px = (lp != null && isFinite(lp)) ? lp : prevClose;
+                    // Live price only counts while the market is open; otherwise the
+                    // last close is the truth (keeps the card == the published chart).
+                    const px = (open && lp != null && isFinite(lp)) ? lp : prevClose;
                     posValue += shares * px;
                 });
                 const totalValue = (p.cash || 0) + posValue;
@@ -951,7 +967,7 @@
                 setLiveAgg('tab-' + sid, f1(totalReturn) + '%', totalReturn);
                 const prof = document.querySelector('[data-live="profit-' + sid + '"]');
                 if (prof) prof.textContent = f2(profit) + '€ beneficio';
-                updateChartLive(sid, totalValue);
+                updateChartLive(sid, totalValue, open);
             }
         }
         function startLivePrices() {
@@ -969,14 +985,18 @@
                     rows = await r.json();
                 } catch (e) { setBadges('Sin conexión en vivo', false); return; }
                 if (!rows || !rows.length) { setBadges('Esperando precios', false); return; }
+                const open = marketOpenET();
                 let newest = 0;
                 for (const row of rows) {
                     _livePrices[row.ticker] = Number(row.price);
-                    applyPrice(row.ticker, Number(row.price));
+                    if (open) applyPrice(row.ticker, Number(row.price));  // per-row live cells only while open
                     const ts = Date.parse(row.updated_at) || 0;
                     if (ts > newest) newest = ts;
                 }
-                updateLiveAggregates();   // live tab %, KPI card and chart point
+                updateLiveAggregates(open);   // live tab %, KPI card and chart point
+                // Market closed → values come from the last close; say so plainly
+                // instead of an age that would imply the cards are tracking live.
+                if (!open) { setBadges('Cierre anterior', false); return; }
                 const ageMin = (Date.now() - newest) / 60000;
                 if (ageMin < 3) setBadges('En vivo', true);
                 else if (ageMin < 60) setBadges('Hace ' + Math.round(ageMin) + ' min', false);
