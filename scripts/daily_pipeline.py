@@ -1044,25 +1044,41 @@ def main() -> None:
     # completed session (this mirrors running `scai` after close, as on macOS).
     now_et = datetime.now(ZoneInfo("America/New_York"))
     market_closed = now_et.weekday() < 5 and now_et.time() >= time(16, 15)
-    # Free Polygon publishes a session's EOD bar on T+1, so the in-progress day's
-    # bar is never available the same day (it 403s). Always target the last
-    # completed session free can serve = the previous calendar day (weekend/holiday
-    # gaps are handled downstream by bdate_range + empty grouped responses). Paired
-    # with the morning cron this is yesterday's just-published close → signals →
-    # morning.yml fills at today's open (the economics the paid plan had via a
-    # same-day evening run). `market_closed` below still guards partial-bar drops.
-    predict_to = (date.today() - timedelta(days=1)).isoformat()
+    # Target the most recent ET session. The daily cron runs in the EVENING
+    # (~23:00 UTC, 2-3h after the 16:00 ET close), so today's bar is already
+    # settled and published — not in-progress. (The old "free publishes on T+1"
+    # belief was wrong: the only 403 is "today's data before end of day"; once the
+    # session closes the grouped bar is served. Running well after the close — not
+    # pegged to it — avoids that 403, and a stray one is caught + skipped by
+    # download_ohlcv_grouped.) now_et.date() stays correct even if GitHub delays the
+    # run past midnight UTC (ET is still the same trading day). Weekend/holiday gaps
+    # and any in-progress day are handled downstream by bdate_range + empty/skipped
+    # grouped responses. `market_closed` below still guards partial-bar drops.
+    predict_to = now_et.date().isoformat()
 
     # Idempotency: skip if already ran today (safe to re-trigger on wake/login)
     if not args.dry_run and _already_ran_today():
         print(f"  ✓ Already ran today ({today}). Skipping. Use --dry-run to re-check.\n")
         return
 
-    # Skip weekends (no market data)
-    weekday = date.today().weekday()
-    if weekday >= 5:  # Saturday=5, Sunday=6
-        print(f"  ℹ Weekend ({date.today().strftime('%A')}). Skipping.\n")
-        return
+    from app.data.store.parquet_store import ParquetStore
+    store = ParquetStore()
+
+    # Weekends (ET): normally skip — no new session — BUT still run if the data is
+    # behind, so a failed Friday run self-heals on Sat/Sun instead of waiting until
+    # Monday. "Behind" = there's at least one business day after our last stored bar
+    # up to today (a holiday in that range just fetches empty, harmless). ET is used
+    # so a delayed Friday-evening run (lands on Sat UTC but is still Fri ET) isn't
+    # mistaken for a weekend; and on a true weekend the catch-up still rescues a
+    # delayed run that did roll over.
+    if now_et.weekday() >= 5:  # Saturday=5, Sunday=6 (ET)
+        stored_max = pd.to_datetime(store.read("ohlcv_smallcap")["date"]).max().date()
+        behind = len(pd.bdate_range(stored_max + timedelta(days=1), now_et.date())) > 0
+        if not behind:
+            print(f"  ℹ Weekend ({now_et:%A}), data current ({stored_max}). Skipping.\n")
+            return
+        print(f"  ⚠ Weekend ({now_et:%A}) but data is behind (last={stored_max}) "
+              f"— running to catch up.\n")
 
     # Default predict_from: 30 days back (enough for signal generation context)
     if args.predict_from is None:
@@ -1079,9 +1095,6 @@ def main() -> None:
     print(f"  Capital:       €{args.capital:,.0f}")
     print("=" * 60)
     print()
-
-    from app.data.store.parquet_store import ParquetStore
-    store = ParquetStore()
 
     # ── Step 1: Update data ──────────────────────────
     print("STEP 1/5 ▸ Updating market data...")
