@@ -118,6 +118,28 @@ def _log_daily(entry: dict) -> None:
         f.write(json.dumps(entry, default=str) + "\n")
 
 
+def _notify_telegram(text: str) -> None:
+    """Best-effort Telegram message (run summary / failure alert).
+
+    No-op unless TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID are set, and never raises
+    — a notification problem must not affect (or fail) the pipeline.
+    """
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    chat = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+    if not token or not chat:
+        return
+    try:
+        import requests
+        requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat, "text": text, "parse_mode": "HTML",
+                  "disable_web_page_preview": True},
+            timeout=15,
+        )
+    except Exception as e:
+        log.warning("telegram_notify_failed", error=str(e))
+
+
 def _should_retrain(force: bool = False) -> bool:
     """Check if we need to retrain based on the model registry."""
     if force:
@@ -1076,6 +1098,9 @@ def main() -> None:
         behind = len(pd.bdate_range(stored_max + timedelta(days=1), now_et.date())) > 0
         if not behind:
             print(f"  ℹ Weekend ({now_et:%A}), data current ({stored_max}). Skipping.\n")
+            if not args.dry_run:
+                _notify_telegram(f"ℹ️ <b>SCAI daily</b> — {now_et:%A}: fin de semana, "
+                                 f"datos al día (sesión {stored_max}). Sin ejecución.")
             return
         print(f"  ⚠ Weekend ({now_et:%A}) but data is behind (last={stored_max}) "
               f"— running to catch up.\n")
@@ -1193,6 +1218,20 @@ def main() -> None:
                       f"{pos['pnl_pct']:>8s} {pos['trail_trigger']:8.2f} {trail_str:>6s}")
         print()
 
+    # Telegram run summary (best-effort; no-op without secrets). Shows the latest
+    # session actually in the data so a stale-but-green run is still visible.
+    if not args.dry_run:
+        n_buy = int((signals["recommendation"] == "BUY").sum()) if not signals.empty else 0
+        _notify_telegram(
+            f"✅ <b>SCAI daily OK</b> — {date.today():%Y-%m-%d}\n"
+            f"📅 Última sesión en datos: <b>{today}</b>\n"
+            f"🟢 Señales BUY: <b>{n_buy}</b>   🔁 Retrain: {'sí' if train_metrics else 'no'}\n\n"
+            f"<b>Baseline</b>  €{summary_a['total_value']:,.2f} ({summary_a['total_return']})"
+            f" · {summary_a['n_open_positions']} pos · WR {summary_a['win_rate']}\n"
+            f"<b>Adaptive</b>  €{summary_b['total_value']:,.2f} ({summary_b['total_return']})"
+            f" · {summary_b['n_open_positions']} pos · WR {summary_b['win_rate']}"
+        )
+
     # Log daily entry (baseline as primary)
     _log_daily({
         "date": today,
@@ -1240,4 +1279,14 @@ def _check_meta_learning_readiness() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        # Loud failure: alert on Telegram (best-effort) then re-raise so the
+        # GitHub run goes RED — no more silent green runs on stale/failed data.
+        _notify_telegram(
+            f"❌ <b>SCAI daily FALLÓ</b> — {date.today():%Y-%m-%d}\n"
+            f"<code>{type(e).__name__}: {str(e)[:300]}</code>\n"
+            f"Revisa el run en GitHub Actions."
+        )
+        raise

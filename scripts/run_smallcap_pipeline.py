@@ -728,13 +728,20 @@ def download_ohlcv_grouped(aggs, tickers, existing_ohlcv, predict_to):
 
     print(f"  grouped: {len(days)} session(s) {days[0]} → {days[-1]} "
           f"(1 call/day, whole market → filter {len(ticker_set)} tickers)")
-    rows, errors, got = [], 0, 0
+    rows, errors, past_errors, got = [], 0, 0, 0
     t0 = _time.monotonic()
     for d in days:
         try:
             bars = aggs.get_grouped_daily(d, adjusted=True)
         except Exception as e:
             errors += 1
+            # A 403 on TODAY's in-progress bar (d == target) is benign: free Polygon
+            # only publishes a session's grouped bar hours after the close (next
+            # morning), so the current day legitimately isn't available yet. An error
+            # on a PAST session (one that should already be published) is a real
+            # failure — count those apart so we can fail loudly on them.
+            if d < target:
+                past_errors += 1
             if errors <= 3:
                 print(f"    ✗ {d} — grouped error: {str(e)[:90]}")
             continue
@@ -750,9 +757,18 @@ def download_ohlcv_grouped(aggs, tickers, existing_ohlcv, predict_to):
                     "vwap": b.vwap, "transactions": b.transactions,
                 })
     if errors:
-        print(f"    ⚠ {errors} session(s) errored (HTTP/auth) — used the rest. If "
-              f"all errored, the plan/data source needs attention.")
+        print(f"    ⚠ {errors} session(s) errored (HTTP/auth) — used the rest.")
     print(f"    ✓ {got} session(s), {len(rows):,} ticker-rows ({_time.monotonic()-t0:.0f}s)")
+
+    # FAIL LOUD: if a PAST session (one that should already be published) errored,
+    # do NOT return silently with stale data — that produced a GREEN run on
+    # 2026-06-29 that committed no new bars. Raise so the GitHub run goes red.
+    if past_errors > 0:
+        raise RuntimeError(
+            f"grouped: {past_errors} PAST session(s) errored and were not fetched — "
+            f"data NOT updated past {last_date}. Likely an auth/plan/rate issue or the "
+            f"free tier hasn't published yet. Failing loudly instead of committing stale data."
+        )
 
     if not rows:
         return existing_ohlcv

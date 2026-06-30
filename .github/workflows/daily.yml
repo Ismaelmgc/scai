@@ -4,27 +4,27 @@ name: SCAI daily
 # commits the updated paper-trading state back to the repo, and publishes a
 # static snapshot of the dashboard to GitHub Pages.
 #
-# Timing: GitHub cron is UTC. Runs in the EVENING after the US close (23:00 UTC ≈
-# 19:00 ET summer / 18:00 ET winter — 2-3h past the 16:00 ET close). By then the
-# day's session is settled and its grouped bar is published, so the pipeline
-# ingests the SAME day's close, generates signals, and morning.yml fills at the
-# NEXT open (close → next open, exactly like the backtest).
-# Why evening, not morning: a morning/overnight run can only ever see the PREVIOUS
-# session (today's bar doesn't exist until after the 20:00 UTC close), which left
-# the dashboard a session stale and added a day of lag between signal and fill.
-# Why not pegged to the close (the old 21:05 UTC, which 403'd ~5 min after the
-# winter close): 23:00 UTC keeps a 2-3h margin year-round so the bar is fully
-# consolidated, and a stray "before end of day" 403 is caught + skipped by
-# download_ohlcv_grouped (never a crash, never a partial bar). GitHub may delay the
-# run ~3h (up to 5h) → it still finishes by ~03:00-05:00 UTC, many hours before the
-# 13:30 UTC open. Runs EVERY day (not just weekdays): on a weekend the pipeline
-# skips immediately if data is current, but a failed Friday run SELF-HEALS on
-# Sat/Sun (it catches up instead of waiting until Monday). The pipeline is
-# idempotent. Use "Run workflow" (workflow_dispatch) to run on demand.
+# Timing: GitHub cron is UTC. Runs in the MADRUGADA (06:00 UTC ≈ 02:00 ET) and
+# targets the PREVIOUS session's close (today's bar doesn't exist until after the
+# 20:00 UTC close, and free Polygon only publishes a session's grouped bar hours
+# later — next morning UTC). So the madrugada run ingests yesterday's just-published
+# close, generates signals, and morning.yml fills at today's open (close → next
+# open, like the backtest).
+# Why NOT evening (the old 23:00 UTC): free hadn't published the same-day bar yet
+# at 23:00-00:00 UTC → 403, and the run committed stale data in GREEN (2026-06-29).
+# Why NOT mid/late morning: GitHub delays scheduled runs ~3h (up to 5h); a 10-11:00
+# UTC cron then lands too close to / past the 13:30 UTC open. 06:00 UTC + 5h delay +
+# ~1h runtime finishes by ~12:00 UTC — a margin before the open even in the worst
+# case — while still being late enough that free has published the prior session.
+# Silent failures are now caught: download_ohlcv_grouped raises on a PAST-session
+# error (red run), and daily_pipeline sends a Telegram summary every run.
+# Runs EVERY day: on a weekend it skips if data is current, but a failed Friday run
+# SELF-HEALS on Sat/Sun (catches up instead of waiting until Monday). Idempotent.
+# Use "Run workflow" (workflow_dispatch) to run on demand.
 
 on:
   schedule:
-    - cron: "0 23 * * *" # daily 23:00 UTC (evening, ~2-3h after the US close); weekend runs self-skip unless data is behind
+    - cron: "0 6 * * *" # daily 06:00 UTC (madrugada, ~02:00 ET); late enough for free's overnight publish, early enough to clear the open even with GitHub's delay
   workflow_dispatch: {}
 
 permissions:
@@ -61,6 +61,9 @@ jobs:
           MASSIVE_CALLS_PER_MINUTE: "5"  # free tier since 2026-06-19 (5/min; ~1h for 320 tickers, recent bars OK, >2y history 403s but that's already in the parquet)
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          # Run summary + failure alerts to Telegram (optional — no-op if unset).
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           PYTHONPATH: src
           PYTHONIOENCODING: utf-8
         run: python scripts/daily_pipeline.py
