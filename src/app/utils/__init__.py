@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import random
 from pathlib import Path
@@ -54,3 +55,30 @@ def ensure_dir(path: Path | str) -> Path:
     p = Path(path)
     p.mkdir(parents=True, exist_ok=True)
     return p
+
+
+def notify_telegram(text: str) -> None:
+    """Best-effort Telegram message (run summaries, fill alerts, failures).
+
+    No-op unless TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID are set; never raises — a
+    notification problem must not affect (or fail) the caller. Uses urllib
+    (stdlib), NOT requests, which isn't importable on the GitHub runner.
+    """
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    chat = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+    if not token or not chat:
+        return
+    try:
+        import urllib.request
+        payload = json.dumps({
+            "chat_id": chat, "text": text, "parse_mode": "HTML",
+            "disable_web_page_preview": True,
+        }).encode()
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            data=payload, headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=15) as r:
+            r.read()
+    except Exception as e:
+        get_logger(__name__).warning("telegram_notify_failed", error=str(e))

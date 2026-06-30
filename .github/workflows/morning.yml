@@ -41,6 +41,9 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           FINNHUB_TOKEN: ${{ secrets.FINNHUB_TOKEN }}
+          # Entry-price alert when pending signals fill (optional — no-op if unset).
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           PYTHONPATH: src
           PYTHONIOENCODING: utf-8
         run: python scripts/morning_execute.py

@@ -43,6 +43,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from app.data import supabase_store  # noqa: E402
 from app.data.free_sources import finnhub  # noqa: E402
 from app.paper_trading import PaperTrader  # noqa: E402
+from app.utils import notify_telegram  # noqa: E402
 from app.web import dashboard_data  # noqa: E402
 
 STRATEGIES = [
@@ -92,6 +93,10 @@ def main() -> None:
 
     ohlcv = dashboard_data._load_ohlcv()  # committed parquet (EOD close), for the view
 
+    # Collect fills across strategies (both enter the same names at the same open
+    # price → dedupe by ticker) so we send ONE Telegram message with entry prices.
+    all_fills: dict[str, float] = {}
+
     for strat, pt_dir, adaptive in STRATEGIES:
         state = supabase_store.read_state(strat)
         if state is None:
@@ -129,6 +134,15 @@ def main() -> None:
             supabase_store.write_dashboard_view(strat, view)
         print(f"  [{strat}] filled {entered or '[]'} at open"
               + (f"; still pending (no open): {missing}" if missing else ""))
+        for tk in entered or []:
+            pos = next((p for p in pt.state.positions if p["ticker"] == tk), None)
+            if pos:
+                all_fills[tk] = float(pos["entry_price"])
+
+    # One Telegram alert per fill event, with the actual entry (open) price.
+    if all_fills:
+        lines = "\n".join(f"  • <b>{t}</b> @ ${p:.2f}" for t, p in sorted(all_fills.items()))
+        notify_telegram(f"🟢 <b>Señales ejecutadas al open</b> — {today}\n{lines}")
 
 
 if __name__ == "__main__":

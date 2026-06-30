@@ -35,7 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 from app.config import get_settings
 from app.data import supabase_store
 from app.features.tradability import tradable_mask, is_stale
-from app.utils import setup_logging, set_global_seed, get_logger
+from app.utils import setup_logging, set_global_seed, get_logger, notify_telegram
 
 log = get_logger(__name__)
 
@@ -116,35 +116,6 @@ def _log_daily(entry: dict) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     with open(p, "a") as f:
         f.write(json.dumps(entry, default=str) + "\n")
-
-
-def _notify_telegram(text: str) -> None:
-    """Best-effort Telegram message (run summary / failure alert).
-
-    No-op unless TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID are set, and never raises
-    — a notification problem must not affect (or fail) the pipeline.
-    """
-    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
-    chat = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
-    if not token or not chat:
-        return
-    # urllib (stdlib), NOT requests: the GitHub runner doesn't have requests
-    # importable in this context (it failed silently with "No module named
-    # 'requests'" on 2026-06-30), and a notifier must not depend on an optional dep.
-    try:
-        import urllib.request
-        payload = json.dumps({
-            "chat_id": chat, "text": text, "parse_mode": "HTML",
-            "disable_web_page_preview": True,
-        }).encode()
-        req = urllib.request.Request(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            data=payload, headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=15) as r:
-            r.read()
-    except Exception as e:
-        log.warning("telegram_notify_failed", error=str(e))
 
 
 def _should_retrain(force: bool = False) -> bool:
@@ -1106,7 +1077,7 @@ def main() -> None:
         if not behind:
             print(f"  ℹ Weekend ({now_et:%A}), data current ({stored_max}). Skipping.\n")
             if not args.dry_run:
-                _notify_telegram(f"ℹ️ <b>SCAI daily</b> — {now_et:%A}: fin de semana, "
+                notify_telegram(f"ℹ️ <b>SCAI daily</b> — {now_et:%A}: fin de semana, "
                                  f"datos al día (sesión {stored_max}). Sin ejecución.")
             return
         print(f"  ⚠ Weekend ({now_et:%A}) but data is behind (last={stored_max}) "
@@ -1229,10 +1200,15 @@ def main() -> None:
     # session actually in the data so a stale-but-green run is still visible.
     if not args.dry_run:
         n_buy = int((signals["recommendation"] == "BUY").sum()) if not signals.empty else 0
-        _notify_telegram(
+        pend_a, pend_b = summary_a["pending_signals"], summary_b["pending_signals"]
+        pend_line = (f"⏳ Pendientes: <b>{pend_a}</b>"
+                     if pend_a == pend_b
+                     else f"⏳ Pendientes: baseline <b>{pend_a}</b> · adaptive <b>{pend_b}</b>")
+        notify_telegram(
             f"✅ <b>SCAI daily OK</b> — {date.today():%Y-%m-%d}\n"
             f"📅 Última sesión en datos: <b>{today}</b>\n"
-            f"🟢 Señales BUY: <b>{n_buy}</b>   🔁 Retrain: {'sí' if train_metrics else 'no'}\n\n"
+            f"🟢 Señales BUY: <b>{n_buy}</b>   🔁 Retrain: {'sí' if train_metrics else 'no'}\n"
+            f"{pend_line}\n\n"
             f"<b>Baseline</b>  €{summary_a['total_value']:,.2f} ({summary_a['total_return']})"
             f" · {summary_a['n_open_positions']} pos · WR {summary_a['win_rate']}\n"
             f"<b>Adaptive</b>  €{summary_b['total_value']:,.2f} ({summary_b['total_return']})"
@@ -1291,7 +1267,7 @@ if __name__ == "__main__":
     except Exception as e:
         # Loud failure: alert on Telegram (best-effort) then re-raise so the
         # GitHub run goes RED — no more silent green runs on stale/failed data.
-        _notify_telegram(
+        notify_telegram(
             f"❌ <b>SCAI daily FALLÓ</b> — {date.today():%Y-%m-%d}\n"
             f"<code>{type(e).__name__}: {str(e)[:300]}</code>\n"
             f"Revisa el run en GitHub Actions."
