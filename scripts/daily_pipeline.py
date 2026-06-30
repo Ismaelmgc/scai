@@ -128,14 +128,21 @@ def _notify_telegram(text: str) -> None:
     chat = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
     if not token or not chat:
         return
+    # urllib (stdlib), NOT requests: the GitHub runner doesn't have requests
+    # importable in this context (it failed silently with "No module named
+    # 'requests'" on 2026-06-30), and a notifier must not depend on an optional dep.
     try:
-        import requests
-        requests.post(
+        import urllib.request
+        payload = json.dumps({
+            "chat_id": chat, "text": text, "parse_mode": "HTML",
+            "disable_web_page_preview": True,
+        }).encode()
+        req = urllib.request.Request(
             f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat, "text": text, "parse_mode": "HTML",
-                  "disable_web_page_preview": True},
-            timeout=15,
+            data=payload, headers={"Content-Type": "application/json"},
         )
+        with urllib.request.urlopen(req, timeout=15) as r:
+            r.read()
     except Exception as e:
         log.warning("telegram_notify_failed", error=str(e))
 
