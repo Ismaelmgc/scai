@@ -700,6 +700,12 @@ def download_ohlcv(aggs, tickers, train_start, predict_to, existing_ohlcv=None):
         return new_data
 
 
+# Business days of overlap re-pulled by the grouped download each run so a
+# session left under-covered (a per-ticker backfill advancing the frontier before
+# the grouped bar publishes) is topped up on a later run. Cheap: ~3 extra calls.
+GROUPED_LOOKBACK_BDAYS = 3
+
+
 def download_ohlcv_grouped(aggs, tickers, existing_ohlcv, predict_to):
     """Incremental OHLCV update via the grouped-daily endpoint.
 
@@ -707,21 +713,30 @@ def download_ohlcv_grouped(aggs, tickers, existing_ohlcv, predict_to):
     latest session(s) for the entire universe costs ~1 call PER DAY instead of one
     call PER TICKER — the difference between ~12s and ~1h on the free tier (5/min).
 
-    It only fills sessions AFTER the latest bar already stored (the common daily
-    case is a single missing session). Per-ticker stragglers and brand-new tickers
-    that need deeper history are handled by download_ohlcv() separately. Returns
-    the combined frame (existing + new), deduped, or existing unchanged.
+    Re-pulls a short lookback window (not only sessions strictly after the stored
+    frontier) so an under-covered session self-heals. Per-ticker stragglers and
+    brand-new tickers that need deeper history are handled by download_ohlcv()
+    separately. Returns the combined frame (existing + new), deduped, or existing
+    unchanged.
     """
     import time as _time
 
     ticker_set = set(tickers)
     existing_ohlcv = existing_ohlcv.copy()
     existing_ohlcv["date"] = pd.to_datetime(existing_ohlcv["date"])
+    have_dates = set(existing_ohlcv["date"].dt.date)
     last_date = existing_ohlcv["date"].max().date()
     target = pd.Timestamp(predict_to).date()
 
-    # Business days strictly after the last stored bar, up to the target.
-    days = [d.date() for d in pd.bdate_range(last_date + pd.Timedelta(days=1), target)]
+    # Re-pull a short lookback window instead of only sessions STRICTLY AFTER the
+    # stored frontier. The per-ticker backfill (new/stale names) can advance the
+    # stored max onto a session grouped hasn't covered yet: on 2026-07-01 that left
+    # the whole universe missing except ECHO, and "strictly after max" would skip
+    # that session forever. Overlapping the last few sessions + dedup(keep=last)
+    # tops up any partial day once its grouped bar is finally published.
+    start = min(pd.Timestamp(last_date),
+                pd.Timestamp(target) - pd.tseries.offsets.BDay(GROUPED_LOOKBACK_BDAYS))
+    days = [d.date() for d in pd.bdate_range(start, target)]
     if not days:
         print("  grouped: already current, nothing to fetch")
         return existing_ohlcv
@@ -737,10 +752,11 @@ def download_ohlcv_grouped(aggs, tickers, existing_ohlcv, predict_to):
             errors += 1
             # A 403 on TODAY's in-progress bar (d == target) is benign: free Polygon
             # only publishes a session's grouped bar hours after the close (next
-            # morning), so the current day legitimately isn't available yet. An error
-            # on a PAST session (one that should already be published) is a real
-            # failure — count those apart so we can fail loudly on them.
-            if d < target:
+            # morning), so the current day legitimately isn't available yet. Ditto a
+            # session we ALREADY have (re-pulled by the lookback window) — a transient
+            # error there must not tank the run. Only a PAST session we DON'T yet hold
+            # erroring is a real failure — count those apart to fail loudly on them.
+            if d < target and d not in have_dates:
                 past_errors += 1
             if errors <= 3:
                 print(f"    ✗ {d} — grouped error: {str(e)[:90]}")

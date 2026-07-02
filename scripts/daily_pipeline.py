@@ -1204,9 +1204,25 @@ def main() -> None:
         pend_line = (f"⏳ Pendientes: <b>{pend_a}</b>"
                      if pend_a == pend_b
                      else f"⏳ Pendientes: baseline <b>{pend_a}</b> · adaptive <b>{pend_b}</b>")
+        # Download health: tickers in the latest session vs the median of the 5
+        # prior sessions. A partial frontier (e.g. 2026-07-01 landed with 1 ticker
+        # when the grouped bar hadn't published) shows up as ⚠️ PARCIAL instead of
+        # hiding behind a green run.
+        _counts = (ohlcv.assign(_d=pd.to_datetime(ohlcv["date"]))
+                   .groupby("_d")["ticker"].nunique().sort_index())
+        n_latest = int(_counts.iloc[-1])
+        n_ref = int(_counts.iloc[-6:-1].median()) if len(_counts) > 1 else n_latest
+        cov_ok = n_ref == 0 or n_latest >= 0.9 * n_ref
+        cov_line = (
+            f"📥 Descarga: <b>{n_latest}</b>/{n_ref} tickers del universo ✅"
+            if cov_ok else
+            f"📥 Descarga: <b>{n_latest}</b>/{n_ref} tickers "
+            f"⚠️ <b>PARCIAL</b> — revisar"
+        )
         notify_telegram(
             f"✅ <b>SCAI daily OK</b> — {date.today():%Y-%m-%d}\n"
             f"📅 Última sesión en datos: <b>{today}</b>\n"
+            f"{cov_line}\n"
             f"🟢 Señales BUY: <b>{n_buy}</b>   🔁 Retrain: {'sí' if train_metrics else 'no'}\n"
             f"{pend_line}\n\n"
             f"<b>Baseline</b>  €{summary_a['total_value']:,.2f} ({summary_a['total_return']})"
