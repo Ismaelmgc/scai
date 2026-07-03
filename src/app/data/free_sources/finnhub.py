@@ -94,6 +94,10 @@ def get_quote(ticker: str, client: httpx.Client | None = None) -> dict | None:
         "low": float(d.get("l") or 0),
         "open": float(d.get("o") or 0),
         "prev_close": float(d.get("pc") or 0),
+        # Unix ts of the quote. On a market holiday Finnhub serves the LAST
+        # session's data with a truthy `o` — callers that fill "at today's
+        # open" must check this is actually from today (see morning_execute).
+        "ts": int(d.get("t") or 0),
     }
 
 

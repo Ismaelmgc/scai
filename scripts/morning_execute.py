@@ -62,13 +62,28 @@ def _market_open_et(now: datetime) -> bool:
 
 def _price_frame(tickers: list[str], today_ts: pd.Timestamp) -> pd.DataFrame:
     """Build a one-day OHLCV-ish frame from Finnhub quotes: `open` for the fill,
-    `close` (= current price) to mark held positions, large volume (no cap)."""
+    `close` (= current price) to mark held positions, large volume (no cap).
+
+    Holiday guard (2026-07-03 incident): on a market holiday Finnhub serves the
+    LAST session's quote with a truthy `open` — filling at it records
+    yesterday's open as today's entry. Only accept quotes whose timestamp is
+    from TODAY (ET); stale ones are dropped so the signal stays pending and the
+    EOD pipeline fills it from the official Polygon open of the next session.
+    """
     quotes = finnhub.get_quotes(tickers)
     rows = []
     for t, q in quotes.items():
-        if q.get("open"):  # need a real open to fill at
-            rows.append({"date": today_ts, "ticker": t,
-                         "open": q["open"], "close": q["price"], "volume": 1e12})
+        if not q.get("open"):  # need a real open to fill at
+            continue
+        ts = q.get("ts", 0)
+        q_date = (pd.Timestamp(ts, unit="s", tz="UTC")
+                  .tz_convert(ZoneInfo("America/New_York")).date() if ts else None)
+        if q_date != today_ts.date():
+            print(f"    {t}: stale quote ({q_date or 'no ts'}) — market closed "
+                  f"today? keeping pending")
+            continue
+        rows.append({"date": today_ts, "ticker": t,
+                     "open": q["open"], "close": q["price"], "volume": 1e12})
     return pd.DataFrame(rows)
 
 
