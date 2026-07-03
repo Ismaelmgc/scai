@@ -41,7 +41,11 @@ from app.features.pipeline import build_feature_matrix  # noqa: E402
 DATA = ROOT / "data" / "liquidcap"
 
 NEW_FEATURES = ["gap_avg_20d", "gap_vol_20d", "intraday_avg_20d",
-                "idio_vol_60d", "dollar_vol_ratio_20v60", "range_pos_20d"]
+                "idio_vol_60d", "dollar_vol_ratio_20v60", "range_pos_20d",
+                # GKX-inspired (Gu-Kelly-Xiu RFS 2020: momentum, liquidity and
+                # volatility variants dominate every model's importance list)
+                "mom_12_1", "mom_6_1", "rev_21d", "max_ret5_60d",
+                "turn_vol_60d"]
 
 
 def add_new_features(feats: pd.DataFrame, panel: pd.DataFrame,
@@ -79,6 +83,19 @@ def add_new_features(feats: pd.DataFrame, panel: pd.DataFrame,
     beta = cov / var.reindex(cov.index)
     p["resid"] = p["ret"] - beta * p["mkt_ret"]
     p["idio_vol_60d"] = roll("resid", 60, "std")
+
+    # GKX-style momentum/reversal/lottery/liquidity (all windows end at T)
+    p["mom_12_1"] = g["close"].shift(21) / g["close"].shift(252) - 1  # 12-1 skip-month
+    p["mom_6_1"] = g["close"].shift(21) / g["close"].shift(126) - 1   # 6-1
+    p["rev_21d"] = p["close"] / g["close"].shift(21) - 1              # 1-mo reversal
+    # MAX effect (Bali-Cakici-Whitelaw): mean of 5 largest daily rets in 60d
+    p["max_ret5_60d"] = (p.groupby("ticker", group_keys=False)["ret"]
+                         .rolling(60, min_periods=30)
+                         .apply(lambda x: np.sort(x)[-5:].mean(), raw=True)
+                         .reset_index(level=0, drop=True))
+    # turnover volatility: std of relative volume (vs its 60d mean)
+    p["rel_vol"] = p["volume"] / roll("volume", 60, "mean")
+    p["turn_vol_60d"] = roll("rel_vol", 60, "std")
 
     return feats.merge(p[["date", "ticker"] + NEW_FEATURES], on=["date", "ticker"], how="left")
 
