@@ -25,6 +25,12 @@ LSTM pilot in lstm_pilot.py):
   G  lambdarank_fs15  LambdaRank on the top-15 features by LGB gain, selected on
                       PRE-2018 data only (predates every test window — no leak).
                       Tests "fewer, better-chosen features".
+  I  lambdarank_fund  LambdaRank, base + new + 10 SEC-EDGAR fundamental ratios
+                      (E/P, CFO yield, B/M, D/E, ROA, accruals, asset growth,
+                      PEAD-ish earnings change — filing-date PIT, $0 cost).
+                      Runs only if build_fundamentals.py output exists. CAVEAT:
+                      CIK coverage of delisted members is lower than current
+                      ones — judge with that asymmetry in mind.
 
 Cost: 5 bps/side flat (all-in realistic for S&P 500 liquidity) + spread-aware
 reported. Exit: prod pt40 trailing.
@@ -68,7 +74,7 @@ DATA = ROOT / "data" / "liquidcap"
 CACHE = DATA / "cache"
 COST_BPS = 5.0
 CONFIRM_START = pd.Timestamp("2024-07-01")
-M_TRIALS = 8
+M_TRIALS = 9  # A..G + LSTM pilot + fundamentals config
 FS_CUTOFF = pd.Timestamp("2018-01-01")  # feature selection uses data before this
 
 LAMBDARANK_PARAMS = {
@@ -231,7 +237,17 @@ def main() -> None:
 
     base = [f for f in h.V2_FEATURES_BASE if f in feats.columns]
     new = [f for f in NEW_FEATURES if f in feats.columns]
-    print(f"  features: {len(base)} base + {len(new)} new; "
+
+    # Optional fundamentals (I): free SEC-EDGAR ratios, filing-date PIT
+    fund: list[str] = []
+    fund_fp = DATA / "fundamentals_daily.parquet"
+    if fund_fp.exists():
+        from build_fundamentals import RATIOS
+        fnd = pd.read_parquet(fund_fp)
+        fnd["date"] = pd.to_datetime(fnd["date"])
+        feats = feats.merge(fnd, on=["date", "ticker"], how="left")
+        fund = [r for r in RATIOS if r in feats.columns]
+    print(f"  features: {len(base)} base + {len(new)} new + {len(fund)} fund; "
           f"rows {len(feats):,}; tickers {feats.ticker.nunique()}")
 
     # More folds: test starts 2018 (4y min training 2014-2018)
@@ -248,11 +264,16 @@ def main() -> None:
         validation_fraction=0.05, random_state=42))
     fs15 = select_features_pre2018(feats, base + new, k=15)
     train(feats, ohlcv, fs15, "G_lambdarank_fs15", True, policy, args.trees)
+    if fund:
+        train(feats, ohlcv, base + new + fund, "I_lambdarank_fund", True,
+              policy, args.trees)
     build_ensemble_cache(["A_lambdarank_base", "B_regression_base", "E_ridge_new"],
                          "D_ensemble_ABE")
 
     names = ["A_lambdarank_base", "B_regression_base", "C_lambdarank_new",
              "D_ensemble_ABE", "E_ridge_new", "F_mlp_new", "G_lambdarank_fs15"]
+    if fund:
+        names.append("I_lambdarank_fund")
     print(f"\n  === SCREEN RESULTS (purged 20d, {COST_BPS:g}bps/side flat, "
           f"pt40, top-8, Sidak M={M_TRIALS}) ===", flush=True)
     dfs = {n: replay(n, ohlcv, policy) for n in names}
