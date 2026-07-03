@@ -366,6 +366,7 @@ def run_walkforward(
     cache_dir: str | Path | None = None,
     n_bins: int = 16,
     num_boost_round: int = 400,
+    purge_days: int = 0,
 ) -> RunResult:
     """Run 16-fold walk-forward; return per-fold + aggregate metrics.
 
@@ -373,10 +374,18 @@ def run_walkforward(
     rows, incl. delisted — anti-survivorship). cache_dir persists per-fold
     predictions so replay_walkforward() can re-evaluate filter/exit/cost
     variants without retraining. n_bins = LambdaRank relevance levels.
+
+    purge_days (off by default → identical to prior behaviour): drop the last
+    `purge_days` TRADING days of each fold's train set. The target is a
+    HOLD_DAYS-forward return, so a train row within HOLD_DAYS of test_start has a
+    label that reaches into the test window — purging that tail removes the
+    look-ahead overlap (López de Prado purging; embargo is unnecessary here since
+    the expanding window never trains on post-test data).
     """
     params = dict(lgb_params or V2_LGB_PARAMS)
     policy = exit_policy or ExitPolicy()
     folds = define_folds(features)
+    all_dates_arr = np.array(sorted(features["date"].unique()))
 
     if objective_lambdarank:
         params = dict(params)
@@ -395,6 +404,13 @@ def run_walkforward(
     for i, fold in enumerate(folds):
         train_mask = (features.date >= fold["train_start"]) & (features.date < fold["train_end"])
         train_data = features[train_mask].dropna(subset=[V2_TARGET]).copy()
+
+        # Purge: drop the last `purge_days` trading days of train, whose forward
+        # label leaks into the test window. No-op when purge_days == 0.
+        if purge_days > 0:
+            prior = all_dates_arr[all_dates_arr < fold["test_start"]]
+            if len(prior) > purge_days:
+                train_data = train_data[train_data["date"] < prior[-purge_days]]
         X_tr = train_data[feat_cols].fillna(0).values
         y_tr = train_data[V2_TARGET].values
 
