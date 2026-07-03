@@ -33,6 +33,7 @@ Usage:
 """
 from __future__ import annotations
 
+import json
 import sys
 import time
 from pathlib import Path
@@ -85,17 +86,31 @@ def main() -> None:
     current = set(mem[mem["end"] >= mem["end"].max()]["ticker"])
     removed = set(tickers) - current
 
-    cik = sec_edgar.get_cik_map(tickers)
+    # Delisted-CIK overrides recovered by company name (recover_delisted_ciks.py)
+    ov_fp = DATA / "cik_overrides.json"
+    overrides = json.loads(ov_fp.read_text()) if ov_fp.exists() else {}
+
+    cik = sec_edgar.get_cik_map(tickers, overrides=overrides)
     cov_cur = len([t for t in current if t in cik]) / len(current)
     cov_rem = len([t for t in removed if t in cik]) / len(removed)
-    print(f"  CIK coverage: current {cov_cur:.0%} ({len(current)}), "
-          f"REMOVED {cov_rem:.0%} ({len(removed)})  <- survivorship asymmetry check")
+    print(f"  CIK coverage (+{len(overrides)} overrides): current {cov_cur:.0%} "
+          f"({len(current)}), REMOVED {cov_rem:.0%} ({len(removed)})"
+          f"  <- survivorship asymmetry check")
 
     if FACTS_FP.exists():
         facts = pd.read_parquet(FACTS_FP)
         print(f"  (facts cached: {len(facts):,} rows, {facts.ticker.nunique()} tickers)")
+        todo = [t for t in tickers if t in cik and t not in set(facts.ticker)]
+        if todo:
+            print(f"  appending {len(todo)} newly-mapped tickers")
+            extra = sec_edgar.download_company_facts(todo, delay=0.12,
+                                                     cik_overrides=overrides)
+            if not extra.empty:
+                facts = pd.concat([facts, extra], ignore_index=True)
+                facts.to_parquet(FACTS_FP, index=False)
     else:
-        facts = sec_edgar.download_company_facts(tickers, delay=0.12)
+        facts = sec_edgar.download_company_facts(tickers, delay=0.12,
+                                                 cik_overrides=overrides)
         facts.to_parquet(FACTS_FP, index=False)
         print(f"  facts: {len(facts):,} rows, {facts.ticker.nunique()} tickers")
     facts["start_date"] = pd.to_datetime(facts.get("start_date"), errors="coerce")
