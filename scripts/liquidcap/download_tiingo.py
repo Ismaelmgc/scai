@@ -50,7 +50,9 @@ def fetch(tkr: str, start: str, tok: str) -> pd.DataFrame | None:
                 return None
             df = pd.DataFrame(js)
             df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None).dt.normalize()
-            df = df.rename(columns=COLS)[["date"] + list(COLS.values())]
+            # select BEFORE renaming: raw open/high/low/volume also exist and
+            # would collide with the renamed adj* columns
+            df = df[["date"] + list(COLS)].rename(columns=COLS)
             df["ticker"] = tkr
             return df
         if r.status_code == 404:
