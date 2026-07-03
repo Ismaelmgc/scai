@@ -118,6 +118,7 @@ def main() -> None:
     # One row per (ticker, filed) with the concepts we need
     parts = None
     spec = [("net_income", True), ("cfo", True), ("revenue", True),
+            ("revenue_contracts", True),  # ASC-606 tag — half the filers use it
             ("operating_income", True), ("equity", False), ("total_assets", False),
             ("long_term_debt", False), ("current_debt", False),
             ("shares_outstanding", False)]
@@ -125,6 +126,8 @@ def main() -> None:
         p = latest_per_filing(facts, concept, ann)
         parts = p if parts is None else parts.merge(p, on=["ticker", "filed"], how="outer")
     f = parts.sort_values(["ticker", "filed"]).reset_index(drop=True)
+    # tag-standardization fallback: Revenues | RevenueFromContractWithCustomer...
+    f["revenue"] = f["revenue"].fillna(f["revenue_contracts"])
     # forward-fill balance-sheet items within ticker (a 10-Q may omit some)
     g = f.groupby("ticker", group_keys=False)
     for c in [c for c, _ in spec]:

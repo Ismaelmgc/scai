@@ -74,7 +74,7 @@ DATA = ROOT / "data" / "liquidcap"
 CACHE = DATA / "cache"
 COST_BPS = 5.0
 CONFIRM_START = pd.Timestamp("2024-07-01")
-M_TRIALS = 9  # A..G + LSTM pilot + fundamentals config
+M_TRIALS = 11  # A..G + LSTM pilot + fundamentals + horizon 10d/5d (horizon_screen)
 FS_CUTOFF = pd.Timestamp("2018-01-01")  # feature selection uses data before this
 
 LAMBDARANK_PARAMS = {
