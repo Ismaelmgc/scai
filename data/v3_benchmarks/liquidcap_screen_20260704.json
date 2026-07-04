@@ -1,0 +1,31 @@
+{
+  "experiment": "liquidcap PIT S&P500 screen, 34 purged folds 2018-2026, top-8 pt40, Sidak M=11",
+  "universe": "753 PIT members (250 removed via Tiingo, current via Tiingo+yf), 718 with features, 1.55M rows",
+  "flat_5bps": {
+    "A_lambdarank_base":  {"mo": 0.0126, "fold_ci": [-0.001, 0.079], "sharpe": 0.97, "ic": 0.0102, "confirm_f": 0.009},
+    "B_regression_base":  {"mo": 0.0139, "fold_ci": [-0.001, 0.084], "sharpe": 1.56, "ic": 0.0129, "confirm_f": 0.074},
+    "C_lambdarank_new":   {"mo": 0.0151, "fold_ci": [-0.001, 0.096], "sharpe": 1.42, "ic": 0.0195, "confirm_f": 0.052},
+    "D_ensemble_ABE":     {"mo": 0.0133, "fold_ci": [-0.000, 0.084], "sharpe": 1.26, "ic": 0.0100, "confirm_f": 0.027},
+    "E_ridge_new":        {"mo": 0.0132, "fold_ci": [0.006, 0.075], "sharpe": 1.80, "ic": 0.0013, "confirm_f": 0.067, "own_ci_gt0": true},
+    "F_mlp_new":          {"mo": 0.0107, "fold_ci": [0.001, 0.064], "sharpe": 1.76, "ic": 0.0019, "confirm_f": 0.058, "own_ci_gt0": true},
+    "G_lambdarank_fs15":  {"mo": 0.0157, "fold_ci": [0.004, 0.091], "sharpe": 2.09, "ic": 0.0109, "confirm_f": 0.074, "own_ci_gt0": true},
+    "I_lambdarank_fund":  {"mo": 0.0152, "fold_ci": [0.002, 0.093], "sharpe": 2.05, "ic": 0.0158, "confirm_f": 0.043, "own_ci_gt0": true},
+    "J_lambdarank_h10":   {"mo": 0.0166, "sharpe": 1.33, "ic": 0.0191, "confirm_f": 0.128},
+    "K_lambdarank_h5":    {"mo": 0.0147, "sharpe": 0.81, "ic": 0.0118, "confirm_f": 0.111}
+  },
+  "spread_aware": {
+    "note": "Corwin-Schultz proxy likely OVERSTATES real S&P500 spreads (1-5bps); all own-CIs include 0",
+    "G_lambdarank_fs15": {"mo": 0.0084, "sharpe": 1.37},
+    "J_lambdarank_h10": {"mo": 0.0012},
+    "K_lambdarank_h5": {"mo": -0.0164, "dA_ci": [-0.095, -0.030], "verdict": "REJECTED both costs"}
+  },
+  "H_lstm_pilot": {"mean_ic": -0.0025, "folds_negative": "10/17", "verdict": "REJECTED - Fischer-Krauss 2018 replicated: no LSTM edge post-2010"},
+  "gates": {
+    "improvement_vs_A_after_sidak11": "NONE pass (min pSidak 0.93 = G)",
+    "own_ci_gt0_flat_cost": ["E", "F", "G", "I"],
+    "ic_trend_bias_check": "PASS all (r in [-0.25, +0.02], no rise toward present)",
+    "confirm_block": "positive for B/C/E/F/G/I/J/K"
+  },
+  "fs15_features": ["ret_252d", "sector_ret_60d", "rev_21d", "realized_vol_120d", "amihud_60d", "beta_60d", "downside_vol_60d", "sma_200", "ema_26", "max_dd_60d", "vol_of_vol_ratio", "adv_60d", "intraday_avg_20d", "price_roc_smooth_120d", "obv"],
+  "runtime_min": {"screen": 736, "horizons": 234, "lstm": 13}
+}
