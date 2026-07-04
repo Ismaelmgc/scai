@@ -40,6 +40,8 @@ def main() -> None:
     if missing_removed:
         print(f"  WARNING: {len(missing_removed)} REMOVED names missing and yfinance "
               f"can't serve them (survivorship hole): {missing_removed[:15]}")
+    if not (DATA / "spy.parquet").exists():
+        todo.append("SPY")  # market_df for the feature build
     if not todo:
         print("  nothing to do — all current members present")
         return
@@ -50,6 +52,9 @@ def main() -> None:
     df["close_unadj"] = np.nan  # raw close unavailable via yfinance auto_adjust
     merged = pd.concat([panel, df], ignore_index=True)
     merged.to_parquet(OUT, index=False)
+    spy = merged[merged.ticker == "SPY"]
+    if not spy.empty and not (DATA / "spy.parquet").exists():
+        spy.to_parquet(DATA / "spy.parquet", index=False)
     print(f"  saved: {len(merged):,} rows, {merged.ticker.nunique()} tickers "
           f"({(time.time()-t0)/60:.1f} min)")
 
