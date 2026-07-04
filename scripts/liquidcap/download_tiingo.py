@@ -42,10 +42,20 @@ def fetch(tkr: str, start: str, tok: str) -> pd.DataFrame | None:
     that means the MONTHLY unique-symbol cap -> stop gracefully."""
     url = f"https://api.tiingo.com/tiingo/daily/{tkr.lower()}/prices"
     for attempt in range(7):
-        r = requests.get(url, params={"startDate": start, "token": tok},
-                         headers={"Content-Type": "application/json"}, timeout=60)
+        try:
+            r = requests.get(url, params={"startDate": start, "token": tok},
+                             headers={"Content-Type": "application/json"}, timeout=60)
+        except requests.RequestException as e:  # transient network error
+            print(f"    {tkr}: network error {str(e)[:60]}, retry in 60s", flush=True)
+            time.sleep(60)
+            continue
         if r.status_code == 200:
-            js = r.json()
+            try:
+                js = r.json()
+            except ValueError:  # 200 with an HTML/empty body (proxy hiccup)
+                print(f"    {tkr}: 200 with non-JSON body, retry in 30s", flush=True)
+                time.sleep(30)
+                continue
             if not js:
                 return None
             df = pd.DataFrame(js)
