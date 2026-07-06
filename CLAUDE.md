@@ -21,8 +21,15 @@ El repo se desarrolló en **macOS arm64**, pero esta copia corre en **Windows** 
 - TOP_K=8 equal-weight (**acciones fraccionadas a 4dp = precisión IBKR** → cada nombre exacto al 12.5%, sin cash ocioso por redondeo, calza con el backtest y ejecutable en IBKR vía orden por importe), holding 20d, rebalance 5d, trailing stop ATR clipped [10%, 16%], cooldown 5d tras salida, **profit target +40%** (v4.0).
 - **Tradability gate (v3.2, 2026-06-11)**: señales solo sobre tickers con `close ≥ $1.50` y `ADV20 ≥ $500K` (`src/app/features/tradability.py`). El filtro aplica SOLO a la selección — el entrenamiento mantiene deslistados (anti-survivorship).
 - Dual paper trading (reset 2026-06-11, €1,000 c/u): Baseline (trail + pt40) + Adaptive (además tighten a 6% tras día 5 si profitable; WR backtest 59.7%, maxDD −15.1%).
-- Métricas honestas (filtro + 15bps/lado, 16 folds): ~+4%/mes, Sharpe ~2.7-2.8, WR 51-60%, α vs SPY +7-9%/fold. Informe: `reports/v4_final_report.md`.
+- **Métricas honestas TRAS PURGING (2026-07-03, leak de 20d corregido)**: +1.0-1.4%/mes a 15bps planos (CI del fold **cruza 0**), ~0%/mes spread-aware, WR 45-55%, Sharpe ~1.2. Las cifras antiguas (+4%/mes, Sharpe ~2.7) estaban infladas por look-ahead de 20d en el harness (sin purge) — NO citarlas. El edge está estadísticamente sin confirmar; el paper trading en vivo es el árbitro (y mide el coste real de fills).
 - Artefacto: `data/models/smallcap_v3_lambdarank.pkl`.
+
+## Segundo producto: LIQUIDCAP (S&P 500, 2026-07-06)
+
+- **Book de paper trading en vivo** (Supabase estrategia `liquidcap`, €1.000): spec congelada `GI_fs15_fund_20d` — LGB LambdaRank 16 bins, **25 features** (15 precio/volumen top-gain pre-2018 + 10 ratios fundamentales SEC EDGAR point-in-time), top-8, hold 20d, salidas de producción. Backtest purgado (34 folds 2018-26, universo PIT con deslistados): **+1.69%/mes flat 5bps / +0.95%/mes spread-aware, Sharpe 2.43**. Resultados: `data/v3_benchmarks/liquidcap_screen_20260704.json`.
+- Job diario (local, tras cierre US): `PYTHONPATH=src python scripts/liquidcap/daily_liquidcap.py`. Retrain semanal purgado-por-construcción + refresh EDGAR + re-descarga completa del panel (convención **dividend-adjusted** = yfinance auto_adjust; NO usar Polygon aquí — es split-only y corrompe features en ex-dividendos).
+- Rechazados con gates (no repetir sin ángulo nuevo): LSTM (IC −0.002, réplica Fischer-Krauss), horizonte 10d/5d (coste de rotación), MLP/Ridge (no superan árboles), conviction sizing (artefacto del leak), K>8.
+- Scripts activos en `scripts/liquidcap/`; research terminada en `scripts/archived/liquidcap_research/`.
 
 ## Comandos
 
