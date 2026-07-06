@@ -31,7 +31,7 @@ import subprocess
 import sys
 import time
 from dataclasses import asdict
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 
 import numpy as np
@@ -227,6 +227,18 @@ def main() -> None:
     pt = PaperTrader.load_or_create(
         str(p_path), initial_capital=1000.0, max_positions=8,
         holding_period_days=20, adaptive_stop=False, profit_target=0.40)
+
+    # Idempotency guard: never process the same session twice. `today` is the
+    # latest bar in the panel, which does NOT change until the next US session —
+    # so a second run on a weekend/holiday (or a double CI run) sees the same
+    # `today`. Without this guard that second run would fill the pending it just
+    # queued from THIS session at THIS session's own open — a look-ahead entry —
+    # and inflate the day index, collapsing the intended decide-at-close ->
+    # enter-next-open lag. Bail if the book was already advanced to this session.
+    if pt.state.last_update and str(pt.state.last_update) >= today:
+        print(f"  session {today} already processed "
+              f"(last_update={pt.state.last_update}) — nothing to do")
+        return
 
     ohlcv_today = panel[panel.ticker.isin(members)]
     entered = pt.execute_pending(ohlcv_today, today)
