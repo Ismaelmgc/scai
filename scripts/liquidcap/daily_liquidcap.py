@@ -128,6 +128,27 @@ def build_features(panel: pd.DataFrame, spy: pd.DataFrame,
     return feats.merge(fnd, on=["date", "ticker"], how="left")
 
 
+def refresh_panel_full(panel: pd.DataFrame, members: list[str]) -> pd.DataFrame:
+    """Weekly full re-download of CURRENT members (+SPY): yfinance re-adjusts
+    the whole series retroactively at each dividend, so incremental appends
+    drift from the true adjusted series. Delisted rows (Tiingo) are untouched —
+    they generate no new adjustments."""
+    print(f"  weekly full panel refresh ({len(members)} members + SPY)...")
+    fresh = download_yahoo_ohlcv(members + ["SPY"], start_date="2014-01-01")
+    if fresh.empty:
+        print("  refresh returned nothing — keeping existing panel")
+        return panel
+    fresh = fresh[["date", "ticker", "open", "high", "low", "close", "volume"]].copy()
+    fresh["date"] = pd.to_datetime(fresh["date"]).dt.tz_localize(None).dt.normalize()
+    fresh["close_unadj"] = np.nan
+    keep = panel[~panel.ticker.isin(set(fresh.ticker))]
+    panel = pd.concat([keep, fresh], ignore_index=True)
+    panel.to_parquet(PANEL_FP, index=False)
+    panel[panel.ticker == "SPY"].to_parquet(SPY_FP, index=False)
+    print(f"  panel refreshed: {len(panel):,} rows")
+    return panel
+
+
 def retrain(panel: pd.DataFrame, spy: pd.DataFrame, members: list[str]) -> None:
     """Weekly full retrain. Purged by construction: the last 20 sessions have
     NaN forward targets and are dropped — the model never sees the future."""
@@ -175,6 +196,8 @@ def main() -> None:
     spy = panel[panel.ticker == "SPY"].copy()
 
     if model_stale():
+        panel = refresh_panel_full(panel, members)
+        spy = panel[panel.ticker == "SPY"].copy()
         retrain(panel, spy, members)
 
     # Daily scoring on a trailing window (features need 252 trading days)
