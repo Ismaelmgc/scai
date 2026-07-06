@@ -83,3 +83,13 @@ data/research/
 
 # mid-cap swing experiment (research)
 data/midcap/
+
+# liquidcap regenerable data (phase-1 local book)
+data/liquidcap/*.parquet
+data/liquidcap/cache/
+data/liquidcap/*.json
+data/liquidcap/*.pkl
+data/liquidcap/paper_trading/
+data/liquidcap/*.html
+!data/liquidcap/cik_overrides.json
+!data/liquidcap/membership_sp500.parquet
