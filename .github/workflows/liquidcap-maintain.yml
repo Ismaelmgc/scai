@@ -1,0 +1,54 @@
+name: SCAI liquidcap universe maintenance
+
+# Monthly: refresh S&P 500 membership from Wikipedia and ARCHIVE any departed
+# member's price history into the committed delisted slice BEFORE yfinance drops
+# it — keeps the anti-survivorship training universe honest as the index turns
+# over (~20-25 names/year). Additions need no action (a new member is "current"
+# so the daily job's yfinance download already covers it).
+#
+# 1st of the month, 04:00 UTC (after the overnight adjust, well clear of any
+# session). Idempotent: no departures -> no-op. Commits membership + delisted.
+
+on:
+  schedule:
+    - cron: "0 4 1 * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: scai-liquidcap-maintain
+  cancel-in-progress: false
+
+jobs:
+  maintain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Refresh universe & archive departed members
+        env:
+          PYTHONPATH: src
+          PYTHONIOENCODING: utf-8
+        run: python scripts/liquidcap/maintain_universe.py
+
+      - name: Commit membership & delisted archive
+        run: |
+          git config user.name "scai-bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A data/liquidcap/membership_sp500.parquet data/liquidcap/ohlcv_delisted.parquet
+          if git diff --cached --quiet; then
+            echo "No universe changes to commit."
+          else
+            git commit -m "liquidcap: refresh membership + archive departed members [skip ci]"
+            git push
+          fi
