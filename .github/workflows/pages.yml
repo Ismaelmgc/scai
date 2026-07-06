@@ -1,0 +1,76 @@
+name: SCAI web deploy
+
+# Standalone GitHub Pages deploy, DECOUPLED from the ~1h Polygon pipeline.
+#
+# The published page is just a login shell: it authenticates against Supabase
+# and paints every strategy tab client-side from the `dashboard_view` rows. So
+# the deploy only needs `render_static_dashboard.py` (reads Supabase, ~30s) —
+# NOT the daily pipeline. daily.yml still deploys after its run, but coupling the
+# web to the pipeline meant a transient `deploy-pages` hiccup (or a pipeline
+# failure) left the site stale and forced a full 1h re-run to fix it.
+#
+# Use this to:
+#   - redeploy the site on demand (workflow_dispatch) in ~1 min, e.g. after a new
+#     strategy's dashboard_view first appears in Supabase (the S&P 500 tab)
+#   - auto-ship a change to the dashboard template / renderer on push to main
+#
+# Shares the `github-pages` environment with daily.yml; GitHub serialises
+# deployments to that environment, so the two never clobber each other.
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - "src/app/web/templates/**"
+      - "src/app/web/static/**"
+      - "src/app/web/server.py"
+      - "scripts/render_static_dashboard.py"
+      - ".github/workflows/pages.yml"
+
+permissions:
+  contents: read
+  pages: write # publish the static dashboard
+  id-token: write # required by actions/deploy-pages
+
+concurrency:
+  group: scai-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Render static dashboard
+        env:
+          PYTHONPATH: src
+          # Anon (publishable) key + URL embedded in the login shell so it can
+          # authenticate and read Supabase. RLS restricts reads to logged-in users.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: python scripts/render_static_dashboard.py
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
