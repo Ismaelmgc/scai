@@ -46,10 +46,29 @@ from app.paper_trading import PaperTrader  # noqa: E402
 from app.utils import notify_telegram  # noqa: E402
 from app.web import dashboard_data  # noqa: E402
 
+ROOT = Path(__file__).resolve().parent.parent
+LIQUIDCAP_DIR = ROOT / "data" / "liquidcap" / "paper_trading"
+LIQUIDCAP_OHLCV = ROOT / "data" / "liquidcap" / "ohlcv_sp500.parquet"
+
+# (strategy, pt_dir, adaptive_stop, ohlcv_path)  ohlcv_path=None -> small-cap parquet.
 STRATEGIES = [
-    ("baseline", dashboard_data.PAPER_TRADING_DIR, False),
-    ("adaptive", dashboard_data.PAPER_TRADING_ADAPTIVE_DIR, True),
+    ("baseline", dashboard_data.PAPER_TRADING_DIR, False, None),
+    ("adaptive", dashboard_data.PAPER_TRADING_ADAPTIVE_DIR, True, None),
+    ("liquidcap", LIQUIDCAP_DIR, False, LIQUIDCAP_OHLCV),
 ]
+
+
+def _ohlcv_for(path: Path | None) -> pd.DataFrame:
+    """Committed EOD panel used to mark the view. Small-cap default, or the
+    liquidcap S&P 500 panel when a path is given (may be absent in CI until the
+    daily job has committed it — then the view keeps its last Supabase state)."""
+    if path is None:
+        return dashboard_data._load_ohlcv()
+    if not path.exists():
+        return pd.DataFrame(columns=["date", "ticker", "open", "high", "low", "close"])
+    df = pd.read_parquet(path)
+    df["date"] = pd.to_datetime(df["date"])
+    return df
 
 
 def _market_open_et(now: datetime) -> bool:
@@ -106,17 +125,16 @@ def main() -> None:
         print("  Supabase not configured — aborting.")
         return
 
-    ohlcv = dashboard_data._load_ohlcv()  # committed parquet (EOD close), for the view
-
-    # Collect fills across strategies (both enter the same names at the same open
-    # price → dedupe by ticker) so we send ONE Telegram message with entry prices.
+    # Collect fills across strategies (dedupe by ticker) so we send ONE Telegram
+    # message with entry prices. Each strategy loads its own EOD panel below.
     all_fills: dict[str, float] = {}
 
-    for strat, pt_dir, adaptive in STRATEGIES:
+    for strat, pt_dir, adaptive, ohlcv_path in STRATEGIES:
         state = supabase_store.read_state(strat)
         if state is None:
             print(f"  [{strat}] no state in Supabase — skip")
             continue
+        ohlcv = _ohlcv_for(ohlcv_path)  # committed EOD panel, for the view
 
         p_path = pt_dir / "portfolio.json"
         p_path.parent.mkdir(parents=True, exist_ok=True)
@@ -144,7 +162,7 @@ def main() -> None:
         entered = pt.execute_pending(prices, today)
         pt.save()
         supabase_store.write_state(strat, asdict(pt.state))
-        view = dashboard_data.build_view(ohlcv, pt_dir, adaptive)
+        view = dashboard_data.build_view(ohlcv, pt_dir, adaptive, strategy=strat)
         if view is not None:
             supabase_store.write_dashboard_view(strat, view)
         print(f"  [{strat}] filled {entered or '[]'} at open"

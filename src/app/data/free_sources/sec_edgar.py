@@ -58,8 +58,14 @@ FINANCIAL_CONCEPTS = {
 }
 
 
-def get_cik_map(tickers: list[str]) -> dict[str, str]:
-    """Map ticker symbols to SEC CIK numbers."""
+def get_cik_map(tickers: list[str],
+                overrides: dict[str, str] | None = None) -> dict[str, str]:
+    """Map ticker symbols to SEC CIK numbers.
+
+    The SEC registry only lists CURRENT registrants; ``overrides`` supplies
+    extra ticker->CIK pairs (e.g. delisted names recovered from the historical
+    name index) used where the registry has no answer.
+    """
     r = httpx.get("https://www.sec.gov/files/company_tickers.json",
                    headers=HEADERS, timeout=15)
     r.raise_for_status()
@@ -71,6 +77,9 @@ def get_cik_map(tickers: list[str]) -> dict[str, str]:
         t = v.get("ticker", "").upper()
         if t in ticker_set:
             cik_map[t] = str(v["cik_str"])
+    for t, cik in (overrides or {}).items():
+        if t.upper() in ticker_set and t.upper() not in cik_map:
+            cik_map[t.upper()] = str(cik)
 
     log.info("edgar_cik_mapped", requested=len(tickers), found=len(cik_map))
     return cik_map
@@ -80,13 +89,14 @@ def download_company_facts(
     tickers: list[str],
     max_tickers: int | None = None,
     delay: float = 0.15,
+    cik_overrides: dict[str, str] | None = None,
 ) -> pd.DataFrame:
     """Download key financial facts from SEC EDGAR for a list of tickers.
 
     Returns DataFrame with point-in-time financial data.
     Columns: ticker, concept, value, filed, end_date, form, source.
     """
-    cik_map = get_cik_map(tickers)
+    cik_map = get_cik_map(tickers, overrides=cik_overrides)
     if max_tickers:
         items = list(cik_map.items())[:max_tickers]
         cik_map = dict(items)

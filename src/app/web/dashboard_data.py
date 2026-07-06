@@ -82,9 +82,11 @@ def _compute_stats(values: list[float], spy_values: list[float]) -> dict | None:
 
 def load_paper_trading(ohlcv: pd.DataFrame,
                        pt_dir: Path | None = None,
-                       adaptive_stop: bool = False) -> dict | None:
+                       adaptive_stop: bool = False,
+                       strategy: str | None = None) -> dict | None:
     pt_dir = pt_dir or PAPER_TRADING_DIR
-    strategy = "adaptive" if pt_dir == PAPER_TRADING_ADAPTIVE_DIR else "baseline"
+    if strategy is None:
+        strategy = "adaptive" if pt_dir == PAPER_TRADING_ADAPTIVE_DIR else "baseline"
 
     # Source of truth is Supabase; fall back to the local JSON (offline/dev).
     state = supabase_store.read_state(strategy)
@@ -208,9 +210,11 @@ def load_paper_trading(ohlcv: pd.DataFrame,
     }
 
 
-def load_signal_history(pt_dir: Path | None = None) -> list[dict]:
+def load_signal_history(pt_dir: Path | None = None,
+                        strategy: str | None = None) -> list[dict]:
     pt_dir = pt_dir or PAPER_TRADING_DIR
-    strategy = "adaptive" if pt_dir == PAPER_TRADING_ADAPTIVE_DIR else "baseline"
+    if strategy is None:
+        strategy = "adaptive" if pt_dir == PAPER_TRADING_ADAPTIVE_DIR else "baseline"
 
     # Source of truth is Supabase; fall back to the local parquet (offline/dev).
     rows = supabase_store.read_signals(strategy, limit=50)
@@ -256,16 +260,21 @@ def _get_data_freshness(ohlcv: pd.DataFrame) -> dict:
     }
 
 
-def build_view(ohlcv: pd.DataFrame, pt_dir: Path, adaptive_stop: bool) -> dict | None:
+def build_view(ohlcv: pd.DataFrame, pt_dir: Path, adaptive_stop: bool,
+               strategy: str | None = None) -> dict | None:
     """Render-ready view for one strategy: paper + signals + data freshness.
 
     This is exactly what the client needs to paint the dashboard, so it can be
     stored in Supabase (`dashboard_view`) and fetched in one read after login.
+
+    ``strategy`` overrides the pt_dir-based name (used by extra books like
+    liquidcap whose pt_dir isn't the small-cap baseline/adaptive pair).
     """
-    paper = load_paper_trading(ohlcv, pt_dir, adaptive_stop=adaptive_stop)
+    paper = load_paper_trading(ohlcv, pt_dir, adaptive_stop=adaptive_stop,
+                               strategy=strategy)
     if paper is None:
         return None
-    signals = load_signal_history(pt_dir)
+    signals = load_signal_history(pt_dir, strategy=strategy)
     return {
         "paper": paper,
         "signals": signals,
