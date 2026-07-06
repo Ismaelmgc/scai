@@ -80,6 +80,14 @@ def latest_per_filing(facts: pd.DataFrame, concept: str, annualized: bool):
 
 
 def main() -> None:
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--refresh-facts", action="store_true",
+                    help="re-download ALL company facts (picks up new filings)")
+    args = ap.parse_args()
+    if args.refresh_facts and FACTS_FP.exists():
+        FACTS_FP.unlink()
+
     t0 = time.time()
     mem = pd.read_parquet(DATA / "membership_sp500.parquet")
     tickers = sorted(mem.ticker.unique())
