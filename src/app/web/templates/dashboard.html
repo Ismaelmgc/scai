@@ -943,7 +943,7 @@
             }
             chart.update('none');
         }
-        function updateLiveAggregates(open) {
+        function updateLiveAggregates(useLive, open) {
             if (!window._scaiPaper) return;
             for (const sid in window._scaiPaper) {
                 const p = window._scaiPaper[sid];
@@ -954,9 +954,12 @@
                     const shares = parseFloat(row.dataset.shares) || 0;
                     const prevClose = parseFloat(row.dataset.prevclose) || 0;
                     const lp = _livePrices[row.dataset.ticker];
-                    // Live price only counts while the market is open; otherwise the
-                    // last close is the truth (keeps the card == the published chart).
-                    const px = (open && lp != null && isFinite(lp)) ? lp : prevClose;
+                    // Value at the live price while the market is open AND after it
+                    // closes (the worker freezes live_prices at the session close, so
+                    // it's the latest close — fresher than a snapshot the daily job
+                    // hasn't rebuilt yet). Only fall back to the snapshot's prevClose
+                    // when live data is missing/genuinely stale (worker down for days).
+                    const px = (useLive && lp != null && isFinite(lp)) ? lp : prevClose;
                     posValue += shares * px;
                 });
                 const totalValue = (p.cash || 0) + posValue;
@@ -989,18 +992,21 @@
                 let newest = 0;
                 for (const row of rows) {
                     _livePrices[row.ticker] = Number(row.price);
-                    if (open) applyPrice(row.ticker, Number(row.price));  // per-row live cells only while open
                     const ts = Date.parse(row.updated_at) || 0;
                     if (ts > newest) newest = ts;
                 }
-                updateLiveAggregates(open);   // live tab %, KPI card and chart point
-                // Market closed → values come from the last close; say so plainly
-                // instead of an age that would imply the cards are tracking live.
-                if (!open) { setBadges('Cierre anterior', false); return; }
+                // Use live prices while open, or after-hours when they're recent —
+                // the worker freezes them at the session close, so they're the latest
+                // close (fresher than a snapshot the daily job hasn't rebuilt). Only
+                // fall back to the snapshot if live is genuinely stale (worker down).
+                const liveFresh = newest > 0 && (Date.now() - newest) < 5 * 24 * 3600 * 1000;
+                const useLive = open || liveFresh;
+                if (useLive) for (const row of rows) applyPrice(row.ticker, Number(row.price));
+                updateLiveAggregates(useLive, open);   // live tab %, KPI card and chart point
                 const ageMin = (Date.now() - newest) / 60000;
-                if (ageMin < 3) setBadges('En vivo', true);
-                else if (ageMin < 60) setBadges('Hace ' + Math.round(ageMin) + ' min', false);
-                else setBadges('Cierre anterior', false);
+                if (open && ageMin < 3) setBadges('En vivo', true);
+                else if (open && ageMin < 60) setBadges('Hace ' + Math.round(ageMin) + ' min', false);
+                else setBadges(liveFresh ? 'Último cierre' : 'Cierre anterior', false);
             }
             pull();
             _liveTimer = setInterval(pull, 60000);
