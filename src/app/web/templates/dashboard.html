@@ -744,7 +744,7 @@
         }
 
         function renderDashboard(views) {
-            const order = [['baseline', 'Baseline'], ['adaptive', 'Adaptive Stop']].filter(([id]) => views[id]);
+            const order = [['baseline', 'Baseline'], ['adaptive', 'Adaptive Stop'], ['liquidcap', 'S&P 500']].filter(([id]) => views[id]);
             if (!order.length) {
                 document.getElementById('appContent').innerHTML = '<div class="card" style="text-align:center; padding:60px;"><div style="font-size:48px;">📊</div><h2 style="justify-content:center;">Sin datos de Paper Trading</h2><p style="color:var(--text-secondary);">El pipeline aún no ha publicado datos.</p></div>';
                 return;

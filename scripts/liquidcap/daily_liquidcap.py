@@ -83,33 +83,36 @@ LGB_PARAMS = {
 }
 
 
+DELISTED_FP = DATA / "ohlcv_delisted.parquet"  # committed, static (anti-survivorship)
+
+
 def current_members() -> list[str]:
     mem = pd.read_parquet(DATA / "membership_sp500.parquet")
     return sorted(mem[mem["end"] >= mem["end"].max()]["ticker"].unique())
 
 
-def update_panel(members: list[str]) -> pd.DataFrame:
-    panel = pd.read_parquet(PANEL_FP)
-    panel["date"] = pd.to_datetime(panel["date"])
-    last = panel["date"].max().date()
-    if last >= date.today() - timedelta(days=1):
-        print(f"  panel already current ({last})")
-        return panel
-    start = (last + timedelta(days=1)).isoformat()
-    print(f"  updating panel {start} -> today ({len(members)} members + SPY)")
-    fresh = download_yahoo_ohlcv(members + ["SPY"], start_date=start)
-    if fresh.empty:
-        print("  no new bars (holiday/weekend)")
-        return panel
+def assemble_panel(members: list[str]) -> pd.DataFrame:
+    """Full training/scoring panel = committed static delisted slice (Tiingo,
+    never changes) + a FRESH yfinance download of current members + SPY.
+
+    Rebuilding current bars every run (instead of an incremental append) both
+    kills the retroactive dividend re-adjustment drift and keeps the CI stateless
+    — only the tiny delisted slice, model and EDGAR facts need to persist. The
+    merged panel is written for morning_execute's view and gitignored."""
+    delisted = pd.read_parquet(DELISTED_FP)
+    delisted["date"] = pd.to_datetime(delisted["date"])
+    print(f"  delisted (committed, static): {delisted.ticker.nunique()} tickers")
+    fresh = download_yahoo_ohlcv(members + ["SPY"], start_date="2014-01-01")
     fresh = fresh[["date", "ticker", "open", "high", "low", "close", "volume"]].copy()
     fresh["date"] = pd.to_datetime(fresh["date"]).dt.tz_localize(None).dt.normalize()
     fresh["close_unadj"] = np.nan
-    panel = pd.concat([panel, fresh], ignore_index=True)
+    panel = pd.concat([delisted, fresh], ignore_index=True)
     panel = panel.drop_duplicates(["date", "ticker"], keep="last")
     panel.to_parquet(PANEL_FP, index=False)
     spy = panel[panel.ticker == "SPY"]
     spy.to_parquet(SPY_FP, index=False)
-    print(f"  panel: {len(panel):,} rows -> {panel['date'].max().date()}")
+    print(f"  panel: {len(panel):,} rows -> {panel['date'].max().date()} "
+          f"({panel.ticker.nunique()} tickers)")
     return panel
 
 
@@ -126,27 +129,6 @@ def build_features(panel: pd.DataFrame, spy: pd.DataFrame,
     fnd = pd.read_parquet(FUND_FP)
     fnd["date"] = pd.to_datetime(fnd["date"])
     return feats.merge(fnd, on=["date", "ticker"], how="left")
-
-
-def refresh_panel_full(panel: pd.DataFrame, members: list[str]) -> pd.DataFrame:
-    """Weekly full re-download of CURRENT members (+SPY): yfinance re-adjusts
-    the whole series retroactively at each dividend, so incremental appends
-    drift from the true adjusted series. Delisted rows (Tiingo) are untouched —
-    they generate no new adjustments."""
-    print(f"  weekly full panel refresh ({len(members)} members + SPY)...")
-    fresh = download_yahoo_ohlcv(members + ["SPY"], start_date="2014-01-01")
-    if fresh.empty:
-        print("  refresh returned nothing — keeping existing panel")
-        return panel
-    fresh = fresh[["date", "ticker", "open", "high", "low", "close", "volume"]].copy()
-    fresh["date"] = pd.to_datetime(fresh["date"]).dt.tz_localize(None).dt.normalize()
-    fresh["close_unadj"] = np.nan
-    keep = panel[~panel.ticker.isin(set(fresh.ticker))]
-    panel = pd.concat([keep, fresh], ignore_index=True)
-    panel.to_parquet(PANEL_FP, index=False)
-    panel[panel.ticker == "SPY"].to_parquet(SPY_FP, index=False)
-    print(f"  panel refreshed: {len(panel):,} rows")
-    return panel
 
 
 def retrain(panel: pd.DataFrame, spy: pd.DataFrame, members: list[str]) -> None:
@@ -185,6 +167,18 @@ def model_stale() -> bool:
     return (date.today() - trained).days >= RETRAIN_DAYS
 
 
+def ensure_fundamentals() -> None:
+    """fundamentals_daily (66M) is regenerated, not committed. Rebuild it from
+    the committed EDGAR facts cache (7.7M) when absent — scoring needs it every
+    run. No --refresh-facts here (no re-download); retrain() refreshes weekly."""
+    if FUND_FP.exists():
+        return
+    print("  rebuilding fundamentals_daily from committed EDGAR facts...")
+    subprocess.run([sys.executable, str(ROOT / "scripts/liquidcap/build_fundamentals.py")],
+                   env={**__import__("os").environ, "PYTHONPATH": str(ROOT / "src")},
+                   check=True)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
@@ -192,12 +186,11 @@ def main() -> None:
     t0 = time.time()
 
     members = current_members()
-    panel = update_panel(members)
+    panel = assemble_panel(members)
     spy = panel[panel.ticker == "SPY"].copy()
 
+    ensure_fundamentals()
     if model_stale():
-        panel = refresh_panel_full(panel, members)
-        spy = panel[panel.ticker == "SPY"].copy()
         retrain(panel, spy, members)
 
     # Daily scoring on a trailing window (features need 252 trading days)
@@ -241,6 +234,16 @@ def main() -> None:
     traded, skipped = pt.process_signals(signals, today)
     pt.save()
     supabase_store.write_state(STRATEGY, asdict(pt.state))
+
+    # Publish the render-ready view so the S&P 500 tab appears on the web,
+    # exactly like the small-cap books (same fetch/render path in dashboard.html).
+    from app.web import dashboard_data
+    view = dashboard_data.build_view(ohlcv_today, PT_DIR, adaptive_stop=False,
+                                     strategy=STRATEGY)
+    if view is not None:
+        supabase_store.write_dashboard_view(STRATEGY, view)
+        # one NAV point per session so the equity chart populates (like small-cap)
+        supabase_store.upsert_nav(STRATEGY, today, float(view["paper"]["total_value"]))
     print(f"  entered={entered or '[]'} closed={[t.ticker for t in closed] or '[]'} "
           f"queued={sorted(traded) or '[]'} skipped={skipped}")
     print(f"  Runtime {(time.time() - t0) / 60:.1f} min")
