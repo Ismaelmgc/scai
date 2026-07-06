@@ -12,12 +12,16 @@ name: SCAI liquidcap daily
 #   - commits only the FOUNDATIONAL data back (delisted slice, EDGAR facts,
 #     model, meta); current bars / fundamentals / features are rebuilt each run
 #
-# 11:20 UTC ≈ 06:20 ET, after the overnight yfinance adjust and before the open.
-# Idempotent + stateless: a delayed/duplicate trigger is harmless.
+# 03:00 UTC (overnight / madrugada CET) — unlike the small-cap Polygon free tier,
+# yfinance publishes the prior session's EOD hours after the 20:00-21:00 UTC US
+# close, so an overnight run has yesterday's bars. Running this early (vs the
+# small-cap 11:05) leaves a ~10h buffer before the 13:30 UTC open so GitHub's
+# cron delay (up to 3-5h) can't push it near the open. The fill still happens at
+# the open via the shared morning.yml (13:45 UTC). Idempotent + stateless.
 
 on:
   schedule:
-    - cron: "20 11 * * 1-5"
+    - cron: "0 3 * * 1-5"
   workflow_dispatch: {}
 
 permissions:
@@ -45,7 +49,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          SEC_EDGAR_USER_AGENT: ${{ secrets.SEC_EDGAR_USER_AGENT }}
+          # sec_edgar.py falls back to a built-in User-Agent if unset
           PYTHONPATH: src
           PYTHONIOENCODING: utf-8
         run: python scripts/liquidcap/daily_liquidcap.py
