@@ -230,11 +230,21 @@ def _evaluate_fold(
     policy: ExitPolicy,
     cost_bps: float,
     use_spread_cost: bool,
+    overlay_col: str | None = None,
+    overlay_exclude_q: float = 0.0,
+    skip_dates: set | None = None,
+    top_k: int = TOP_K,
 ) -> dict:
     """Trade simulation + tradable IC for one fold's predictions.
 
     Shared by run_walkforward (fresh predictions) and replay_walkforward
     (cached predictions). Filtering applies to SELECTION only.
+
+    Optional selection overlay: if ``overlay_col`` is given, at each rebalance
+    drop the top ``overlay_exclude_q`` fraction of tradable candidates by that
+    column (e.g. exclude the most heavily-shorted names by days-to-cover) BEFORE
+    picking the top-K. NaN values are kept (no signal → no exclusion). Default
+    off → identical behaviour to before (production/other callers unaffected).
     """
     filtering = min_price is not None or min_adv_usd is not None
     test_dates_sorted = sorted(test_data.date.unique())
@@ -260,16 +270,26 @@ def _evaluate_fold(
     n_skipped = 0
     candidate_counts = []
     for reb_date in rebalance_dates:
+        # Regime gate: in a risk-off regime, hold cash this rebalance (no trade).
+        if skip_dates is not None and reb_date in skip_dates:
+            n_skipped += 1
+            continue
         day = test_data[test_data.date == reb_date]
         if filtering:
             day = day[tradable_mask(day, min_price or 0.0, min_adv_usd or 0.0)]
+        # Selection overlay: drop the most-shorted (top-q by overlay_col).
+        if overlay_col and overlay_exclude_q > 0 and overlay_col in day.columns:
+            valid = day[day[overlay_col].notna()]
+            if len(valid) >= TOP_K:
+                thr = valid[overlay_col].quantile(1 - overlay_exclude_q)
+                day = day[day[overlay_col].isna() | (day[overlay_col] < thr)]
         candidate_counts.append(len(day))
-        if len(day) < TOP_K:
+        if len(day) < top_k:
             n_skipped += 1
             continue
-        top_k = day.sort_values("pred", ascending=False).head(TOP_K)
+        picks = day.sort_values("pred", ascending=False).head(top_k)
         period_rets = []
-        for _, row in top_k.iterrows():
+        for _, row in picks.iterrows():
             ticker = row["ticker"]
             t_oh = ohlcv[(ohlcv.ticker == ticker) & (ohlcv.date >= reb_date)]
             if len(t_oh) < 2:
@@ -345,6 +365,8 @@ def run_walkforward(
     use_spread_cost: bool = False,
     cache_dir: str | Path | None = None,
     n_bins: int = 16,
+    num_boost_round: int = 400,
+    purge_days: int = 0,
 ) -> RunResult:
     """Run 16-fold walk-forward; return per-fold + aggregate metrics.
 
@@ -352,10 +374,18 @@ def run_walkforward(
     rows, incl. delisted — anti-survivorship). cache_dir persists per-fold
     predictions so replay_walkforward() can re-evaluate filter/exit/cost
     variants without retraining. n_bins = LambdaRank relevance levels.
+
+    purge_days (off by default → identical to prior behaviour): drop the last
+    `purge_days` TRADING days of each fold's train set. The target is a
+    HOLD_DAYS-forward return, so a train row within HOLD_DAYS of test_start has a
+    label that reaches into the test window — purging that tail removes the
+    look-ahead overlap (López de Prado purging; embargo is unnecessary here since
+    the expanding window never trains on post-test data).
     """
     params = dict(lgb_params or V2_LGB_PARAMS)
     policy = exit_policy or ExitPolicy()
     folds = define_folds(features)
+    all_dates_arr = np.array(sorted(features["date"].unique()))
 
     if objective_lambdarank:
         params = dict(params)
@@ -374,6 +404,13 @@ def run_walkforward(
     for i, fold in enumerate(folds):
         train_mask = (features.date >= fold["train_start"]) & (features.date < fold["train_end"])
         train_data = features[train_mask].dropna(subset=[V2_TARGET]).copy()
+
+        # Purge: drop the last `purge_days` trading days of train, whose forward
+        # label leaks into the test window. No-op when purge_days == 0.
+        if purge_days > 0:
+            prior = all_dates_arr[all_dates_arr < fold["test_start"]]
+            if len(prior) > purge_days:
+                train_data = train_data[train_data["date"] < prior[-purge_days]]
         X_tr = train_data[feat_cols].fillna(0).values
         y_tr = train_data[V2_TARGET].values
 
@@ -391,7 +428,7 @@ def run_walkforward(
         else:
             ds = lgb.Dataset(X_tr, y_tr, feature_name=feat_cols, free_raw_data=True)
 
-        model = lgb.train(params, ds, num_boost_round=400,
+        model = lgb.train(params, ds, num_boost_round=num_boost_round,
                           callbacks=[lgb.log_evaluation(0)])
 
         test_mask = (features.date >= fold["test_start"]) & (features.date < fold["test_end"])

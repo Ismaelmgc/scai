@@ -67,3 +67,35 @@ htmlcov/
 # Jupyter
 .ipynb_checkpoints/
 data/v3_benchmarks/cache/
+
+# Research-only datasets + per-experiment benchmark results (regenerable; never
+# merge to main — findings live in memory/v4-research-program.md + git history).
+data/accum_features.parquet
+data/residmom_features.parquet
+data/pead_features.parquet
+data/short_interest.parquet
+data/insider_form4.parquet
+data/earnings.parquet
+data/v3_benchmarks/v4_feat_*.json
+data/v3_benchmarks/v4_rm_*.json
+data/research_breadth/
+data/research/
+
+# mid-cap swing experiment (research)
+data/midcap/
+
+# liquidcap: regenerable data gitignored; foundational data committed so CI is
+# stateless (delisted slice = static anti-survivorship; EDGAR facts cache;
+# model + meta persist across runs; membership + CIK overrides).
+data/liquidcap/*.parquet
+data/liquidcap/cache/
+data/liquidcap/*.json
+data/liquidcap/*.pkl
+data/liquidcap/paper_trading/
+data/liquidcap/*.html
+!data/liquidcap/cik_overrides.json
+!data/liquidcap/membership_sp500.parquet
+!data/liquidcap/ohlcv_delisted.parquet
+!data/liquidcap/edgar_facts_raw.parquet
+!data/liquidcap/model_liquidcap.pkl
+!data/liquidcap/model_meta.json

@@ -1,0 +1,67 @@
+name: SCAI liquidcap daily
+
+# Second paper-trading book: systematic swing on the S&P 500 (spec
+# GI_fs15_fund_20d). Same architecture as the small-cap daily.yml:
+#   - runs in the MORNING (before the US open), ingesting yesterday's close
+#   - queues today's top-8 as pending; the SHARED morning.yml (09:45 ET) fills
+#     them at the open via Finnhub — morning_execute.py now handles all three
+#     strategies (baseline, adaptive, liquidcap), so no separate fill job
+#   - writes state + dashboard_view to Supabase (strategy "liquidcap"); the S&P
+#     500 tab then appears on the Pages dashboard automatically (client fetches
+#     all views), so daily.yml's Pages deploy needs no change
+#   - commits only the FOUNDATIONAL data back (delisted slice, EDGAR facts,
+#     model, meta); current bars / fundamentals / features are rebuilt each run
+#
+# 03:00 UTC (overnight / madrugada CET) — unlike the small-cap Polygon free tier,
+# yfinance publishes the prior session's EOD hours after the 20:00-21:00 UTC US
+# close, so an overnight run has yesterday's bars. Running this early (vs the
+# small-cap 11:05) leaves a ~10h buffer before the 13:30 UTC open so GitHub's
+# cron delay (up to 3-5h) can't push it near the open. The fill still happens at
+# the open via the shared morning.yml (13:45 UTC). Idempotent + stateless.
+
+on:
+  schedule:
+    - cron: "0 3 * * 1-5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write # commit updated foundational data back
+
+concurrency:
+  group: scai-liquidcap
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Liquidcap daily
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          # sec_edgar.py falls back to a built-in User-Agent if unset
+          PYTHONPATH: src
+          PYTHONIOENCODING: utf-8
+        run: python scripts/liquidcap/daily_liquidcap.py
+
+      - name: Commit foundational data & model
+        run: |
+          git config user.name "scai-bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A data/liquidcap/
+          if git diff --cached --quiet; then
+            echo "No liquidcap data changes to commit."
+          else
+            git commit -m "liquidcap: update model & EDGAR facts [skip ci]"
+            git push
+          fi
