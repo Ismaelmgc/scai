@@ -252,6 +252,14 @@ def load_signal_history(pt_dir: Path | None = None,
 
 
 def _get_data_freshness(ohlcv: pd.DataFrame) -> dict:
+    # An extra book's EOD panel (e.g. liquidcap ohlcv_sp500.parquet) is
+    # gitignored, so it's ABSENT on the morning-fill runner — _ohlcv_for then
+    # passes an empty frame. `.max()` on an empty date column is NaN, and
+    # NaN.date() used to crash build_view (morning fill went red, positions
+    # written but the view left stale). Degrade to nulls; the daily job, which
+    # has the real panel, rewrites the view with true freshness.
+    if ohlcv is None or ohlcv.empty:
+        return {"latest_date": None, "earliest_date": None, "n_tickers": 0, "n_rows": 0}
     return {
         "latest_date": ohlcv["date"].max().date().isoformat(),
         "earliest_date": ohlcv["date"].min().date().isoformat(),
