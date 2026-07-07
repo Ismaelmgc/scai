@@ -247,6 +247,20 @@ def main() -> None:
     pt.save()
     supabase_store.write_state(STRATEGY, asdict(pt.state))
 
+    # Persist the day's top-8 to the signals table so the S&P 500 tab shows a
+    # signal history like the small-cap books (load_signal_history reads it).
+    # The small-cap pipeline does this via SignalTracker; liquidcap didn't, so
+    # its history was empty. actual_ret_20d stays null (no live-IC monitor here).
+    supabase_store.upsert_signals(STRATEGY, [{
+        "signal_date": today,
+        "ticker": r["ticker"],
+        "score": round(float(r["score"]), 6),
+        "recommendation": "BUY",
+        "was_traded": r["ticker"] in traded,
+        "skip_reason": skipped.get(r["ticker"], ""),
+        "actual_ret_20d": None,
+    } for _, r in top.iterrows()])
+
     # Publish the render-ready view so the S&P 500 tab appears on the web,
     # exactly like the small-cap books (same fetch/render path in dashboard.html).
     from app.web import dashboard_data
