@@ -690,11 +690,14 @@
 
         function signalsHTML(sigs, sid) {
             if (!sigs || !sigs.length) return '';
-            // Light by default (especially on mobile): the 5 highest-score signals,
-            // most recent first as a tiebreak. "Ver más" reveals up to 10 more.
-            const top = [...sigs]
-                .sort((a, b) => (b.score - a.score) || String(b.date).localeCompare(String(a.date)))
-                .slice(0, 15);
+            // Most recent sessions first (date desc), ranked by score within each
+            // date — and only the latest 2 dates, so old high-score signals from
+            // earlier sessions don't dominate the view. "Ver más" reveals the rest.
+            const recentDates = [...new Set(sigs.map(s => String(s.date)))]
+                .sort().reverse().slice(0, 2);
+            const top = sigs
+                .filter(s => recentDates.includes(String(s.date)))
+                .sort((a, b) => String(b.date).localeCompare(String(a.date)) || (b.score - a.score));
             const rows = top.map((s, i) => {
                 let st = '<span class="tag tag-expiry">Skip</span>';
                 if (s.was_traded) st = '<span class="tag tag-buy">Ejecutada</span>';
@@ -716,7 +719,7 @@
                 : '';
             return `
             <div class="card">
-              <h2>Historial de Señales <span class="badge">top ${Math.min(top.length, 5)} por score</span></h2>
+              <h2>Historial de Señales <span class="badge">últimas sesiones · por score</span></h2>
               <table class="responsive-table" id="sigTable-${sid}">
                 <thead><tr><th>Fecha</th><th>Ticker</th><th class="text-right">Score</th><th>Estado</th><th class="text-right">Retorno real (20d)</th></tr></thead>
                 <tbody>${rows}</tbody>
