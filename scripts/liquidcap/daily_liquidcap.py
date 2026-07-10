@@ -53,6 +53,7 @@ from app.data import supabase_store  # noqa: E402
 from app.data.free_sources.yahoo import download_yahoo_ohlcv  # noqa: E402
 from app.features.pipeline import build_feature_matrix  # noqa: E402
 from app.paper_trading import PaperTrader  # noqa: E402
+from app.utils import notify_telegram  # noqa: E402
 from build_features_liquidcap import add_new_features  # noqa: E402
 from build_fundamentals import RATIOS  # noqa: E402
 
@@ -190,7 +191,8 @@ def main() -> None:
     spy = panel[panel.ticker == "SPY"].copy()
 
     ensure_fundamentals()
-    if model_stale():
+    retrained = model_stale()
+    if retrained:
         retrain(panel, spy, members)
 
     # Daily scoring on a trailing window (features need 252 trading days)
@@ -272,6 +274,26 @@ def main() -> None:
         supabase_store.upsert_nav(STRATEGY, today, float(view["paper"]["total_value"]))
     print(f"  entered={entered or '[]'} closed={[t.ticker for t in closed] or '[]'} "
           f"queued={sorted(traded) or '[]'} skipped={skipped}")
+
+    # Telegram run summary (best-effort; no-op without secrets), mirroring the
+    # small-cap daily_pipeline so LiquidCap gets the same daily message + the
+    # positions opened/closed this run. Morning fills at the open are alerted
+    # separately by morning_execute (which already includes liquidcap).
+    if view is not None:
+        paper = view["paper"]
+        opened = ", ".join(entered) if entered else "—"
+        closed_names = ", ".join(t.ticker for t in closed) if closed else "—"
+        notify_telegram(
+            f"✅ <b>SCAI LiquidCap OK</b> — {date.today():%Y-%m-%d}\n"
+            f"📅 Última sesión en datos: <b>{today}</b>\n"
+            f"🟢 Señales BUY (top-8): <b>{len(traded)}</b>   "
+            f"🔁 Retrain: {'sí' if retrained else 'no'}\n"
+            f"🟢 Abiertas: {opened}\n"
+            f"🔴 Cerradas: {closed_names}\n"
+            f"<b>LiquidCap</b>  €{paper['total_value']:,.2f} "
+            f"({paper['total_return']:+.2f}%) · {paper['n_open']} pos · "
+            f"WR {paper['win_rate']:.0f}%"
+        )
     print(f"  Runtime {(time.time() - t0) / 60:.1f} min")
 
 
