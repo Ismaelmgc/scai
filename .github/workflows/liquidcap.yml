@@ -45,6 +45,22 @@ jobs:
       - name: Install
         run: pip install -e .
 
+      # The weekly retrain builds the full-panel feature matrix (~1.5M rows x
+      # ~470 cols), whose transient peak RSS is ~13GB — above the hosted runner's
+      # RAM. Without headroom the kernel OOM-kills the job and Actions reports it
+      # as "The operation was canceled" (no traceback). Replace the default 4GB
+      # swap with 16GB so the peak spills to disk instead of dying. Only the
+      # weekly retrain hits this; daily scoring stays small.
+      - name: Enlarge swap (retrain peak > runner RAM)
+        run: |
+          sudo swapoff -a || true
+          sudo rm -f /mnt/swapfile
+          sudo fallocate -l 16G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+          free -h
+
       - name: Liquidcap daily
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
