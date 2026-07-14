@@ -14,10 +14,14 @@ def rank_within_date(
 ) -> pd.DataFrame:
     """Add cross-sectional percentile rank (0-1) for each column per date."""
     df = df.copy()
-    for col in cols:
-        if col not in df.columns:
-            continue
-        df[f"{col}{suffix}"] = df.groupby(date_col)[col].rank(pct=True)
+    g = df.groupby(date_col)
+    # Build all new columns then concat ONCE. Inserting them one-by-one into a
+    # wide frame refragments the BlockManager on every assignment (the "highly
+    # fragmented" warnings) and copies it whole each time, spiking peak RSS on
+    # the full panel. concat is value-identical (same columns/order/dtype).
+    new = {f"{col}{suffix}": g[col].rank(pct=True) for col in cols if col in df.columns}
+    if new:
+        df = pd.concat([df, pd.DataFrame(new, index=df.index)], axis=1)
     return df
 
 
@@ -30,13 +34,17 @@ def sector_relative(
 ) -> pd.DataFrame:
     """Compute sector-relative z-score for each column."""
     df = df.copy()
+    new = {}
     for col in cols:
         if col not in df.columns:
             continue
         grp = df.groupby([date_col, sector_col])[col]
         mu = grp.transform("mean")
         sigma = grp.transform("std").replace(0, np.nan)
-        df[f"{col}{suffix}"] = (df[col] - mu) / sigma
+        new[f"{col}{suffix}"] = (df[col] - mu) / sigma
+    # concat once (see rank_within_date) to avoid the fragmentation RSS spike
+    if new:
+        df = pd.concat([df, pd.DataFrame(new, index=df.index)], axis=1)
     return df
 
 
