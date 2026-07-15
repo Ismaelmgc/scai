@@ -230,56 +230,56 @@ def main() -> None:
         str(p_path), initial_capital=1000.0, max_positions=8,
         holding_period_days=20, adaptive_stop=False, profit_target=0.40)
 
-    # Idempotency guard: never process the same session twice. `today` is the
+    # Idempotency guard: never PROCESS the same session twice. `today` is the
     # latest bar in the panel, which does NOT change until the next US session —
     # so a second run on a weekend/holiday (or a double CI run) sees the same
-    # `today`. Without this guard that second run would fill the pending it just
-    # queued from THIS session at THIS session's own open — a look-ahead entry —
-    # and inflate the day index, collapsing the intended decide-at-close ->
-    # enter-next-open lag. Bail if the book was already advanced to this session.
-    if pt.state.last_update and str(pt.state.last_update) >= today:
-        print(f"  session {today} already processed "
-              f"(last_update={pt.state.last_update}) — nothing to do")
-        return
-
+    # `today`. Re-processing would fill the pending queued from THIS session at
+    # THIS session's own open (a look-ahead entry) and inflate the day index,
+    # collapsing the decide-at-close -> enter-next-open lag. So we skip the
+    # trading mutations when already advanced — but STILL (re)publish the view +
+    # NAV below, so a re-run after a partial failure (e.g. a crash between the
+    # state write and the view write) self-heals the dashboard instead of
+    # leaving it frozen on a stale session.
     ohlcv_today = panel[panel.ticker.isin(members)]
-    entered = pt.execute_pending(ohlcv_today, today)
-    closed = pt.update_positions(ohlcv_today, today)
-    traded, skipped = pt.process_signals(signals, today)
-    pt.save()
-    supabase_store.write_state(STRATEGY, asdict(pt.state))
+    already = bool(pt.state.last_update and str(pt.state.last_update) >= today)
+    if already:
+        print(f"  session {today} already processed "
+              f"(last_update={pt.state.last_update}) — refreshing view + NAV only")
+        entered, closed, traded, skipped = [], [], set(), {}
+    else:
+        entered = pt.execute_pending(ohlcv_today, today)
+        closed = pt.update_positions(ohlcv_today, today)
+        traded, skipped = pt.process_signals(signals, today)
+        pt.save()
+        supabase_store.write_state(STRATEGY, asdict(pt.state))
+        # Persist the day's top-8 to the signals table so the S&P 500 tab shows a
+        # signal history like the small-cap books (load_signal_history reads it).
+        # actual_ret_20d stays null (no live-IC monitor here).
+        supabase_store.upsert_signals(STRATEGY, [{
+            "signal_date": today,
+            "ticker": r["ticker"],
+            "score": round(float(r["score"]), 6),
+            "recommendation": "BUY",
+            "was_traded": r["ticker"] in traded,
+            "skip_reason": skipped.get(r["ticker"], ""),
+            "actual_ret_20d": None,
+        } for _, r in top.iterrows()])
 
-    # Persist the day's top-8 to the signals table so the S&P 500 tab shows a
-    # signal history like the small-cap books (load_signal_history reads it).
-    # The small-cap pipeline does this via SignalTracker; liquidcap didn't, so
-    # its history was empty. actual_ret_20d stays null (no live-IC monitor here).
-    supabase_store.upsert_signals(STRATEGY, [{
-        "signal_date": today,
-        "ticker": r["ticker"],
-        "score": round(float(r["score"]), 6),
-        "recommendation": "BUY",
-        "was_traded": r["ticker"] in traded,
-        "skip_reason": skipped.get(r["ticker"], ""),
-        "actual_ret_20d": None,
-    } for _, r in top.iterrows()])
-
-    # Publish the render-ready view so the S&P 500 tab appears on the web,
-    # exactly like the small-cap books (same fetch/render path in dashboard.html).
+    # Always (re)publish the render-ready view + one NAV point for the session.
+    # Both are idempotent upserts (keyed by strategy[,date]) reflecting current
+    # state, so republishing on an already-processed re-run repairs a stale web.
     from app.web import dashboard_data
     view = dashboard_data.build_view(ohlcv_today, PT_DIR, adaptive_stop=False,
                                      strategy=STRATEGY)
     if view is not None:
         supabase_store.write_dashboard_view(STRATEGY, view)
-        # one NAV point per session so the equity chart populates (like small-cap)
         supabase_store.upsert_nav(STRATEGY, today, float(view["paper"]["total_value"]))
     print(f"  entered={entered or '[]'} closed={[t.ticker for t in closed] or '[]'} "
           f"queued={sorted(traded) or '[]'} skipped={skipped}")
 
-    # Telegram run summary (best-effort; no-op without secrets), mirroring the
-    # small-cap daily_pipeline so LiquidCap gets the same daily message + the
-    # positions opened/closed this run. Morning fills at the open are alerted
-    # separately by morning_execute (which already includes liquidcap).
-    if view is not None:
+    # Telegram run summary (best-effort; no-op without secrets) — only on a real
+    # processing run, not a view-only refresh (which has nothing new to report).
+    if view is not None and not already:
         paper = view["paper"]
         opened = ", ".join(entered) if entered else "—"
         closed_names = ", ".join(t.ticker for t in closed) if closed else "—"

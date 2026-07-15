@@ -101,8 +101,11 @@ def load_paper_trading(ohlcv: pd.DataFrame,
     for pos in state.get("positions", []):
         ticker = pos["ticker"]
         ticker_data = ohlcv[ohlcv["ticker"] == ticker].sort_values("date")
-        current_price = (float(ticker_data.iloc[-1]["close"])
-                         if not ticker_data.empty else pos["entry_price"])
+        # last FINITE close (a fresh yfinance pull can carry a NaN close for the
+        # latest day of a just-bought name -> would NaN the whole portfolio value
+        # and break the JSON write); fall back to entry price if none.
+        closes = ticker_data["close"].dropna()
+        current_price = float(closes.iloc[-1]) if not closes.empty else float(pos["entry_price"])
         pnl_pct = (current_price / pos["entry_price"] - 1) * 100
         invested = pos["shares"] * pos["entry_price"]
         current_value = pos["shares"] * current_price
