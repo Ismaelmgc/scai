@@ -11,11 +11,13 @@ pipeline still runs locally without Supabase.
 """
 from __future__ import annotations
 
+import math
 import os
 from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
+import numpy as np
 
 from app.utils import get_logger
 
@@ -95,6 +97,24 @@ def _headers(extra: dict[str, str] | None = None,
     return h
 
 
+def _json_safe(obj):
+    """Recursively make a payload JSON-serialisable by httpx, whose encoder is
+    strict (``allow_nan=False``): non-finite floats (NaN / ±Inf) become None and
+    numpy scalars become native Python types. A single NaN anywhere in the state
+    / view / signals payload (e.g. a win-rate with no closed trades, or a missing
+    live price) otherwise raises "Out of range float values are not JSON
+    compliant" and fails the whole daily job."""
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    if isinstance(obj, np.generic):
+        obj = obj.item()  # numpy scalar -> python float/int/bool
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    return obj
+
+
 def _post(table: str, rows: list[dict], on_conflict: str | None = None,
           resolution: str = "merge-duplicates") -> None:
     """Insert/upsert rows into a table via PostgREST."""
@@ -103,7 +123,8 @@ def _post(table: str, rows: list[dict], on_conflict: str | None = None,
     url = f"{_base_url()}/rest/v1/{table}"
     params = {"on_conflict": on_conflict} if on_conflict else {}
     headers = _headers({"Prefer": f"resolution={resolution}"})
-    r = httpx.post(url, json=rows, params=params, headers=headers, timeout=_TIMEOUT)
+    r = httpx.post(url, json=_json_safe(rows), params=params, headers=headers,
+                   timeout=_TIMEOUT)
     r.raise_for_status()
 
 
