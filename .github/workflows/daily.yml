@@ -68,6 +68,16 @@ jobs:
           PYTHONIOENCODING: utf-8
         run: python scripts/daily_pipeline.py
 
+      - name: Illiquid shadow logger (OOS test — non-blocking)
+        # Logs the illiquid-variant top-8 (low-ADV tercile + widest-20%-spread
+        # trim) and scores matured 20d cohorts vs IWM. Isolated: own parquet log,
+        # no Supabase/paper book. continue-on-error → can never fail the job.
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+          PYTHONIOENCODING: utf-8
+        run: python scripts/illiquid_shadow.py
+
       - name: Render static dashboard
         env:
           PYTHONPATH: src
