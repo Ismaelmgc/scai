@@ -286,6 +286,46 @@ class PaperTrader:
         self.state.pending_signals = remaining
         return entered
 
+    def _reconcile_splits(self, ohlcv: pd.DataFrame) -> None:
+        """Re-anchor open positions to the split-adjusted price panel.
+
+        Polygon bars are fetched split-adjusted (``adjusted=True``), and the
+        adjustment is applied RETROACTIVELY on the split's execution date — the
+        whole history, including the entry bar, is rescaled by the split factor.
+        But a position's stored ``entry_price`` / ``high_price`` / stop were
+        captured at fill time on the PRE-split basis. Left uncorrected, marking
+        the split-adjusted close against a stale entry fires a fake ~(1 - 1/f)
+        loss and a spurious trailing stop (e.g. WLFC's 3:1 split showed −67%).
+
+        Fix: recover the cumulative split factor from the entry bar's CURRENT
+        adjusted open (which only moves on splits, not dividends) and rescale the
+        position value-preservingly — entry/high/low/stop ÷ f, shares × f — so
+        cost basis and marks sit on the same basis. Idempotent: once rescaled the
+        factor is ≈1, so subsequent runs are no-ops. Handles reverse splits too
+        (f < 1). Positions whose entry bar is not in the window are left as-is.
+        """
+        if not self.state.positions:
+            return
+        cost_pct = (self.state.commission_bps + self.state.slippage_bps) / 10_000
+        for pos in self.state.positions:
+            bar = ohlcv[(ohlcv["ticker"] == pos["ticker"])
+                        & (ohlcv["date"] == pd.Timestamp(pos["entry_date"]))]
+            if bar.empty:
+                continue
+            ref = float(bar.iloc[0]["open"]) * (1 + cost_pct)  # adjusted fill basis
+            if not np.isfinite(ref) or ref <= 0:
+                continue
+            factor = pos["entry_price"] / ref
+            if abs(factor - 1.0) < 0.10:  # no split (only sub-% cost noise)
+                continue
+            for k in ("entry_price", "high_price", "low_price", "stop_loss_price"):
+                if pos.get(k):
+                    pos[k] = round(pos[k] / factor, 4)
+            pos["shares"] = round(pos["shares"] * factor, 4)
+            log.warning("split_adjusted", ticker=pos["ticker"],
+                        factor=round(factor, 4), entry_price=pos["entry_price"],
+                        shares=pos["shares"])
+
     def update_positions(self, ohlcv_today: pd.DataFrame, today: str) -> list[PaperTrade]:
         """Update all positions with today's prices. Check exits.
 
@@ -296,6 +336,9 @@ class PaperTrader:
         ohlcv_today = ohlcv_today.copy()
         ohlcv_today["date"] = pd.to_datetime(ohlcv_today["date"])
         today_ts = pd.Timestamp(today)
+        # Re-anchor positions to any split that adjusted the panel since entry,
+        # BEFORE marking — otherwise a split reads as a huge fake loss/stop.
+        self._reconcile_splits(ohlcv_today)
         prices = ohlcv_today[ohlcv_today["date"] == today_ts].set_index("ticker")
 
         self.state.current_day_idx += 1
