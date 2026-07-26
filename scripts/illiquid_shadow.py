@@ -3,10 +3,12 @@
 
 In-sample (16 mined folds) the edge is promising but unconfirmed (α +0.64%/mo vs
 IWM @ $5k under realistic impact, but CI spans 0). The only honest arbiter is
-forward OOS data. This logs, each day it runs, the illiquid-variant top-8 picks
-using the SAME production model + features as daily_pipeline, then scores matured
-cohorts' realised 20d return vs IWM. Isolated: own log, no Supabase book, no cash
-engine — it measures pure SELECTION alpha, which is exactly the doubtful part.
+forward OOS data. Run daily, it refreshes the illiquid-variant top-8 every 5
+TRADING days (matching the backtest's 20d-hold / 5d-rebalance overlapping
+cohorts, NOT a fresh unrelated 8 each day), using the SAME production model +
+features as daily_pipeline, then scores matured cohorts' realised 20d return vs
+IWM. Isolated: own log, no Supabase book, no cash engine — it measures pure
+SELECTION alpha (at the strategy's cadence), which is exactly the doubtful part.
 
 Selection = production tradability gate → bottom ADV tercile → drop widest-20%
 cs_spread_20d → top-8 by model score. All from daily OHLC-derived features (no
@@ -44,6 +46,7 @@ MODEL_FP = ROOT / str(dp.MODEL_PATH)
 LOG_FP = ROOT / "data/paper_trading/illiquid_shadow/picks.parquet"
 BENCH_FP = ROOT / "data/processed/bench_iwm_spy.parquet"
 HOLD_DAYS = 20
+REBALANCE_EVERY = 5    # refresh the top-8 every 5 TRADING days, like the backtest
 ADV_TERCILE = 1.0 / 3.0
 SPREAD_TRIM_Q = 0.80   # keep spread <= 80th pct among low-ADV (drop widest 20%)
 
@@ -77,9 +80,18 @@ def do_log() -> None:
         return
     LOG_FP.parent.mkdir(parents=True, exist_ok=True)
     log = pd.read_parquet(LOG_FP) if LOG_FP.exists() else pd.DataFrame()
-    if not log.empty and str(latest.date()) in set(log["pick_date"].astype(str)):
-        print(f"  [{latest.date()}] already logged — skip")
-        return
+    # Rebalance cadence: the job runs daily, but the strategy refreshes the top-8
+    # every REBALANCE_EVERY *trading* days (20d hold / 5d rebalance = overlapping
+    # cohorts, NOT a fresh unrelated 8 each day). Skip until 5 trading days have
+    # passed since the last cohort so the shadow log mirrors the backtest.
+    if not log.empty:
+        last = pd.to_datetime(log["pick_date"]).max()
+        cal = np.sort(feat["date"].unique())
+        n_since = int(((cal > np.datetime64(last)) & (cal <= np.datetime64(latest))).sum())
+        if n_since < REBALANCE_EVERY:
+            print(f"  [{latest.date()}] {n_since} trading day(s) since last cohort "
+                  f"{last.date()} (rebalance every {REBALANCE_EVERY}) — skip")
+            return
     rows = picks[["ticker", "score", "adv_usd_20d", "cs_spread_20d", "close"]].copy()
     rows.insert(0, "pick_date", str(latest.date()))
     rows = rows.rename(columns={"close": "entry_close"})
