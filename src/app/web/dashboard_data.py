@@ -33,6 +33,11 @@ def _load_ohlcv() -> pd.DataFrame:
 _bench_cache: dict[str, pd.DataFrame | None] = {}
 _BENCH_FILE = {"SPY": "smallcap_spy.parquet", "IWM": "smallcap_iwm.parquet"}
 
+# Strategy inception (paper-trading reset): the chart + benchmark start here so
+# both lines span the SAME live window. Drops any stray pre-reset NAV points that
+# would otherwise stretch the x-axis before the strategy actually existed.
+_INCEPTION = {"baseline": "2026-06-11", "adaptive": "2026-06-11", "liquidcap": "2026-07-06"}
+
 
 def _bench_for(strategy: str) -> str:
     """Investable benchmark ticker for a strategy's chart/alpha."""
@@ -196,8 +201,19 @@ def load_paper_trading(ohlcv: pd.DataFrame,
                     except (json.JSONDecodeError, KeyError):
                         continue
 
+    # Align the chart to the strategy's inception so portfolio + benchmark share
+    # the same live window (2026-06-11 for the small-cap books). Trims any stray
+    # pre-reset NAV points; benchmark is then rebased to the portfolio's first
+    # point → both lines start from the same € on the same date.
+    inception = _INCEPTION.get(strategy)
+    if inception and chart_dates:
+        keep = [i for i, d in enumerate(chart_dates) if str(d)[:10] >= inception]
+        chart_dates = [chart_dates[i] for i in keep]
+        chart_values = [chart_values[i] for i in keep]
+
     bench_symbol = _bench_for(strategy)
-    bench_values = _bench_aligned(bench_symbol, chart_dates, state["initial_capital"])
+    base_capital = chart_values[0] if chart_values else state["initial_capital"]
+    bench_values = _bench_aligned(bench_symbol, chart_dates, base_capital)
     stats = _compute_stats(chart_values, bench_values)
 
     return {
