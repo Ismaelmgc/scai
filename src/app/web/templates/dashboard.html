@@ -577,7 +577,7 @@
             <div class="metrics-strip">
               <div class="metric-chip"><span class="m-label">Sharpe (anual.)</span>${sharpe}<span class="m-hint">retorno / volatilidad</span></div>
               <div class="metric-chip"><span class="m-label">Max Drawdown</span>${dd}<span class="m-hint">peor caída pico-valle</span></div>
-              <div class="metric-chip"><span class="m-label">Alpha vs SPY</span>${alpha}<span class="m-hint">exceso sobre el mercado</span></div>
+              <div class="metric-chip"><span class="m-label">Alpha vs ${p.bench_label || 'SPY'}</span>${alpha}<span class="m-hint">exceso sobre el mercado</span></div>
             </div>`;
         }
 
@@ -771,7 +771,7 @@
                 const p = views[id].paper;
                 window._scaiPaper[id] = p;
                 if (p.chart_dates && p.chart_dates.length) {
-                    createPortfolioChart('portfolioChart-' + id, p.chart_dates, p.chart_values, p.initial_capital, p.spy_values);
+                    createPortfolioChart('portfolioChart-' + id, p.chart_dates, p.chart_values, p.initial_capital, p.bench_values || p.spy_values, p.bench_label || 'SPY');
                 }
             }
         }
@@ -783,7 +783,7 @@
             event.target.closest('.strategy-tab').classList.add('active');
         }
 
-        function createPortfolioChart(canvasId, dates, values, initialCapital, spyValues) {
+        function createPortfolioChart(canvasId, dates, values, initialCapital, benchValues, benchLabel) {
             const el = document.getElementById(canvasId);
             if (!el) return;
             if (window.scaiCharts[canvasId]) { window.scaiCharts[canvasId].destroy(); }
@@ -805,11 +805,11 @@
                 label: 'Capital inicial', data: Array(dates.length).fill(initialCapital),
                 borderColor: 'rgba(255, 255, 255, 0.14)', borderDash: [5, 5], borderWidth: 1, pointRadius: 0, fill: false,
             }];
-            if (spyValues && spyValues.length) {
+            if (benchValues && benchValues.length) {
                 datasets.push({
                     // Solid slate line (was dotted): far easier to read against the
                     // portfolio curve for the buy-and-hold comparison.
-                    label: 'SPY (mismo €)', data: spyValues,
+                    label: (benchLabel || 'SPY') + ' (mismo €)', data: benchValues,
                     borderColor: 'rgba(123, 156, 209, 0.9)',
                     borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, fill: false, tension: 0.3,
                 });
@@ -939,10 +939,11 @@
             chart.data.labels = labels;
             chart.data.datasets[0].data = open ? p.chart_values.concat([totalValue]) : p.chart_values.slice();
             if (chart.data.datasets[1]) chart.data.datasets[1].data = Array(labels.length).fill(p.initial_capital);
-            if (chart.data.datasets[2] && p.spy_values && p.spy_values.length) {
+            const bench = p.bench_values || p.spy_values;
+            if (chart.data.datasets[2] && bench && bench.length) {
                 chart.data.datasets[2].data = open
-                    ? p.spy_values.concat([p.spy_values[p.spy_values.length - 1]])
-                    : p.spy_values.slice();
+                    ? bench.concat([bench[bench.length - 1]])
+                    : bench.slice();
             }
             chart.update('none');
         }

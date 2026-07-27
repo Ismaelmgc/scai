@@ -255,6 +255,33 @@ def update_ohlcv(cfg, predict_to: str) -> pd.DataFrame:
             spy_df = spy_new
         store.write("smallcap_spy", spy_df)
 
+    # Also update IWM (Russell 2000) — the investable benchmark for the small-cap
+    # books on the dashboard chart/alpha (SPY stays as the feature market-proxy).
+    # First run self-backfills the full history to match SPY's span; then incremental.
+    existing_iwm = store.read("smallcap_iwm") if store.exists("smallcap_iwm") else None
+    if existing_iwm is not None and not existing_iwm.empty:
+        existing_iwm["date"] = pd.to_datetime(existing_iwm["date"])
+        iwm_from = (existing_iwm["date"].max() + timedelta(days=1)).date().isoformat()
+    else:
+        iwm_from = "2021-06-09"  # backfill to match smallcap_spy's start
+    try:
+        iwm_bars = aggs.get_custom_bars("IWM", from_date=iwm_from,
+                                        to_date=predict_to, adjusted=True)
+    except Exception as e:
+        log.warning("iwm_download_failed", error=str(e))
+        iwm_bars = []
+    if iwm_bars:
+        iwm_rows = [{"date": pd.Timestamp(b.trading_date), "ticker": "IWM",
+                     "open": b.open, "high": b.high, "low": b.low,
+                     "close": b.close, "volume": b.volume} for b in iwm_bars]
+        iwm_new = pd.DataFrame(iwm_rows)
+        if existing_iwm is not None and not existing_iwm.empty:
+            iwm_df = pd.concat([existing_iwm, iwm_new], ignore_index=True)
+            iwm_df = iwm_df.drop_duplicates(subset=["date"], keep="last")
+        else:
+            iwm_df = iwm_new
+        store.write("smallcap_iwm", iwm_df)
+
     client.close()
     store.write("ohlcv_smallcap", ohlcv)
     print(f"  ✓ OHLCV: {len(ohlcv):,} rows, {ohlcv['date'].max().date()}")

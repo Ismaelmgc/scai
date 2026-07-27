@@ -27,32 +27,41 @@ def _load_ohlcv() -> pd.DataFrame:
     return ohlcv
 
 
-_spy_cache: pd.DataFrame | None = None
+# Benchmark per product: small-cap books (baseline/adaptive) belong against the
+# Russell 2000 (IWM); the S&P-500 book (liquidcap) against SPY. SPY is ALSO the
+# feature market-proxy (beta/regime) — do not repurpose it; IWM is a separate file.
+_bench_cache: dict[str, pd.DataFrame | None] = {}
+_BENCH_FILE = {"SPY": "smallcap_spy.parquet", "IWM": "smallcap_iwm.parquet"}
 
 
-def _load_spy() -> pd.DataFrame | None:
-    """SPY daily closes (benchmark for the equity chart / alpha). Cached."""
-    global _spy_cache
-    if _spy_cache is not None:
-        return _spy_cache
-    path = DATA_DIR / "smallcap_spy.parquet"
-    if not path.exists():
-        return None
-    spy = pd.read_parquet(path)
-    spy["date"] = pd.to_datetime(spy["date"])
-    _spy_cache = spy.sort_values("date")[["date", "close"]].reset_index(drop=True)
-    return _spy_cache
+def _bench_for(strategy: str) -> str:
+    """Investable benchmark ticker for a strategy's chart/alpha."""
+    return "IWM" if strategy in ("baseline", "adaptive") else "SPY"
 
 
-def _spy_aligned(chart_dates: list[str], initial_capital: float) -> list[float]:
-    """SPY equity normalised to `initial_capital` at the first chart date, sampled
-    on-or-before each chart date (so a buy-and-hold SPY of the same € can overlay
-    the portfolio line). [] if SPY data is unavailable."""
-    spy = _load_spy()
-    if spy is None or not chart_dates:
+def _load_bench(symbol: str) -> pd.DataFrame | None:
+    """Benchmark ETF daily closes (SPY or IWM) for the equity chart / alpha. Cached."""
+    if symbol in _bench_cache:
+        return _bench_cache[symbol]
+    path = DATA_DIR / _BENCH_FILE.get(symbol, "")
+    df = None
+    if path.exists():
+        b = pd.read_parquet(path)
+        b["date"] = pd.to_datetime(b["date"])
+        df = b.sort_values("date")[["date", "close"]].reset_index(drop=True)
+    _bench_cache[symbol] = df
+    return df
+
+
+def _bench_aligned(symbol: str, chart_dates: list[str], initial_capital: float) -> list[float]:
+    """Benchmark equity normalised to `initial_capital` at the first chart date,
+    sampled on-or-before each chart date (so a buy-and-hold of the same € overlays
+    the portfolio line). [] if the benchmark data is unavailable."""
+    bench = _load_bench(symbol)
+    if bench is None or not chart_dates:
         return []
     target = pd.DataFrame({"date": pd.to_datetime(chart_dates)})
-    merged = pd.merge_asof(target, spy, on="date", direction="backward")
+    merged = pd.merge_asof(target, bench, on="date", direction="backward")
     closes = merged["close"].ffill().bfill()
     if closes.isna().all() or float(closes.iloc[0]) == 0:
         return []
@@ -60,10 +69,10 @@ def _spy_aligned(chart_dates: list[str], initial_capital: float) -> list[float]:
     return [round(float(initial_capital * c / base), 2) for c in closes]
 
 
-def _compute_stats(values: list[float], spy_values: list[float]) -> dict | None:
-    """Sharpe (annualised), max drawdown and alpha vs SPY from the NAV series.
-    None when there is too little history (<10 NAV points) for the figures to mean
-    anything — the paper-trading was reset 2026-06-11, so early days are noisy."""
+def _compute_stats(values: list[float], bench_values: list[float]) -> dict | None:
+    """Sharpe (annualised), max drawdown and alpha vs the benchmark from the NAV
+    series. None when there is too little history (<10 NAV points) for the figures
+    to mean anything — the paper-trading was reset 2026-06-11, so early days are noisy."""
     if not values or len(values) < 10:
         return None
     arr = np.asarray(values, dtype=float)
@@ -74,9 +83,9 @@ def _compute_stats(values: list[float], spy_values: list[float]) -> dict | None:
     sharpe = float(rets.mean() / std * np.sqrt(252)) if std > 0 else 0.0
     total_ret = (arr[-1] / arr[0] - 1) * 100
     alpha = None
-    if spy_values and len(spy_values) == len(values) and spy_values[0]:
-        spy_ret = (spy_values[-1] / spy_values[0] - 1) * 100
-        alpha = round(total_ret - spy_ret, 1)
+    if bench_values and len(bench_values) == len(values) and bench_values[0]:
+        bench_ret = (bench_values[-1] / bench_values[0] - 1) * 100
+        alpha = round(total_ret - bench_ret, 1)
     return {"sharpe": round(sharpe, 2), "max_dd": round(max_dd, 1), "alpha": alpha}
 
 
@@ -187,8 +196,9 @@ def load_paper_trading(ohlcv: pd.DataFrame,
                     except (json.JSONDecodeError, KeyError):
                         continue
 
-    spy_values = _spy_aligned(chart_dates, state["initial_capital"])
-    stats = _compute_stats(chart_values, spy_values)
+    bench_symbol = _bench_for(strategy)
+    bench_values = _bench_aligned(bench_symbol, chart_dates, state["initial_capital"])
+    stats = _compute_stats(chart_values, bench_values)
 
     return {
         "positions": positions,
@@ -208,7 +218,9 @@ def load_paper_trading(ohlcv: pd.DataFrame,
         "last_update": state.get("last_update", ""),
         "chart_dates": chart_dates,
         "chart_values": chart_values,
-        "spy_values": spy_values,
+        "bench_values": bench_values,
+        "bench_label": bench_symbol,
+        "spy_values": bench_values,  # back-compat alias for cached/older clients
         "stats": stats,
     }
 
