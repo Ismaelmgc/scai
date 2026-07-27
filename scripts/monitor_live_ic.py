@@ -46,6 +46,8 @@ HORIZON_DAYS = 20          # forward-return horizon (matches V2_HOLD_DAYS / the 
 WINDOW_DAYS = 180          # rolling calendar window of signal dates to consider
 MIN_NAMES_PER_DATE = 20    # need a real cross-section for a per-date IC to mean anything
 MIN_DATES = 8              # below this many matured dates we only report, never alarm
+MIN_TRADED = 30            # below this many matured TRADED signals, WR/selection are
+                           # noise (n=8 -> WR CI ≈ [10%,74%]) → informational, never alarm
 
 # Backtest reference band (16-fold WF, tradability filter, honest costs).
 REF_IC = 0.008
@@ -141,19 +143,30 @@ def _analyse(strategy: str, fwd: pd.DataFrame, write: bool) -> int:
     print(f"  Valor de selección (traded − no-traded): {spread:+.2%}")
 
     # ── Verdict ──
+    # IC is measured over the FULL cross-section (thousands of matured signals /
+    # ≥8 dates) → it can alarm. The traded-based checks (WR / return / selection
+    # spread) run on the ~8-name rolling book; below MIN_TRADED they are pure
+    # noise, so they stay INFORMATIONAL and never turn the run red.
     fails, warns = [], []
     if live_ic <= 0:
         fails.append(f"IC en vivo ≤ 0 ({live_ic:+.4f}): el ranking no generaliza")
     elif live_ic < REF_IC * 0.5:
         warns.append(f"IC en vivo ({live_ic:+.4f}) < mitad del backtest ({REF_IC:+.4f})")
-    if not np.isnan(t_avg) and t_avg <= 0:
-        fails.append(f"retorno medio de los traded ≤ 0 ({t_avg:+.2%})")
-    if not np.isnan(t_wr) and t_wr < 0.45:
-        fails.append(f"WR de traded < 45% ({t_wr:.0%})")
-    elif not np.isnan(t_wr) and t_wr < REF_WR_LO:
-        warns.append(f"WR de traded ({t_wr:.0%}) por debajo de la banda backtest")
-    if not np.isnan(spread) and spread <= 0:
-        warns.append("la selección no bate a las no-traded (spread ≤ 0)")
+
+    n_traded = len(traded)
+    if n_traded >= MIN_TRADED:
+        if not np.isnan(t_avg) and t_avg <= 0:
+            fails.append(f"retorno medio de los traded ≤ 0 ({t_avg:+.2%})")
+        if not np.isnan(t_wr) and t_wr < 0.45:
+            fails.append(f"WR de traded < 45% ({t_wr:.0%})")
+        elif not np.isnan(t_wr) and t_wr < REF_WR_LO:
+            warns.append(f"WR de traded ({t_wr:.0%}) por debajo de la banda backtest")
+        if not np.isnan(spread) and spread <= 0:
+            warns.append("la selección no bate a las no-traded (spread ≤ 0)")
+    else:
+        warns.append(f"muestra traded pequeña (n={n_traded}<{MIN_TRADED}): "
+                     f"WR {t_wr:.0%} / selección {spread:+.2%} informativos, "
+                     f"no disparan alarma (ruido a este tamaño)")
 
     if fails:
         print("  🔴 DEGRADADO:")
