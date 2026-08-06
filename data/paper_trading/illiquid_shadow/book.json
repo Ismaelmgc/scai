@@ -1,5 +1,5 @@
 {
-  "last_marked": "2026-08-04",
+  "last_marked": "2026-08-05",
   "last_refill": "2026-07-29",
   "positions": [
     {
@@ -8,15 +8,15 @@
       "entry_price": 2.06,
       "peak": 2.2,
       "atr": 0.054725728155339784,
-      "days_held": 7
+      "days_held": 8
     },
     {
       "ticker": "HITI",
       "entry_date": "2026-07-24",
       "entry_price": 2.15,
-      "peak": 2.25,
+      "peak": 2.27,
       "atr": 0.03284883720930232,
-      "days_held": 7
+      "days_held": 8
     },
     {
       "ticker": "HUYA",
@@ -24,15 +24,15 @@
       "entry_price": 2.36,
       "peak": 2.55,
       "atr": 0.0342161016949153,
-      "days_held": 7
+      "days_held": 8
     },
     {
       "ticker": "ACB",
       "entry_date": "2026-07-24",
       "entry_price": 2.67,
-      "peak": 2.83,
+      "peak": 2.91,
       "atr": 0.03327340823970039,
-      "days_held": 7
+      "days_held": 8
     },
     {
       "ticker": "OCCI",
@@ -40,7 +40,7 @@
       "entry_price": 2.34,
       "peak": 2.51,
       "atr": 0.043143162393162404,
-      "days_held": 7
+      "days_held": 8
     },
     {
       "ticker": "SABS",
@@ -48,7 +48,7 @@
       "entry_price": 3.51,
       "peak": 3.85,
       "atr": 0.05850712250712249,
-      "days_held": 7
+      "days_held": 8
     },
     {
       "ticker": "DOUG",
@@ -56,15 +56,7 @@
       "entry_price": 1.71,
       "peak": 1.76,
       "atr": 0.05760233918128655,
-      "days_held": 7
-    },
-    {
-      "ticker": "NEOV",
-      "entry_date": "2026-07-29",
-      "entry_price": 1.97,
-      "peak": 2.53,
-      "atr": 0.11089086294416248,
-      "days_held": 4
+      "days_held": 8
     }
   ],
   "closed_trades": [
@@ -77,6 +69,16 @@
       "ret": -0.2899,
       "exit_reason": "trailing_stop",
       "holding_days": 2
+    },
+    {
+      "ticker": "NEOV",
+      "entry_date": "2026-07-29",
+      "entry_price": 1.97,
+      "exit_date": "2026-08-05",
+      "exit_price": 2.87,
+      "ret": 0.4569,
+      "exit_reason": "profit_target",
+      "holding_days": 5
     }
   ]
 }
