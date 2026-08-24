@@ -285,6 +285,26 @@ def update_ohlcv(cfg, predict_to: str) -> pd.DataFrame:
     client.close()
     store.write("ohlcv_smallcap", ohlcv)
     print(f"  ✓ OHLCV: {len(ohlcv):,} rows, {ohlcv['date'].max().date()}")
+
+    # Data-gap watch: name ACTIVE tickers chronically behind the panel (missing the
+    # last >=2 sessions). A transient 1-day miss self-heals via the stale catch-up,
+    # so it's NOT flagged; a ticker stuck >=2 sessions is a real gap. The daily
+    # "316/317" count alone can't tell transient noise from a broken ticker — this
+    # surfaces the NAMES + how many sessions each is behind in the log/Telegram.
+    sessions = sorted(pd.to_datetime(ohlcv["date"]).dt.normalize().unique())
+    active_set = set(tickers)
+    if len(sessions) >= 3:
+        cutoff = sessions[-2]  # last bar older than this => missing >=2 sessions
+        last_bar = ohlcv[ohlcv["ticker"].isin(active_set)].groupby("ticker")["date"].max()
+        stale = last_bar[last_bar < cutoff]
+        if len(stale):
+            behind = sorted(((tk, int(sum(s > d for s in sessions))) for tk, d in stale.items()),
+                            key=lambda x: -x[1])
+            names = ", ".join(f"{tk}(-{n})" for tk, n in behind[:15])
+            print(f"  ⚠ {len(stale)}/{len(active_set)} active tickers STALE >=2 sessions "
+                  f"[ticker(-sessions_behind)]: {names}{' ...' if len(stale) > 15 else ''}")
+        else:
+            print(f"  ✓ all {len(active_set)} active tickers current (<=1 session behind)")
     return ohlcv
 
 
