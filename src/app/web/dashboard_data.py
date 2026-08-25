@@ -36,12 +36,13 @@ _BENCH_FILE = {"SPY": "smallcap_spy.parquet", "IWM": "smallcap_iwm.parquet"}
 # Strategy inception (paper-trading reset): the chart + benchmark start here so
 # both lines span the SAME live window. Drops any stray pre-reset NAV points that
 # would otherwise stretch the x-axis before the strategy actually existed.
-_INCEPTION = {"baseline": "2026-06-11", "adaptive": "2026-06-11", "liquidcap": "2026-07-06"}
+_INCEPTION = {"baseline": "2026-06-11", "adaptive": "2026-06-11",
+              "liquidcap": "2026-07-06", "illiquid": "2026-08-20"}
 
 
 def _bench_for(strategy: str) -> str:
     """Investable benchmark ticker for a strategy's chart/alpha."""
-    return "IWM" if strategy in ("baseline", "adaptive") else "SPY"
+    return "IWM" if strategy in ("baseline", "adaptive", "illiquid") else "SPY"
 
 
 def _load_bench(symbol: str) -> pd.DataFrame | None:

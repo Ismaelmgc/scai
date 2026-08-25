@@ -741,13 +741,16 @@
             const p = view.paper;
             const chart = (p.chart_dates && p.chart_dates.length)
                 ? `<div class="card"><h2>Evolución del Portfolio</h2><div class="chart-wrap"><canvas id="portfolioChart-${sid}"></canvas></div></div>` : '';
+            const grossBanner = sid === 'illiquid'
+                ? `<div class="card" style="border-left:3px solid #c9a227; background:rgba(201,162,39,.08);"><strong>⚠️ Shadow OOS — retornos GROSS.</strong> Test out-of-sample del edge de iliquidez (small-caps de bajo ADV). No descuenta el impacto de mercado: el neto real es mucho menor y el edge se agota hacia ~$100k. Léelo como alfa de selección vs IWM, no como retorno ejecutable a escala.</div>`
+                : '';
             return `<div class="strategy-panel${active ? ' active' : ''}" id="panel-${sid}">
-                ${kpiHTML(p, sid)}${metricsHTML(p)}${chart}${positionsHTML(p, sid)}${pendingSummaryHTML(p)}${closedHTML(p)}${signalsHTML(view.signals, sid)}
+                ${grossBanner}${kpiHTML(p, sid)}${metricsHTML(p)}${chart}${positionsHTML(p, sid)}${pendingSummaryHTML(p)}${closedHTML(p)}${signalsHTML(view.signals, sid)}
             </div>`;
         }
 
         function renderDashboard(views) {
-            const order = [['baseline', 'Baseline'], ['adaptive', 'Adaptive Stop'], ['liquidcap', 'S&P 500']].filter(([id]) => views[id]);
+            const order = [['baseline', 'Baseline'], ['adaptive', 'Adaptive Stop'], ['liquidcap', 'S&P 500'], ['illiquid', 'Illiquid (OOS)']].filter(([id]) => views[id]);
             if (!order.length) {
                 document.getElementById('appContent').innerHTML = '<div class="card" style="text-align:center; padding:60px;"><div style="font-size:48px;">📊</div><h2 style="justify-content:center;">Sin datos de Paper Trading</h2><p style="color:var(--text-secondary);">El pipeline aún no ha publicado datos.</p></div>';
                 return;

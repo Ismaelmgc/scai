@@ -68,12 +68,17 @@ jobs:
           PYTHONIOENCODING: utf-8
         run: python scripts/daily_pipeline.py
 
-      - name: Illiquid shadow logger (OOS test — non-blocking)
-        # Logs the illiquid-variant top-8 (low-ADV tercile + widest-20%-spread
-        # trim) and scores matured 20d cohorts vs IWM. Isolated: own parquet log,
-        # no Supabase/paper book. continue-on-error → can never fail the job.
+      - name: Illiquid shadow book (OOS test — non-blocking)
+        # Real €1000 rolling-8 paper book on the illiquid variant (low-ADV tercile
+        # + widest-20%-spread trim), published to Supabase (strategy "illiquid") +
+        # the web dashboard like the other books. GROSS (no market impact) — read as
+        # selection alpha vs IWM. continue-on-error → can never fail the job.
         continue-on-error: true
         env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           PYTHONPATH: src
           PYTHONIOENCODING: utf-8
         run: python scripts/illiquid_shadow.py
