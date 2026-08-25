@@ -59,6 +59,56 @@ PROFIT_TARGET = 0.40
 ADV_TERCILE = 1.0 / 3.0
 SPREAD_TRIM_Q = 0.80
 
+# the pre-Supabase isolated book (gross rolling-8 log) — migrated ONCE into the
+# new PaperTrader/Supabase book so the ~1 month it already ran is preserved.
+LEGACY_FP = ROOT / "data/paper_trading/illiquid_shadow/book.json"
+
+
+def _migrate_legacy() -> dict | None:
+    """Seed the fresh Supabase book from the legacy gross log so the month it
+    already ran (8 open + 9 closed) carries over. Models each slot as a fixed €125
+    notional (1000/8): closed trades bank their realised € to cash, opens keep
+    their €125 cost basis → total = 1000 + realised + unrealised. Returns a
+    PortfolioState-shaped dict, or None if the legacy log is absent."""
+    if not LEGACY_FP.exists():
+        return None
+    b = json.loads(LEGACY_FP.read_text())
+    notional = 1000.0 / MAX_POS
+    day_idx = 100  # arbitrary base; entry_day_idx preserves each pos's days_held
+    positions = []
+    for p in b.get("positions", []):
+        ep = float(p["entry_price"])
+        trail = float(np.clip(float(p.get("atr", 0.03)) * TRAIL_MULT, TRAIL_MIN, TRAIL_MAX))
+        peak = float(p.get("peak", ep))
+        positions.append({
+            "ticker": p["ticker"], "side": "LONG", "shares": round(notional / ep, 6),
+            "entry_price": ep, "entry_date": p["entry_date"],
+            "entry_day_idx": day_idx - int(p.get("days_held", 0)),
+            "trailing_stop_pct": round(trail, 4), "holding_period_days": HOLD_DAYS,
+            "high_price": peak, "low_price": ep,
+            "stop_loss_price": round(peak * (1 - trail), 4),
+            "position_size_pct": 1.0 / MAX_POS,
+        })
+    closed = []
+    for t in b.get("closed_trades", []):
+        ep = float(t["entry_price"]); ret = float(t["ret"])
+        closed.append({
+            "ticker": t["ticker"], "side": "LONG", "shares": round(notional / ep, 6),
+            "entry_price": ep, "entry_date": t["entry_date"],
+            "exit_price": float(t["exit_price"]), "exit_date": t["exit_date"],
+            "exit_reason": t["exit_reason"], "pnl_pct": ret,
+            "pnl_usd": round(notional * ret, 2), "days_held": int(t.get("holding_days", 0)),
+        })
+    cash = round(sum(c["pnl_usd"] for c in closed), 2)
+    print(f"  migrated legacy book: {len(positions)} open + {len(closed)} closed (cash €{cash})")
+    return {
+        "initial_capital": 1000.0, "cash": cash,
+        "positions": positions, "closed_trades": closed, "current_day_idx": day_idx,
+        "last_update": b.get("last_marked", ""), "pending_signals": [], "cooldown_until": {},
+        "max_positions": MAX_POS, "holding_period_days": HOLD_DAYS,
+        "commission_bps": 5.0, "slippage_bps": 10.0, "cooldown_days": 5,
+    }
+
 
 def illiquid_ranked(day: pd.DataFrame, model) -> pd.DataFrame:
     """Tradable → bottom-ADV tercile → drop widest-20% spread → ranked by score."""
@@ -111,6 +161,8 @@ def main() -> None:
 
     PT_DIR.mkdir(parents=True, exist_ok=True)
     state = supabase_store.read_state(STRATEGY)
+    if state is None:
+        state = _migrate_legacy()  # first run: carry over the legacy month
     p_path = PT_DIR / "portfolio.json"
     if state is not None:
         p_path.write_text(json.dumps(state))
