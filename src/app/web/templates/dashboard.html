@@ -586,7 +586,7 @@
                 return '<div class="card"><h2>Posiciones Abiertas</h2><p style="color: var(--text-secondary); font-size: 13px;">Sin posiciones abiertas.</p></div>';
             }
             const rows = p.positions.map(pos => `
-                <tr data-ticker="${esc(pos.ticker)}" data-entry="${pos.entry_price}" data-prevclose="${pos.current_price}" data-shares="${pos.shares}">
+                <tr data-ticker="${esc(pos.ticker)}" data-entry="${pos.entry_price}" data-prevclose="${pos.current_price}" data-dayref="${pos.prev_close ?? ''}" data-shares="${pos.shares}">
                     <td class="ticker" data-label="Ticker">${esc(pos.ticker)}</td>
                     <td data-label="Entrada">${esc(pos.entry_date)}</td>
                     <td class="text-right" data-label="$ Entrada">$${Number(pos.entry_price).toFixed(4)}</td>
@@ -878,7 +878,11 @@
         }
         function applyPrice(ticker, price) {
             document.querySelectorAll('.positions-table tbody tr[data-ticker="' + ticker + '"]').forEach(row => {
-                const prevClose = parseFloat(row.dataset.prevclose);
+                // Day % uses prev_close (yesterday's close), NOT current_price:
+                // when the panel lacks the ticker current_price falls back to the
+                // entry, which would turn the day% into the cumulative P/L. dayref
+                // is empty in that case → skip (show "—") instead of a wrong number.
+                const dayRef = parseFloat(row.dataset.dayref);
                 const liveCell = row.querySelector('.td-live');
                 if (liveCell) {
                     const prev = parseFloat((liveCell.textContent || '').replace('$', ''));
@@ -888,8 +892,8 @@
                 }
                 // %Live: intraday move vs the previous close ($ Último cierre).
                 const pctCell = row.querySelector('.td-live-pct');
-                if (pctCell && prevClose) {
-                    const day = (price / prevClose - 1) * 100;
+                if (pctCell && dayRef) {
+                    const day = (price / dayRef - 1) * 100;
                     pctCell.innerHTML = '<span class="arrow">' + (day >= 0 ? '▲' : '▼') + '</span> ' + (day >= 0 ? '+' : '') + day.toFixed(1) + '%';
                     pctCell.className = 'text-right td-live-pct ' + (day >= 0 ? 'profit' : 'loss');
                     pctCell.style.fontWeight = '600';

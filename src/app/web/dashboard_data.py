@@ -137,6 +137,12 @@ def load_paper_trading(ohlcv: pd.DataFrame,
             "entry_date": pos["entry_date"],
             "entry_price": round(pos["entry_price"], 4),
             "current_price": round(current_price, 2),
+            # Previous session's close, for the live DAY %. None (NOT the entry
+            # fallback current_price uses) when the panel lacks this ticker —
+            # otherwise the frontend's day% collapses to (live/entry-1) = the
+            # cumulative P/L (the liquidcap-tab bug: a panel-less runner rewrites
+            # the view → current_price==entry → %Live shows the accumulated move).
+            "prev_close": (round(float(closes.iloc[-1]), 4) if not closes.empty else None),
             "shares": round(pos["shares"], 4),  # fractional shares
             "invested": round(invested, 2),
             "current_value": round(current_value, 2),
