@@ -1266,10 +1266,32 @@ def main() -> None:
             f"📥 Descarga: <b>{n_latest}</b>/{n_ref} tickers "
             f"⚠️ <b>PARCIAL</b> — revisar"
         )
+        # Name the ACTIVE tickers missing the latest session (with how many
+        # sessions behind) so the "315/316" count says WHICH ones: a "(-1)" is a
+        # benign self-healing miss, a "(-3)" is a real gap worth investigating.
+        gap_line = ""
+        try:
+            from app.data.store.parquet_store import ParquetStore as _PS
+            _uni = _PS().read("smallcap_universe")
+            _active = (set(_uni[_uni["active"] == True]["ticker"])
+                       if "active" in _uni.columns else set(_uni["ticker"]))
+            _sess = sorted(pd.to_datetime(ohlcv["date"]).dt.normalize().unique())
+            _last = (ohlcv[ohlcv["ticker"].isin(_active)]
+                     .assign(_d=pd.to_datetime(ohlcv["date"]))
+                     .groupby("ticker")["_d"].max())
+            _miss = _last[_last < _sess[-1]]
+            if len(_miss):
+                _behind = sorted(((tk, int(sum(s > d for s in _sess)))
+                                  for tk, d in _miss.items()), key=lambda x: -x[1])
+                _names = ", ".join(f"{tk}(-{n})" for tk, n in _behind[:12])
+                gap_line = (f"\n⚠️ Sin barra hoy ({len(_miss)}): {_names}"
+                            f"{' …' if len(_miss) > 12 else ''}")
+        except Exception:
+            gap_line = ""
         notify_telegram(
             f"✅ <b>SCAI daily OK</b> — {date.today():%Y-%m-%d}\n"
             f"📅 Última sesión en datos: <b>{today}</b>\n"
-            f"{cov_line}\n"
+            f"{cov_line}{gap_line}\n"
             f"🟢 Señales BUY: <b>{n_buy}</b>   🔁 Retrain: {'sí' if train_metrics else 'no'}\n"
             f"{pend_line}\n\n"
             f"<b>Baseline</b>  €{summary_a['total_value']:,.2f} ({summary_a['total_return']})"
