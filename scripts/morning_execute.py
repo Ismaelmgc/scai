@@ -162,18 +162,20 @@ def main() -> None:
         entered = pt.execute_pending(prices, today)
         pt.save()
         supabase_store.write_state(strat, asdict(pt.state))
-        # Only refresh the view when we have a real EOD panel to mark positions
-        # against. Liquidcap's ohlcv_sp500 is gitignored and ABSENT on this runner,
-        # so build_view would mark EVERY position at its entry price (current_price
-        # fallback) → a degraded view: P/L collapses to 0% and the live %s show the
-        # cumulative move instead of the day's. The fill is already saved to state;
-        # leave the last good view from the daily job, which rewrites it correctly.
-        if not ohlcv.empty:
-            view = dashboard_data.build_view(ohlcv, pt_dir, adaptive, strategy=strat)
+        # Refresh the view so the just-filled BUY shows as an OPEN position, not
+        # stuck "pending". Mark with the EOD panel when present; otherwise with the
+        # live Finnhub quotes we already fetched (liquidcap's ohlcv_sp500 panel is
+        # gitignored → ABSENT here). Marking with `prices` (live) instead of the
+        # empty panel avoids the degraded view (every position at its entry price,
+        # P/L 0%). Only skip if we have NO prices at all. The 03:00 daily job later
+        # rewrites the view from the full EOD panel with true day-change references.
+        mark = ohlcv if not ohlcv.empty else prices
+        if not mark.empty:
+            view = dashboard_data.build_view(mark, pt_dir, adaptive, strategy=strat)
             if view is not None:
                 supabase_store.write_dashboard_view(strat, view)
         else:
-            print(f"  [{strat}] no EOD panel here — view left to the daily job")
+            print(f"  [{strat}] no prices to mark — view left to the daily job")
         print(f"  [{strat}] filled {entered or '[]'} at open"
               + (f"; still pending (no open): {missing}" if missing else ""))
         for tk in entered or []:

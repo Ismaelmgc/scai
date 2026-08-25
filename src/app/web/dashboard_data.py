@@ -37,7 +37,7 @@ _BENCH_FILE = {"SPY": "smallcap_spy.parquet", "IWM": "smallcap_iwm.parquet"}
 # both lines span the SAME live window. Drops any stray pre-reset NAV points that
 # would otherwise stretch the x-axis before the strategy actually existed.
 _INCEPTION = {"baseline": "2026-06-11", "adaptive": "2026-06-11",
-              "liquidcap": "2026-07-06", "illiquid": "2026-08-20"}
+              "liquidcap": "2026-07-06", "illiquid": "2026-07-24"}
 
 
 def _bench_for(strategy: str) -> str:

@@ -110,6 +110,65 @@ def _migrate_legacy() -> dict | None:
     }
 
 
+def _reconstruct_nav(ohlcv: pd.DataFrame) -> list[tuple[str, float]]:
+    """Rebuild the daily €NAV series over the legacy month from the trade ledger,
+    so the dashboard chart shows the real evolution (+ IWM for the same window)
+    like the other books. Same fixed-€125-notional model as the migration: each
+    day NAV = 1000 − 125·(entered≤d) + Σ realised(exited≤d) + Σ held·close(d).
+    Missing closes forward-fill; unknown → entry price. [] if no legacy log."""
+    if not LEGACY_FP.exists():
+        return []
+    b = json.loads(LEGACY_FP.read_text())
+    notional = 1000.0 / MAX_POS
+    trades = []
+    for t in b.get("closed_trades", []):
+        trades.append((t["ticker"], pd.Timestamp(t["entry_date"]), float(t["entry_price"]),
+                       pd.Timestamp(t["exit_date"]), float(t["exit_price"])))
+    for p in b.get("positions", []):
+        trades.append((p["ticker"], pd.Timestamp(p["entry_date"]), float(p["entry_price"]),
+                       None, None))
+    if not trades:
+        return []
+    start = min(t[1] for t in trades)
+    end = pd.Timestamp(b["last_marked"]) if b.get("last_marked") else max(t[1] for t in trades)
+    held = {t[0] for t in trades}
+    oh = ohlcv[ohlcv["ticker"].isin(held)]
+    px = (oh.pivot_table(index="date", columns="ticker", values="close")
+          .sort_index().ffill())
+    sessions = [d for d in px.index if start <= d <= end]
+    series = []
+    for d in sessions:
+        cash, eq = 1000.0, 0.0
+        for tk, ed, ep, xd, xp in trades:
+            if ed > d:
+                continue
+            shares = notional / ep
+            cash -= notional
+            if xd is not None and xd <= d:
+                cash += shares * xp
+            else:
+                c = px.loc[d, tk] if tk in px.columns else np.nan
+                eq += shares * (float(c) if np.isfinite(c) else ep)
+        series.append((str(d.date()), round(cash + eq, 2)))
+    return series
+
+
+def _backfill_nav_if_missing(ohlcv: pd.DataFrame) -> None:
+    """One-off: upsert the reconstructed legacy-month NAV points that Supabase is
+    missing (idempotent — keyed by date). Runs every time but writes nothing once
+    the history is present, so it's safe to leave in the daily path."""
+    try:
+        have = {str(n["date"])[:10] for n in (supabase_store.read_nav(STRATEGY) or [])}
+        missing = [(d, v) for d, v in _reconstruct_nav(ohlcv) if d not in have]
+        for d, v in missing:
+            supabase_store.upsert_nav(STRATEGY, d, v)
+        if missing:
+            print(f"  backfilled {len(missing)} historical NAV points "
+                  f"({missing[0][0]} → {missing[-1][0]})")
+    except Exception as e:  # best-effort; never break the daily publish
+        print(f"  NAV backfill skipped: {e}")
+
+
 def illiquid_ranked(day: pd.DataFrame, model) -> pd.DataFrame:
     """Tradable → bottom-ADV tercile → drop widest-20% spread → ranked by score."""
     day = day[tradable_mask(day)].copy()
@@ -201,6 +260,7 @@ def main() -> None:
     if view is not None:
         supabase_store.write_dashboard_view(STRATEGY, view)
         supabase_store.upsert_nav(STRATEGY, today, float(view["paper"]["total_value"]))
+        _backfill_nav_if_missing(ohlcv)  # fill the legacy month's daily NAV (once)
     print(f"  entered={entered or '[]'} closed={[t.ticker for t in closed] or '[]'} "
           f"queued={sorted(traded) or '[]'} skipped={skipped}")
 
