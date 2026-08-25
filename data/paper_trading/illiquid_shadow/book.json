@@ -1,5 +1,5 @@
 {
-  "last_marked": "2026-08-21",
+  "last_marked": "2026-08-24",
   "last_refill": "2026-08-21",
   "positions": [
     {
@@ -8,7 +8,7 @@
       "entry_price": 11.99,
       "peak": 11.99,
       "atr": 0.05863803169307757,
-      "days_held": 11
+      "days_held": 12
     },
     {
       "ticker": "KULR",
@@ -16,23 +16,23 @@
       "entry_price": 2.97,
       "peak": 2.97,
       "atr": 0.06733164983164983,
-      "days_held": 6
+      "days_held": 7
     },
     {
       "ticker": "ONEW",
       "entry_date": "2026-08-21",
       "entry_price": 11.91,
-      "peak": 11.91,
+      "peak": 12.02,
       "atr": 0.06314441645675906,
-      "days_held": 0
+      "days_held": 1
     },
     {
       "ticker": "RBBN",
       "entry_date": "2026-08-21",
       "entry_price": 2.03,
-      "peak": 2.03,
+      "peak": 2.04,
       "atr": 0.05010591133004929,
-      "days_held": 0
+      "days_held": 1
     },
     {
       "ticker": "CVGI",
@@ -40,15 +40,15 @@
       "entry_price": 3.21,
       "peak": 3.21,
       "atr": 0.08639252336448598,
-      "days_held": 0
+      "days_held": 1
     },
     {
       "ticker": "LFCR",
       "entry_date": "2026-08-21",
       "entry_price": 4.54,
-      "peak": 4.54,
+      "peak": 4.55,
       "atr": 0.05720154185022026,
-      "days_held": 0
+      "days_held": 1
     },
     {
       "ticker": "STRS",
@@ -62,9 +62,9 @@
       "ticker": "EDN",
       "entry_date": "2026-08-21",
       "entry_price": 22.3,
-      "peak": 22.3,
+      "peak": 23.5,
       "atr": 0.05633475336322872,
-      "days_held": 0
+      "days_held": 1
     }
   ],
   "closed_trades": [
