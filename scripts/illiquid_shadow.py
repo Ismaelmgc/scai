@@ -255,12 +255,16 @@ def main() -> None:
             "actual_ret_20d": None,
         } for _, r in top.iterrows()])
 
+    # Backfill the legacy month's daily NAV into the table BEFORE building the view:
+    # build_view reads read_nav to fill chart_dates/values + compute stats, so the
+    # historical points must already be there — otherwise the view is written with a
+    # single point (no chart, stats=None needs >=10) and only self-heals next run.
+    _backfill_nav_if_missing(ohlcv)
     from app.web import dashboard_data
     view = dashboard_data.build_view(ohlcv, PT_DIR, adaptive_stop=False, strategy=STRATEGY)
     if view is not None:
         supabase_store.write_dashboard_view(STRATEGY, view)
         supabase_store.upsert_nav(STRATEGY, today, float(view["paper"]["total_value"]))
-        _backfill_nav_if_missing(ohlcv)  # fill the legacy month's daily NAV (once)
     print(f"  entered={entered or '[]'} closed={[t.ticker for t in closed] or '[]'} "
           f"queued={sorted(traded) or '[]'} skipped={skipped}")
 
