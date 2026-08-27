@@ -23,8 +23,11 @@ name: SCAI daily
 # Use "Run workflow" (workflow_dispatch) to run on demand.
 
 on:
-  schedule:
-    - cron: "0 6 * * *" # daily 06:00 UTC (madrugada, ~02:00 ET); late enough for free's overnight publish, early enough to clear the open even with GitHub's delay
+  # Scheduled by the Cloudflare Worker (cloudflare/scheduler) at 06:00 UTC every
+  # day — GitHub's native cron was best-effort (ran hours late / got dropped),
+  # which is exactly what the timing notes above tried to buffer against. The
+  # worker fires reliably, so the schedule lives there now. workflow_dispatch
+  # stays for manual "Run workflow" runs.
   workflow_dispatch: {}
 
 permissions:

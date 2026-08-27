@@ -20,8 +20,9 @@ name: SCAI liquidcap daily
 # the open via the shared morning.yml (13:45 UTC). Idempotent + stateless.
 
 on:
-  schedule:
-    - cron: "0 3 * * 1-5"
+  # Scheduled by the Cloudflare Worker (cloudflare/scheduler) at 03:00 UTC on
+  # weekdays — reliable trigger instead of GitHub's best-effort cron. The timing
+  # rationale above still holds; only the trigger moved. Manual runs via the button.
   workflow_dispatch: {}
 
 permissions:

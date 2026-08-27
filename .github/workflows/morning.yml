@@ -5,14 +5,15 @@ name: SCAI morning fill
 # so this only changes *when* it's recorded, not the price — consistent with the
 # backtest. Exits stay close-based (handled by the EOD pipeline in daily.yml).
 #
-# Two crons cover both EST and EDT; the script gates precisely by Eastern Time and
-# is idempotent (once filled, pending is empty → re-runs and the EOD pipeline are
-# no-ops). No Polygon (uses the committed OHLCV + Finnhub REST opens).
+# The script gates precisely by Eastern Time and is idempotent (once filled,
+# pending is empty → re-runs and the EOD pipeline are no-ops). No Polygon (uses
+# the committed OHLCV + Finnhub REST opens).
 
 on:
-  schedule:
-    - cron: "45 13 * * 1-5" # 09:45 ET in summer (EDT)
-    - cron: "45 14 * * 1-5" # 09:45 ET in winter (EST)
+  # Scheduled by the Cloudflare Worker (cloudflare/scheduler) at 09:32 ET
+  # (open+2min) on weekdays — it fires at 13:32 & 14:32 UTC and gates on New York
+  # time so exactly one lands per season (EDT/EST), DST-robust. Replaces the two
+  # native 09:45 ET crons with a reliable, earlier trigger. Manual runs via the button.
   workflow_dispatch: {}
 
 permissions:

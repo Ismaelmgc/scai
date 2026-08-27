@@ -8,10 +8,10 @@
  * on time regardless of GitHub's own scheduler. The workflows keep their
  * workflow_dispatch trigger (manual "Run workflow" still works).
  *
- * Jobs (weekdays):
- *   03:00 UTC          -> liquidcap.yml  (S&P 500 daily; yfinance EOD ready)
- *   11:05 UTC          -> daily.yml      (small-cap daily; after free Polygon T+1)
- *   09:32 ET (open+2m) -> morning.yml    (fill pending BUYs at the open)
+ * Jobs (times mirror the workflows' former native schedules exactly):
+ *   06:00 UTC every day -> daily.yml      (small-cap; daily so a failed Fri self-heals Sat/Sun)
+ *   03:00 UTC weekdays  -> liquidcap.yml  (S&P 500 daily; yfinance EOD ready)
+ *   09:32 ET (open+2m)  -> morning.yml    (fill pending BUYs at the open; weekdays)
  *
  * The morning cron is registered at BOTH 13:32 and 14:32 UTC (one expression);
  * the handler gates on New York local time == 09:32 so exactly one of the two
@@ -32,8 +32,8 @@ const WORKFLOWS = {
 // Map a matched cron expression (exactly as registered in wrangler.toml) to its
 // job. The morning entry is additionally ET-gated in scheduled().
 const CRON_JOBS = {
+  "0 6 * * *": "daily",
   "0 3 * * 1-5": "liquidcap",
-  "5 11 * * 1-5": "daily",
   "32 13,14 * * 1-5": "morning",
 };
 

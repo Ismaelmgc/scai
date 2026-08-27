@@ -7,11 +7,16 @@ Cloudflare's cron and dispatches the matching GitHub Actions workflow via
 
 ## What it triggers (weekdays)
 
-| Cloudflare cron (UTC) | Workflow        | When (ET)        |
-| --------------------- | --------------- | ---------------- |
-| `0 3 * * 1-5`         | `liquidcap.yml` | 03:00 UTC (fixed) |
-| `5 11 * * 1-5`        | `daily.yml`     | 11:05 UTC (fixed) |
-| `32 13,14 * * 1-5`    | `morning.yml`   | 09:32 ET (open+2min) |
+| Cloudflare cron (UTC) | Workflow        | When              |
+| --------------------- | --------------- | ----------------- |
+| `0 6 * * *`           | `daily.yml`     | 06:00 UTC, every day |
+| `0 3 * * 1-5`         | `liquidcap.yml` | 03:00 UTC, weekdays |
+| `32 13,14 * * 1-5`    | `morning.yml`   | 09:32 ET (open+2min), weekdays |
+
+These mirror the workflows' former native schedules exactly — the Cloudflare
+Worker only changes *what triggers* them (reliably), not *when*. `daily.yml`
+runs every day on purpose: it's idempotent, and a weekend run self-heals a failed
+Friday.
 
 The morning cron fires at both 13:32 and 14:32 UTC; the Worker only dispatches
 the one that is 09:32 in New York, so it stays at open+2min across EDT and EST.
