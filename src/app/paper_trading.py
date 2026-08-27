@@ -195,10 +195,14 @@ class PaperTrader:
                  pending=len(self.state.pending_signals))
         return traded_tickers, skip_reasons
 
-    def execute_pending(self, ohlcv_today: pd.DataFrame, today: str) -> list[str]:
-        """Execute pending signals at today's open prices.
+    def execute_pending(self, ohlcv_today: pd.DataFrame, today: str,
+                        price_col: str = "open") -> list[str]:
+        """Execute pending signals at today's ``price_col`` (default the open).
 
-        Call this AFTER market open data is available (t+1 from signal date).
+        Call this AFTER market open data is available (t+1 from signal date) for
+        the default open fill. Pass ``price_col="close"`` to fill at the same
+        session's close — a market-on-close (MOC) entry that matches the backtest
+        (decide on the close, enter at that close); used by the liquidcap book.
 
         Returns list of tickers entered.
         """
@@ -232,8 +236,8 @@ class PaperTrader:
                     log.warning("signal_expired", ticker=ticker)
                 continue
 
-            open_price = float(prices.loc[ticker, "open"])
-            entry_price = open_price * (1 + cost_pct)  # slippage + commission
+            fill_price = float(prices.loc[ticker, price_col])
+            entry_price = fill_price * (1 + cost_pct)  # slippage + commission
 
             # Fractional shares: each name lands at exactly its equal-weight target,
             # so no cash sits idle from integer rounding (a $66 stock no longer

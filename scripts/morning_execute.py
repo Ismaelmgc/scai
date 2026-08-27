@@ -46,15 +46,12 @@ from app.paper_trading import PaperTrader  # noqa: E402
 from app.utils import notify_telegram  # noqa: E402
 from app.web import dashboard_data  # noqa: E402
 
-ROOT = Path(__file__).resolve().parent.parent
-LIQUIDCAP_DIR = ROOT / "data" / "liquidcap" / "paper_trading"
-LIQUIDCAP_OHLCV = ROOT / "data" / "liquidcap" / "ohlcv_sp500.parquet"
-
 # (strategy, pt_dir, adaptive_stop, ohlcv_path)  ohlcv_path=None -> small-cap parquet.
 # Adaptive-Stop book retired 2026-08-27 (poor live performance).
+# Liquidcap left the open-fill 2026-08-27: it now enters at close(S) (MOC-sim) in
+# its own nightly job, so there is nothing to fill at the open.
 STRATEGIES = [
     ("baseline", dashboard_data.PAPER_TRADING_DIR, False, None),
-    ("liquidcap", LIQUIDCAP_DIR, False, LIQUIDCAP_OHLCV),
 ]
 
 

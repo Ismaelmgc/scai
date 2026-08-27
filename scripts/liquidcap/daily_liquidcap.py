@@ -16,8 +16,8 @@ Flow per run (after US close):
      + retrain (purged by construction: recent rows have NaN 20d targets and
      are dropped) -> model pkl
   3. daily: features on a trailing window, score the latest session
-  4. PaperTrader: execute pending at today's open -> update positions/exits
-     -> queue today's top-8 BUYs for tomorrow
+  4. PaperTrader: update positions/exits at close(S) -> select today's top-8
+     -> enter them at that SAME close(S) (MOC-sim close-entry, matches backtest)
   5. state -> Supabase strategy "liquidcap"
 
 Usage:
@@ -233,13 +233,12 @@ def main() -> None:
     # Idempotency guard: never PROCESS the same session twice. `today` is the
     # latest bar in the panel, which does NOT change until the next US session —
     # so a second run on a weekend/holiday (or a double CI run) sees the same
-    # `today`. Re-processing would fill the pending queued from THIS session at
-    # THIS session's own open (a look-ahead entry) and inflate the day index,
-    # collapsing the decide-at-close -> enter-next-open lag. So we skip the
-    # trading mutations when already advanced — but STILL (re)publish the view +
-    # NAV below, so a re-run after a partial failure (e.g. a crash between the
-    # state write and the view write) self-heals the dashboard instead of
-    # leaving it frozen on a stale session.
+    # `today`. Re-processing would double-enter the top-8 (at the close, below)
+    # and double-advance the day index. So we skip the trading mutations when
+    # already advanced — but STILL (re)publish the view + NAV below, so a re-run
+    # after a partial failure (e.g. a crash between the state write and the view
+    # write) self-heals the dashboard instead of leaving it frozen on a stale
+    # session.
     ohlcv_today = panel[panel.ticker.isin(members)]
     already = bool(pt.state.last_update and str(pt.state.last_update) >= today)
     if already:
@@ -247,9 +246,17 @@ def main() -> None:
               f"(last_update={pt.state.last_update}) — refreshing view + NAV only")
         entered, closed, traded, skipped = [], [], set(), {}
     else:
-        entered = pt.execute_pending(ohlcv_today, today)
+        # CLOSE-entry (MOC-sim, 2026-08): the signal is generated from close(S)
+        # and we enter at that SAME close(S) — matching the backtest exactly and
+        # capturing the overnight drift that the old open(S+1) fill forfeited
+        # (~+0.16pp/mo). Order: exits on held positions first, then queue today's
+        # top-8, then fill them at close(S) in this same nightly run. The official
+        # yfinance close is the fill price (no Finnhub → no source-gap). For real
+        # money this is a ~15:45-ET MOC order; the paper book simulates it since
+        # the slow daily model's top-8 barely moves in the last 15 min.
         closed = pt.update_positions(ohlcv_today, today)
         traded, skipped = pt.process_signals(signals, today)
+        entered = pt.execute_pending(ohlcv_today, today, price_col="close")
         pt.save()
         supabase_store.write_state(STRATEGY, asdict(pt.state))
         # Persist the day's top-8 to the signals table so the S&P 500 tab shows a
