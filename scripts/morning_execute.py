@@ -51,9 +51,9 @@ LIQUIDCAP_DIR = ROOT / "data" / "liquidcap" / "paper_trading"
 LIQUIDCAP_OHLCV = ROOT / "data" / "liquidcap" / "ohlcv_sp500.parquet"
 
 # (strategy, pt_dir, adaptive_stop, ohlcv_path)  ohlcv_path=None -> small-cap parquet.
+# Adaptive-Stop book retired 2026-08-27 (poor live performance).
 STRATEGIES = [
     ("baseline", dashboard_data.PAPER_TRADING_DIR, False, None),
-    ("adaptive", dashboard_data.PAPER_TRADING_ADAPTIVE_DIR, True, None),
     ("liquidcap", LIQUIDCAP_DIR, False, LIQUIDCAP_OHLCV),
 ]
 

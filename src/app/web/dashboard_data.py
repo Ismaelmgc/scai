@@ -18,7 +18,6 @@ from app.data import supabase_store
 ROOT = Path(__file__).resolve().parents[3]
 DATA_DIR = ROOT / "data" / "processed"
 PAPER_TRADING_DIR = ROOT / "data" / "paper_trading"
-PAPER_TRADING_ADAPTIVE_DIR = ROOT / "data" / "paper_trading" / "adaptive"
 
 
 def _load_ohlcv() -> pd.DataFrame:
@@ -27,8 +26,8 @@ def _load_ohlcv() -> pd.DataFrame:
     return ohlcv
 
 
-# Benchmark per product: small-cap books (baseline/adaptive) belong against the
-# Russell 2000 (IWM); the S&P-500 book (liquidcap) against SPY. SPY is ALSO the
+# Benchmark per product: the small-cap books (baseline/illiquid) belong against
+# the Russell 2000 (IWM); the S&P-500 book (liquidcap) against SPY. SPY is ALSO the
 # feature market-proxy (beta/regime) — do not repurpose it; IWM is a separate file.
 _bench_cache: dict[str, pd.DataFrame | None] = {}
 _BENCH_FILE = {"SPY": "smallcap_spy.parquet", "IWM": "smallcap_iwm.parquet"}
@@ -36,13 +35,13 @@ _BENCH_FILE = {"SPY": "smallcap_spy.parquet", "IWM": "smallcap_iwm.parquet"}
 # Strategy inception (paper-trading reset): the chart + benchmark start here so
 # both lines span the SAME live window. Drops any stray pre-reset NAV points that
 # would otherwise stretch the x-axis before the strategy actually existed.
-_INCEPTION = {"baseline": "2026-06-11", "adaptive": "2026-06-11",
+_INCEPTION = {"baseline": "2026-06-11",
               "liquidcap": "2026-07-06", "illiquid": "2026-07-24"}
 
 
 def _bench_for(strategy: str) -> str:
     """Investable benchmark ticker for a strategy's chart/alpha."""
-    return "IWM" if strategy in ("baseline", "adaptive", "illiquid") else "SPY"
+    return "IWM" if strategy in ("baseline", "illiquid") else "SPY"
 
 
 def _load_bench(symbol: str) -> pd.DataFrame | None:
@@ -101,7 +100,7 @@ def load_paper_trading(ohlcv: pd.DataFrame,
                        strategy: str | None = None) -> dict | None:
     pt_dir = pt_dir or PAPER_TRADING_DIR
     if strategy is None:
-        strategy = "adaptive" if pt_dir == PAPER_TRADING_ADAPTIVE_DIR else "baseline"
+        strategy = "baseline"
 
     # Source of truth is Supabase; fall back to the local JSON (offline/dev).
     state = supabase_store.read_state(strategy)
@@ -252,7 +251,7 @@ def load_signal_history(pt_dir: Path | None = None,
                         strategy: str | None = None) -> list[dict]:
     pt_dir = pt_dir or PAPER_TRADING_DIR
     if strategy is None:
-        strategy = "adaptive" if pt_dir == PAPER_TRADING_ADAPTIVE_DIR else "baseline"
+        strategy = "baseline"
 
     # Source of truth is Supabase; fall back to the local parquet (offline/dev).
     rows = supabase_store.read_signals(strategy, limit=50)
@@ -314,7 +313,7 @@ def build_view(ohlcv: pd.DataFrame, pt_dir: Path, adaptive_stop: bool,
     stored in Supabase (`dashboard_view`) and fetched in one read after login.
 
     ``strategy`` overrides the pt_dir-based name (used by extra books like
-    liquidcap whose pt_dir isn't the small-cap baseline/adaptive pair).
+    liquidcap/illiquid whose pt_dir isn't the small-cap baseline dir).
     """
     paper = load_paper_trading(ohlcv, pt_dir, adaptive_stop=adaptive_stop,
                                strategy=strategy)

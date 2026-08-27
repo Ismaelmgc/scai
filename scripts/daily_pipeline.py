@@ -42,7 +42,6 @@ log = get_logger(__name__)
 # ── Constants ───────────────────────────────────────────────
 RETRAIN_EVERY_DAYS = 7          # Retrain model every N calendar days
 PORTFOLIO_PATH = "data/paper_trading/portfolio.json"
-PORTFOLIO_PATH_ADAPTIVE = "data/paper_trading/adaptive/portfolio.json"
 TRADE_LOG_PATH = "data/paper_trading/trades.parquet"
 DAILY_LOG_PATH = "data/paper_trading/daily_log.jsonl"
 MODEL_REGISTRY = "data/paper_trading/model_registry.json"
@@ -1198,11 +1197,13 @@ def main() -> None:
         signals.to_parquet(signals_path, index=False)
     print()
 
-    # ── Step 5: Paper trading (dual strategies) ────
+    # ── Step 5: Paper trading ────
     print("STEP 5/5 ▸ Paper trading execution...")
 
-    # Strategy A: Baseline (standard trailing stop)
-    print("  ── Strategy A: Baseline ──")
+    # Baseline book (standard trailing stop). The Adaptive-Stop book was retired
+    # 2026-08-27 (poor live performance); the generic adaptive_stop flag stays on
+    # PaperTrader but no production book enables it.
+    print("  ── Baseline ──")
     summary_a = run_paper_trading(
         signals, ohlcv, today, args.capital, args.dry_run,
         model=model, features=features,
@@ -1210,20 +1211,10 @@ def main() -> None:
         adaptive_stop=False,
         strategy_label="baseline",
     )
-
-    # Strategy B: Adaptive Stop (tighten to 6% after day 5 if profitable)
-    print("  ── Strategy B: Adaptive Stop ──")
-    summary_b = run_paper_trading(
-        signals, ohlcv, today, args.capital, args.dry_run,
-        model=model, features=features,
-        portfolio_path=PORTFOLIO_PATH_ADAPTIVE,
-        adaptive_stop=True,
-        strategy_label="adaptive",
-    )
     print()
 
     # ── Summary ──────────────────────────────────────
-    for label, summary in [("BASELINE", summary_a), ("ADAPTIVE STOP", summary_b)]:
+    for label, summary in [("BASELINE", summary_a)]:
         print("=" * 60)
         print(f"  {label}")
         print("=" * 60)
@@ -1247,10 +1238,8 @@ def main() -> None:
     # session actually in the data so a stale-but-green run is still visible.
     if not args.dry_run:
         n_buy = int((signals["recommendation"] == "BUY").sum()) if not signals.empty else 0
-        pend_a, pend_b = summary_a["pending_signals"], summary_b["pending_signals"]
-        pend_line = (f"⏳ Pendientes: <b>{pend_a}</b>"
-                     if pend_a == pend_b
-                     else f"⏳ Pendientes: baseline <b>{pend_a}</b> · adaptive <b>{pend_b}</b>")
+        pend_a = summary_a["pending_signals"]
+        pend_line = f"⏳ Pendientes: <b>{pend_a}</b>"
         # Download health: tickers in the latest session vs the median of the 5
         # prior sessions. A partial frontier (e.g. 2026-07-01 landed with 1 ticker
         # when the grouped bar hadn't published) shows up as ⚠️ PARCIAL instead of
@@ -1295,9 +1284,7 @@ def main() -> None:
             f"🟢 Señales BUY: <b>{n_buy}</b>   🔁 Retrain: {'sí' if train_metrics else 'no'}\n"
             f"{pend_line}\n\n"
             f"<b>Baseline</b>  €{summary_a['total_value']:,.2f} ({summary_a['total_return']})"
-            f" · {summary_a['n_open_positions']} pos · WR {summary_a['win_rate']}\n"
-            f"<b>Adaptive</b>  €{summary_b['total_value']:,.2f} ({summary_b['total_return']})"
-            f" · {summary_b['n_open_positions']} pos · WR {summary_b['win_rate']}"
+            f" · {summary_a['n_open_positions']} pos · WR {summary_a['win_rate']}"
         )
 
     # Log daily entry (baseline as primary)
@@ -1307,7 +1294,6 @@ def main() -> None:
         "cash": summary_a["cash"],
         "n_positions": summary_a["n_open_positions"],
         "n_closed": summary_a["n_closed_trades"],
-        "portfolio_value_adaptive": summary_b["total_value"],
         "retrained": bool(train_metrics),
         "dry_run": args.dry_run,
     })
@@ -1318,14 +1304,11 @@ def main() -> None:
     if not args.dry_run and supabase_store.is_configured():
         try:
             from app.web import dashboard_data
-            for strat, pt_dir, adaptive in [
-                ("baseline", dashboard_data.PAPER_TRADING_DIR, False),
-                ("adaptive", dashboard_data.PAPER_TRADING_ADAPTIVE_DIR, True),
-            ]:
-                view = dashboard_data.build_view(ohlcv, pt_dir, adaptive)
-                if view is not None:
-                    supabase_store.write_dashboard_view(strat, view)
-            print("  ✓ Supabase: dashboard views (baseline + adaptive)")
+            view = dashboard_data.build_view(
+                ohlcv, dashboard_data.PAPER_TRADING_DIR, False)
+            if view is not None:
+                supabase_store.write_dashboard_view("baseline", view)
+            print("  ✓ Supabase: dashboard view (baseline)")
         except Exception as e:
             log.warning("dashboard_view_write_failed", error=str(e))
             print(f"  ⚠ Dashboard view write failed: {e}")
