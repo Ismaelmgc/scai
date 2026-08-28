@@ -1335,9 +1335,13 @@ if __name__ == "__main__":
     except Exception as e:
         # Loud failure: alert on Telegram (best-effort) then re-raise so the
         # GitHub run goes RED — no more silent green runs on stale/failed data.
+        # Escape the error text: an unescaped '<' (e.g. a 525 "<none>" body) breaks
+        # Telegram's HTML parse and 400s the alert — the failure would go unnotified.
+        import html
+        detail = html.escape(f"{type(e).__name__}: {str(e)[:300]}")
         notify_telegram(
             f"❌ <b>SCAI daily FALLÓ</b> — {date.today():%Y-%m-%d}\n"
-            f"<code>{type(e).__name__}: {str(e)[:300]}</code>\n"
+            f"<code>{detail}</code>\n"
             f"Revisa el run en GitHub Actions."
         )
         raise

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import math
 import os
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -115,6 +116,35 @@ def _json_safe(obj):
     return obj
 
 
+# Cloudflare/Supabase throw transient 5xx (a 525 SSL-handshake blip once killed a
+# whole daily run on read_state). Retry those + network errors with backoff so a
+# momentary infra hiccup no longer fails the pipeline.
+_RETRY_STATUS = {502, 503, 504, 520, 521, 522, 523, 524, 525, 527, 530}
+_MAX_TRIES = 4
+
+
+def _request(method: str, url: str, **kwargs) -> httpx.Response:
+    """httpx request with retry/backoff on transient Cloudflare/Supabase errors."""
+    fn = getattr(httpx, method.lower())  # httpx.get / httpx.post
+    for attempt in range(_MAX_TRIES):
+        last = attempt == _MAX_TRIES - 1
+        try:
+            r = fn(url, timeout=_TIMEOUT, **kwargs)
+        except httpx.TransportError:
+            if last:
+                raise
+            time.sleep(2 ** attempt)
+            continue
+        if r.status_code in _RETRY_STATUS and not last:
+            log.warning("supabase_transient_retry", status=r.status_code,
+                        attempt=attempt + 1, url=url.rsplit("/", 1)[-1])
+            time.sleep(2 ** attempt)
+            continue
+        r.raise_for_status()
+        return r
+    raise RuntimeError("unreachable")  # pragma: no cover
+
+
 def _post(table: str, rows: list[dict], on_conflict: str | None = None,
           resolution: str = "merge-duplicates") -> None:
     """Insert/upsert rows into a table via PostgREST."""
@@ -123,9 +153,7 @@ def _post(table: str, rows: list[dict], on_conflict: str | None = None,
     url = f"{_base_url()}/rest/v1/{table}"
     params = {"on_conflict": on_conflict} if on_conflict else {}
     headers = _headers({"Prefer": f"resolution={resolution}"})
-    r = httpx.post(url, json=_json_safe(rows), params=params, headers=headers,
-                   timeout=_TIMEOUT)
-    r.raise_for_status()
+    _request("POST", url, json=_json_safe(rows), params=params, headers=headers)
 
 
 # ── Public API ───────────────────────────────────────────────
@@ -151,8 +179,7 @@ def read_state(strategy: str) -> dict | None:
         return None
     url = f"{_base_url()}/rest/v1/portfolio_state"
     params = {"strategy": f"eq.{strategy}", "select": "state", "limit": "1"}
-    r = httpx.get(url, params=params, headers=_headers(key=_read_key()), timeout=_TIMEOUT)
-    r.raise_for_status()
+    r = _request("GET", url, params=params, headers=_headers(key=_read_key()))
     data = r.json()
     return data[0]["state"] if data else None
 
@@ -218,9 +245,8 @@ def write_dashboard_view(strategy: str, view: dict) -> None:
 
 
 def _get(table: str, params: dict) -> list[dict]:
-    r = httpx.get(f"{_base_url()}/rest/v1/{table}", params=params,
-                  headers=_headers(key=_read_key()), timeout=_TIMEOUT)
-    r.raise_for_status()
+    r = _request("GET", f"{_base_url()}/rest/v1/{table}", params=params,
+                 headers=_headers(key=_read_key()))
     return r.json()
 
 
