@@ -42,5 +42,14 @@ jobs:
             echo "No universe changes to commit."
           else
             git commit -m "universe: monthly refresh [skip ci]"
-            git push
+            # main may have advanced during this run; rebase our data-only commit
+            # onto it and retry so the push never fails on a non-fast-forward.
+            ok=0
+            for i in 1 2 3 4 5; do
+              if git push; then ok=1; break; fi
+              echo "push rejected — rebasing onto origin/main (attempt $i)"
+              git pull --rebase origin main
+              sleep 3
+            done
+            [ "$ok" = 1 ] || { echo "push failed after retries"; exit 1; }
           fi
