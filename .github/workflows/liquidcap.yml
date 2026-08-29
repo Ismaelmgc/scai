@@ -20,9 +20,18 @@ name: SCAI liquidcap daily
 # the open via the shared morning.yml (13:45 UTC). Idempotent + stateless.
 
 on:
-  # Scheduled by the Cloudflare Worker (cloudflare/scheduler) at 03:00 UTC on
-  # weekdays — reliable trigger instead of GitHub's best-effort cron. The timing
-  # rationale above still holds; only the trigger moved. Manual runs via the button.
+  # PRIMARY trigger: the Cloudflare Worker (cloudflare/scheduler) dispatches at
+  # 03:00 UTC on weekdays. BACKUP + weekend: this GitHub-native schedule runs
+  # EVERY day so (a) a dropped Worker fire self-heals the next run and (b) Friday's
+  # session is processed on Saturday — matching the small-cap daily (0 6 * * *) —
+  # instead of being left until Monday. GitHub's cron is late/best-effort, but
+  # liquidcap has a wide buffer (close-entry, no morning fill) so late is harmless,
+  # and historically the native schedule fired every weekday without a miss. The
+  # `concurrency` group below + the last_update idempotency guard in
+  # daily_liquidcap.py make an overlapping worker+native double-fire safe: the
+  # second run finds the session already processed and only refreshes view/NAV.
+  schedule:
+    - cron: "0 3 * * *"
   workflow_dispatch: {}
 
 permissions:
