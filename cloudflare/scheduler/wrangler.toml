@@ -18,5 +18,6 @@ GITHUB_REF = "main"
 crons = [
   "0 6 * * *",        # 06:00 UTC daily  -> daily.yml     (small-cap; every day = Fri-fail self-heal)
   "0 3 * * 1-5",      # 03:00 UTC L-V    -> liquidcap.yml (S&P 500 daily)
+  "0 4 * * *",        # 04:00 UTC daily  -> bounce.yml    (dip-reversion; every day = Fri-fail self-heal)
   "32 13,14 * * 1-5", # 13:32 & 14:32 UTC -> morning.yml   (fill at 09:32 ET)
 ]
