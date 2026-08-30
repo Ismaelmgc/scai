@@ -1,0 +1,48 @@
+{
+  "cash": 500.0,
+  "last_date": "2026-08-28",
+  "positions": [
+    {
+      "ticker": "TJX",
+      "entry_date": "2026-08-28",
+      "entry_price": 135.1199951171875,
+      "shares": 0.9251036450348404,
+      "peak": 135.1199951171875,
+      "armed": false,
+      "bars_in": 0,
+      "entry_roc": -14.12
+    },
+    {
+      "ticker": "HRL",
+      "entry_date": "2026-08-28",
+      "entry_price": 21.56999969482422,
+      "shares": 5.7950858492591495,
+      "peak": 21.56999969482422,
+      "armed": false,
+      "bars_in": 0,
+      "entry_roc": -13.75
+    },
+    {
+      "ticker": "CMI",
+      "entry_date": "2026-08-28",
+      "entry_price": 564.8499755859375,
+      "shares": 0.22129769921709455,
+      "peak": 564.8499755859375,
+      "armed": false,
+      "bars_in": 0,
+      "entry_roc": -10.94
+    },
+    {
+      "ticker": "NI",
+      "entry_date": "2026-08-28",
+      "entry_price": 40.56999969482422,
+      "shares": 3.081094427909179,
+      "peak": 40.56999969482422,
+      "armed": false,
+      "bars_in": 0,
+      "entry_roc": -8.69
+    }
+  ],
+  "cooldown": {},
+  "peak_equity": 1000.0
+}

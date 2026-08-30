@@ -27,6 +27,7 @@ const WORKFLOWS = {
   liquidcap: "liquidcap.yml",
   daily: "daily.yml",
   morning: "morning.yml",
+  bounce: "bounce.yml",
 };
 
 // Map a matched cron expression (exactly as registered in wrangler.toml) to its
@@ -34,6 +35,7 @@ const WORKFLOWS = {
 const CRON_JOBS = {
   "0 6 * * *": "daily",
   "0 3 * * 1-5": "liquidcap",
+  "0 4 * * *": "bounce",
   "32 13,14 * * 1-5": "morning",
 };
 

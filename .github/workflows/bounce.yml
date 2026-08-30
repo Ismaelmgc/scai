@@ -1,0 +1,51 @@
+name: SCAI bounce daily
+
+# Third paper-trading book: dip-reversion swing on the S&P 500 (RSI<30 & A/D<15 &
+# ROC(20)<=-7%, biggest-drop-first, 8 slots, trailing-lock exit). Out-of-sample
+# forward test tracked on the dashboard (strategy "bounce").
+#
+# Simpler than the ML books: no model / no retrain / no data commit. Signals are
+# computed from a fresh yfinance pull each run; the only persistent state lives in
+# Supabase. Entry AND fills happen at the signal bar's CLOSE, so there is no
+# separate morning fill job — one self-contained daily run.
+#
+# 04:00 UTC every day: yfinance publishes the prior session's EOD hours after the
+# US close, so an overnight run has yesterday's bars. Every day (not just
+# weekdays) so a failed Friday self-heals over the weekend. Idempotent + stateless
+# (never processes a session twice).
+
+on:
+  # Scheduled by the Cloudflare Worker (cloudflare/scheduler) at 04:00 UTC daily —
+  # reliable trigger instead of GitHub's best-effort cron. Manual runs via button.
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scai-bounce
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Bounce daily
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PYTHONPATH: src
+          PYTHONIOENCODING: utf-8
+        run: python scripts/bounce_daily.py
