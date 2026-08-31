@@ -755,11 +755,17 @@
                 document.getElementById('appContent').innerHTML = '<div class="card" style="text-align:center; padding:60px;"><div style="font-size:48px;">📊</div><h2 style="justify-content:center;">Sin datos de Paper Trading</h2><p style="color:var(--text-secondary);">El pipeline aún no ha publicado datos.</p></div>';
                 return;
             }
-            const tabs = order.length > 1 ? '<div class="strategy-tabs">' + order.map(([id, name], i) => {
+            // Keep the viewer on the tab they last chose (persists across reloads /
+            // navigating away and back). Falls back to the first tab if the saved one
+            // isn't present (e.g. a strategy with no view yet).
+            let savedTab = null;
+            try { savedTab = localStorage.getItem('scaiActiveTab'); } catch { savedTab = null; }
+            const activeId = order.some(([id]) => id === savedTab) ? savedTab : order[0][0];
+            const tabs = order.length > 1 ? '<div class="strategy-tabs">' + order.map(([id, name]) => {
                 const p = views[id].paper;
-                return `<button class="strategy-tab${i === 0 ? ' active' : ''}" onclick="switchTab('${id}')">${name} <span class="tab-badge ${cls(p.total_return)}" data-live="tab-${id}">${f1(p.total_return)}%</span></button>`;
+                return `<button class="strategy-tab${id === activeId ? ' active' : ''}" onclick="switchTab('${id}')">${name} <span class="tab-badge ${cls(p.total_return)}" data-live="tab-${id}">${f1(p.total_return)}%</span></button>`;
             }).join('') + '</div>' : '';
-            const panels = order.map(([id], i) => panelHTML(id, views[id], i === 0)).join('');
+            const panels = order.map(([id]) => panelHTML(id, views[id], id === activeId)).join('');
             document.getElementById('appContent').innerHTML = tabs + panels;
 
             // Header data-info + footer from the first view
@@ -784,6 +790,7 @@
             document.querySelectorAll('.strategy-tab').forEach(t => t.classList.remove('active'));
             document.getElementById('panel-' + stratId).classList.add('active');
             event.target.closest('.strategy-tab').classList.add('active');
+            try { localStorage.setItem('scaiActiveTab', stratId); } catch { /* private mode: skip */ }
         }
 
         function createPortfolioChart(canvasId, dates, values, initialCapital, benchValues, benchLabel) {
