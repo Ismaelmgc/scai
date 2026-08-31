@@ -41,15 +41,17 @@ from app.utils import notify_telegram  # noqa: E402
 STRATEGY = "bounce"
 CAPITAL = 1000.0
 N_SLOTS = 8
-RSI_TH, AD_TH, ROC_FLOOR = 30.0, 15.0, -7.0
+RSI_TH, AD_TH, ROC_FLOOR = 35.0, 20.0, -7.0   # robust-selected config (35/20/150)
+AD_LOOKBACK = 150                              # A/D-norm min-max window
 SL, ACT, GB, FLOOR, NMAX = 0.12, 0.12, 0.02, 0.10, 60
 COOLDOWN_BARS = 5
-FETCH_DAYS = 400
+FETCH_DAYS = 500                               # >= AD_LOOKBACK + warmup
 INCEPTION = "2026-08-28"
+MAX_CANDIDATES = 10                            # top-N ranked signals published/day
 
 MEMBERSHIP_FP = ROOT / "data/liquidcap/membership_sp500.parquet"
 PT_DIR = ROOT / "data/paper_trading/bounce"
-LEGACY_FP = PT_DIR / "legacy_shadow.json"
+SEED_FP = PT_DIR / "seed_state.json"           # fresh Aug-28 book under the new config
 
 
 # ---------------------------------------------------------------- data / indicators
@@ -84,7 +86,7 @@ def fetch(tickers: list[str]) -> dict[str, pd.DataFrame]:
                 hl = (d["high"] - d["low"]).replace(0, np.nan)
                 mfv = (((d["close"] - d["low"]) - (d["high"] - d["close"])) / hl * d["vol"]).fillna(0)
                 ad = mfv.cumsum()
-                lo = ad.rolling(100, min_periods=100).min(); hi = ad.rolling(100, min_periods=100).max()
+                lo = ad.rolling(AD_LOOKBACK, min_periods=AD_LOOKBACK).min(); hi = ad.rolling(AD_LOOKBACK, min_periods=AD_LOOKBACK).max()
                 d["adnorm"] = np.where((hi - lo) != 0, (ad - lo) / (hi - lo) * 100, 50.0)
                 out[tk] = d.set_index("date")
             except Exception:
@@ -112,26 +114,16 @@ def _sync(pos: dict, day_idx: int) -> dict:
     return pos
 
 
-def migrate_legacy() -> dict | None:
-    """Seed the fresh book from the local shadow log so the days it already ran
-    carry over. Returns a superset state (build_view fields + engine fields)."""
-    if not LEGACY_FP.exists():
+def load_seed() -> dict | None:
+    """Seed the fresh book from the committed inception state (the Aug-28 book
+    re-simulated under the 35/20/150 config). Already in the superset schema
+    build_view + the engine both read, so it's returned as-is."""
+    if not SEED_FP.exists():
         return None
-    b = json.loads(LEGACY_FP.read_text())
-    day_idx = 100
-    positions = []
-    for p in b.get("positions", []):
-        pos = {"ticker": p["ticker"], "entry_date": p["entry_date"],
-               "entry_price": float(p["entry_price"]), "shares": float(p["shares"]),
-               "peak": float(p.get("peak", p["entry_price"])), "armed": bool(p.get("armed", False)),
-               "bars_in": int(p.get("bars_in", 0)), "entry_roc": float(p.get("entry_roc", np.nan))}
-        positions.append(_sync(pos, day_idx))
-    print(f"  migrated legacy shadow book: {len(positions)} open, cash €{b.get('cash', CAPITAL)}")
-    return {"initial_capital": CAPITAL, "cash": float(b.get("cash", CAPITAL)),
-            "positions": positions, "closed_trades": [], "current_day_idx": day_idx,
-            "last_update": b.get("last_date", INCEPTION), "pending_signals": [],
-            "max_positions": N_SLOTS, "cooldown": b.get("cooldown", {}),
-            "peak_equity": float(b.get("peak_equity", CAPITAL))}
+    st = json.loads(SEED_FP.read_text())
+    print(f"  loaded seed book: {len(st.get('positions', []))} open, cash €{st.get('cash', CAPITAL)}, "
+          f"last_update {st.get('last_update')}")
+    return st
 
 
 # ---------------------------------------------------------------- engine
@@ -237,7 +229,7 @@ def main() -> None:
 
     st = None if args.dry_run else supabase_store.read_state(STRATEGY)
     if st is None:
-        st = migrate_legacy() or {
+        st = load_seed() or {
             "initial_capital": CAPITAL, "cash": CAPITAL, "positions": [], "closed_trades": [],
             "current_day_idx": 100, "last_update": str(dts[-2].date()) if len(dts) > 1 else INCEPTION,
             "pending_signals": [], "max_positions": N_SLOTS, "cooldown": {}, "peak_equity": CAPITAL}
@@ -271,7 +263,7 @@ def main() -> None:
             "signal_date": today, "ticker": tk, "score": round(-roc, 4),
             "recommendation": "BUY", "was_traded": tk in entered_set,
             "skip_reason": "" if tk in entered_set else "slots llenos / ranking",
-            "actual_ret_20d": None} for tk, roc in cands[:20]])
+            "actual_ret_20d": None} for tk, roc in cands[:MAX_CANDIDATES]])
 
     PT_DIR.mkdir(parents=True, exist_ok=True)
     from app.web import dashboard_data
