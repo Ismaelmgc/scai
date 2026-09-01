@@ -15,8 +15,13 @@ name: SCAI bounce daily
 # (never processes a session twice).
 
 on:
-  # Scheduled by the Cloudflare Worker (cloudflare/scheduler) at 04:00 UTC daily —
-  # reliable trigger instead of GitHub's best-effort cron. Manual runs via button.
+  # Primary trigger is the Cloudflare Worker (cloudflare/scheduler) at 04:00 UTC.
+  # This GitHub-native cron is a BACKUP so the book still runs if the worker was
+  # never redeployed with the bounce cron / drops it (best-effort, may run late —
+  # the job is idempotent so a late/duplicate run is harmless). Every day so a
+  # failed weekday self-heals over the weekend. Manual runs via the button.
+  schedule:
+    - cron: "0 4 * * *"
   workflow_dispatch: {}
 
 permissions:
