@@ -25,6 +25,7 @@ workflow or:
 """
 from __future__ import annotations
 
+import os
 import sys
 from datetime import date
 from pathlib import Path
@@ -68,7 +69,10 @@ def main() -> None:
     active_before = int((existing["active"] == True).sum()) if existing is not None else 0  # noqa: E712
     print(f"Universe before: {n_before} tickers ({active_before} active)")
 
-    client = MassiveClient(calls_per_minute=50)
+    # Respect the workflow's env (free Polygon since 2026-06-19 = 5/min); the
+    # hardcoded 50 would 429 on the free tier and fail the refresh.
+    cpm = int(os.environ.get("MASSIVE_CALLS_PER_MINUTE", "5"))
+    client = MassiveClient(calls_per_minute=cpm)
     ref = ReferenceAPI(client)
 
     # Current active listing — drives both the flag refresh and the refill budget.
