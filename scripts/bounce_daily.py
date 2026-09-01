@@ -175,30 +175,31 @@ def process_day(st: dict, data: dict[str, pd.DataFrame], d: pd.Timestamp) -> dic
               for p in st["positions"])
     equity = st["cash"] + mtm
 
-    # 3) fill free slots with today's signals, biggest 20d drop first
+    # 3) today's signals, biggest 20d drop first. Scan ALWAYS (even with the book
+    # full) so the daily ranked candidate list is recorded for the signal history;
+    # only actually fill the free slots (cands[:free] is empty when free<=0).
     free = N_SLOTS - len(st["positions"])
     cands = []
-    if free > 0:
-        for tk, df in data.items():
-            if tk in held or d not in df.index:
-                continue
-            cd = st["cooldown"].get(tk)
-            if cd is not None and np.busday_count(pd.Timestamp(cd).date(), d.date()) < COOLDOWN_BARS:
-                continue
-            r = df.loc[d]
-            if pd.notna(r.rsi) and pd.notna(r.adnorm) and pd.notna(r.roc) \
-               and r.rsi < RSI_TH and r.adnorm < AD_TH and r.roc <= ROC_FLOOR:
-                cands.append((float(r.roc), tk, float(r.close)))
-        cands.sort()
-        for roc, tk, px in cands[:free]:
-            alloc = min(equity / N_SLOTS, st["cash"])
-            if alloc <= 0:
-                break
-            st["cash"] -= alloc
-            pos = {"ticker": tk, "entry_date": ds, "entry_price": px, "shares": alloc / px,
-                   "peak": px, "armed": False, "bars_in": 0, "entry_roc": round(roc, 2)}
-            st["positions"].append(_sync(pos, st["current_day_idx"]))
-            entered.append(tk)
+    for tk, df in data.items():
+        if tk in held or d not in df.index:
+            continue
+        cd = st["cooldown"].get(tk)
+        if cd is not None and np.busday_count(pd.Timestamp(cd).date(), d.date()) < COOLDOWN_BARS:
+            continue
+        r = df.loc[d]
+        if pd.notna(r.rsi) and pd.notna(r.adnorm) and pd.notna(r.roc) \
+           and r.rsi < RSI_TH and r.adnorm < AD_TH and r.roc <= ROC_FLOOR:
+            cands.append((float(r.roc), tk, float(r.close)))
+    cands.sort()
+    for roc, tk, px in cands[:max(free, 0)]:
+        alloc = min(equity / N_SLOTS, st["cash"])
+        if alloc <= 0:
+            break
+        st["cash"] -= alloc
+        pos = {"ticker": tk, "entry_date": ds, "entry_price": px, "shares": alloc / px,
+               "peak": px, "armed": False, "bars_in": 0, "entry_roc": round(roc, 2)}
+        st["positions"].append(_sync(pos, st["current_day_idx"]))
+        entered.append(tk)
 
     st["last_update"] = ds
     st["_today_candidates"] = [(tk, roc) for roc, tk, _ in cands]
