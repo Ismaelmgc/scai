@@ -1,6 +1,6 @@
 {
   "initial_capital": 1000.0,
-  "cash": 133.67,
+  "cash": 236.20956207627998,
   "positions": [
     {
       "side": "LONG",
@@ -12,20 +12,6 @@
       "entry_price": 11.99,
       "entry_day_idx": 88,
       "stop_loss_price": 10.0716,
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.16,
-      "holding_period_days": 20
-    },
-    {
-      "side": "LONG",
-      "shares": 42.087542,
-      "ticker": "KULR",
-      "low_price": 2.97,
-      "entry_date": "2026-08-13",
-      "high_price": 2.97,
-      "entry_price": 2.97,
-      "entry_day_idx": 93,
-      "stop_loss_price": 2.4948,
       "position_size_pct": 0.125,
       "trailing_stop_pct": 0.16,
       "holding_period_days": 20
@@ -232,12 +218,35 @@
       "exit_price": 1.93,
       "entry_price": 1.71,
       "exit_reason": "time_stop"
+    },
+    {
+      "ticker": "KULR",
+      "side": "LONG",
+      "shares": 42.087542,
+      "entry_price": 2.97,
+      "entry_date": "2026-08-13",
+      "exit_price": 2.4363,
+      "exit_date": "2026-09-01",
+      "exit_reason": "trailing_stop",
+      "pnl_pct": -0.1797,
+      "pnl_usd": -22.46,
+      "days_held": 13
     }
   ],
-  "current_day_idx": 105,
-  "last_update": "2026-08-31",
-  "pending_signals": [],
-  "cooldown_until": {},
+  "current_day_idx": 106,
+  "last_update": "2026-09-01",
+  "pending_signals": [
+    {
+      "ticker": "ELME",
+      "signal_date": "2026-09-01",
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.1,
+      "stop_loss_pct": 0.1
+    }
+  ],
+  "cooldown_until": {
+    "KULR": 111
+  },
   "max_positions": 8,
   "holding_period_days": 20,
   "commission_bps": 5.0,
