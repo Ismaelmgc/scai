@@ -1,6 +1,6 @@
 {
   "initial_capital": 1000.0,
-  "cash": 236.20956207627998,
+  "cash": 95.57696913627996,
   "positions": [
     {
       "side": "LONG",
@@ -64,7 +64,7 @@
       "ticker": "LFCR",
       "low_price": 4.54,
       "entry_date": "2026-08-21",
-      "high_price": 4.65,
+      "high_price": 4.74,
       "entry_price": 4.54,
       "entry_day_idx": 99,
       "stop_loss_price": 3.822,
@@ -92,13 +92,27 @@
       "ticker": "EDN",
       "low_price": 22.3,
       "entry_date": "2026-08-21",
-      "high_price": 23.79,
+      "high_price": 24.91,
       "entry_price": 22.3,
       "entry_day_idx": 99,
       "stop_loss_price": 19.74,
       "position_size_pct": 0.125,
       "trailing_stop_pct": 0.16,
       "holding_period_days": 20
+    },
+    {
+      "ticker": "ELME",
+      "side": "LONG",
+      "shares": 83.5845,
+      "entry_price": 1.6825,
+      "entry_date": "2026-09-02",
+      "entry_day_idx": 106,
+      "trailing_stop_pct": 0.1,
+      "holding_period_days": 20,
+      "high_price": 1.69,
+      "low_price": 1.6825,
+      "stop_loss_price": 1.5143,
+      "position_size_pct": 0.125
     }
   ],
   "closed_trades": [
@@ -220,30 +234,22 @@
       "exit_reason": "time_stop"
     },
     {
-      "ticker": "KULR",
       "side": "LONG",
       "shares": 42.087542,
-      "entry_price": 2.97,
-      "entry_date": "2026-08-13",
-      "exit_price": 2.4363,
-      "exit_date": "2026-09-01",
-      "exit_reason": "trailing_stop",
+      "ticker": "KULR",
       "pnl_pct": -0.1797,
       "pnl_usd": -22.46,
-      "days_held": 13
+      "days_held": 13,
+      "exit_date": "2026-09-01",
+      "entry_date": "2026-08-13",
+      "exit_price": 2.4363,
+      "entry_price": 2.97,
+      "exit_reason": "trailing_stop"
     }
   ],
-  "current_day_idx": 106,
-  "last_update": "2026-09-01",
-  "pending_signals": [
-    {
-      "ticker": "ELME",
-      "signal_date": "2026-09-01",
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.1,
-      "stop_loss_pct": 0.1
-    }
-  ],
+  "current_day_idx": 107,
+  "last_update": "2026-09-02",
+  "pending_signals": [],
   "cooldown_until": {
     "KULR": 111
   },
