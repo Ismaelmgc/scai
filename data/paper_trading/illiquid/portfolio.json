@@ -1,21 +1,7 @@
 {
   "initial_capital": 1000.0,
-  "cash": 95.57696913627996,
+  "cash": 225.49022442939997,
   "positions": [
-    {
-      "side": "LONG",
-      "shares": 10.425354,
-      "ticker": "FORR",
-      "low_price": 11.99,
-      "entry_date": "2026-08-06",
-      "high_price": 12.38,
-      "entry_price": 11.99,
-      "entry_day_idx": 88,
-      "stop_loss_price": 10.0716,
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.16,
-      "holding_period_days": 20
-    },
     {
       "side": "LONG",
       "shares": 10.495382,
@@ -101,18 +87,18 @@
       "holding_period_days": 20
     },
     {
-      "ticker": "ELME",
       "side": "LONG",
       "shares": 83.5845,
-      "entry_price": 1.6825,
-      "entry_date": "2026-09-02",
-      "entry_day_idx": 106,
-      "trailing_stop_pct": 0.1,
-      "holding_period_days": 20,
-      "high_price": 1.69,
+      "ticker": "ELME",
       "low_price": 1.6825,
+      "entry_date": "2026-09-02",
+      "high_price": 1.69,
+      "entry_price": 1.6825,
+      "entry_day_idx": 106,
       "stop_loss_price": 1.5143,
-      "position_size_pct": 0.125
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.1,
+      "holding_period_days": 20
     }
   ],
   "closed_trades": [
@@ -245,11 +231,32 @@
       "exit_price": 2.4363,
       "entry_price": 2.97,
       "exit_reason": "trailing_stop"
+    },
+    {
+      "ticker": "FORR",
+      "side": "LONG",
+      "shares": 10.425354,
+      "entry_price": 11.99,
+      "entry_date": "2026-08-06",
+      "exit_price": 12.4613,
+      "exit_date": "2026-09-03",
+      "exit_reason": "expiry",
+      "pnl_pct": 0.0393,
+      "pnl_usd": 4.91,
+      "days_held": 20
     }
   ],
-  "current_day_idx": 107,
-  "last_update": "2026-09-02",
-  "pending_signals": [],
+  "current_day_idx": 108,
+  "last_update": "2026-09-03",
+  "pending_signals": [
+    {
+      "ticker": "THRY",
+      "signal_date": "2026-09-03",
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "stop_loss_pct": 0.16
+    }
+  ],
   "cooldown_until": {
     "KULR": 111
   },
