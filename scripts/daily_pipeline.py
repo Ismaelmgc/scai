@@ -1047,6 +1047,13 @@ def run_paper_trading(signals: pd.DataFrame, ohlcv: pd.DataFrame,
                         "actual_ret_20d": None,
                     } for _, r in signals.iterrows()]
                     supabase_store.upsert_signals(strat, sig_rows)
+                # Overwrite live_prices with the official close so the web (which
+                # reads that table) matches this Telegram/snapshot from job-run
+                # until the next market open. The live-prices worker resumes
+                # overwriting with Finnhub quotes when the market reopens.
+                supabase_store.upsert_live_prices(
+                    {p["ticker"]: p["current_price"]
+                     for p in summary["open_positions"]})
                 print(f"  ✓ Supabase: state + nav + {len(all_closed)} trades "
                       f"+ {len(signals)} signals ({strat})")
             except Exception as e:

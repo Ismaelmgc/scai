@@ -244,6 +244,25 @@ def write_dashboard_view(strategy: str, view: dict) -> None:
           on_conflict="strategy")
 
 
+def upsert_live_prices(prices: dict[str, float]) -> None:
+    """Write the OFFICIAL daily close into ``live_prices`` (one row per ticker).
+
+    The dashboard values open positions from ``live_prices``. During US market
+    hours the Cloudflare live-prices worker overwrites these rows with Finnhub
+    quotes (real-time). Once the market closes the worker stops, so the daily job
+    overwrites them here with the same close it reports on Telegram — from job-run
+    until the next open the web and the Telegram message agree (and it is fresher
+    than the previous session's snapshot in the close→job gap).
+    """
+    if not is_configured() or not prices:
+        return
+    now = datetime.now(UTC).isoformat()
+    rows = [{"ticker": t, "price": round(float(p), 4),
+             "change_percent": 0, "updated_at": now}
+            for t, p in prices.items() if p is not None]
+    _post("live_prices", rows, on_conflict="ticker")
+
+
 def _get(table: str, params: dict) -> list[dict]:
     r = _request("GET", f"{_base_url()}/rest/v1/{table}", params=params,
                  headers=_headers(key=_read_key()))
