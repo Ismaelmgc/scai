@@ -281,6 +281,12 @@ def main() -> None:
     if view is not None:
         supabase_store.write_dashboard_view(STRATEGY, view)
         supabase_store.upsert_nav(STRATEGY, today, float(view["paper"]["total_value"]))
+        # Overwrite live_prices with the official close so the web matches the
+        # Telegram/snapshot from job-run until the next open (the live-prices
+        # worker resumes with Finnhub quotes when the market reopens).
+        supabase_store.upsert_live_prices(
+            {p["ticker"]: p["current_price"]
+             for p in view["paper"].get("positions", [])})
     print(f"  entered={entered or '[]'} closed={[t.ticker for t in closed] or '[]'} "
           f"queued={sorted(traded) or '[]'} skipped={skipped}")
 
