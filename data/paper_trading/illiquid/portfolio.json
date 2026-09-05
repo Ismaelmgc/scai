@@ -1,6 +1,6 @@
 {
   "initial_capital": 1000.0,
-  "cash": 225.49022442939997,
+  "cash": 83.89241783739996,
   "positions": [
     {
       "side": "LONG",
@@ -8,7 +8,7 @@
       "ticker": "ONEW",
       "low_price": 11.91,
       "entry_date": "2026-08-21",
-      "high_price": 12.03,
+      "high_price": 12.7,
       "entry_price": 11.91,
       "entry_day_idx": 99,
       "stop_loss_price": 10.0968,
@@ -36,7 +36,7 @@
       "ticker": "CVGI",
       "low_price": 3.21,
       "entry_date": "2026-08-21",
-      "high_price": 3.21,
+      "high_price": 3.24,
       "entry_price": 3.21,
       "entry_day_idx": 99,
       "stop_loss_price": 2.6964,
@@ -99,6 +99,20 @@
       "position_size_pct": 0.125,
       "trailing_stop_pct": 0.1,
       "holding_period_days": 20
+    },
+    {
+      "ticker": "THRY",
+      "side": "LONG",
+      "shares": 73.6384,
+      "entry_price": 1.9229,
+      "entry_date": "2026-09-04",
+      "entry_day_idx": 108,
+      "trailing_stop_pct": 0.16,
+      "holding_period_days": 20,
+      "high_price": 2.08,
+      "low_price": 1.9229,
+      "stop_loss_price": 1.6152,
+      "position_size_pct": 0.125
     }
   ],
   "closed_trades": [
@@ -233,30 +247,22 @@
       "exit_reason": "trailing_stop"
     },
     {
-      "ticker": "FORR",
       "side": "LONG",
       "shares": 10.425354,
-      "entry_price": 11.99,
-      "entry_date": "2026-08-06",
-      "exit_price": 12.4613,
-      "exit_date": "2026-09-03",
-      "exit_reason": "expiry",
+      "ticker": "FORR",
       "pnl_pct": 0.0393,
       "pnl_usd": 4.91,
-      "days_held": 20
+      "days_held": 20,
+      "exit_date": "2026-09-03",
+      "entry_date": "2026-08-06",
+      "exit_price": 12.4613,
+      "entry_price": 11.99,
+      "exit_reason": "expiry"
     }
   ],
-  "current_day_idx": 108,
-  "last_update": "2026-09-03",
-  "pending_signals": [
-    {
-      "ticker": "THRY",
-      "signal_date": "2026-09-03",
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.16,
-      "stop_loss_pct": 0.16
-    }
-  ],
+  "current_day_idx": 109,
+  "last_update": "2026-09-04",
+  "pending_signals": [],
   "cooldown_until": {
     "KULR": 111
   },
