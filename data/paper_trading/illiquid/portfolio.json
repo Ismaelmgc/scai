@@ -260,8 +260,8 @@
       "exit_reason": "expiry"
     }
   ],
-  "current_day_idx": 110,
-  "last_update": "2026-09-08",
+  "current_day_idx": 111,
+  "last_update": "2026-09-09",
   "pending_signals": [],
   "cooldown_until": {
     "KULR": 111
