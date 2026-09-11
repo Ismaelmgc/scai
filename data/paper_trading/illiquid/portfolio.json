@@ -78,7 +78,7 @@
       "ticker": "EDN",
       "low_price": 22.3,
       "entry_date": "2026-08-21",
-      "high_price": 24.91,
+      "high_price": 25.07,
       "entry_price": 22.3,
       "entry_day_idx": 99,
       "stop_loss_price": 19.74,
@@ -260,8 +260,8 @@
       "exit_reason": "expiry"
     }
   ],
-  "current_day_idx": 111,
-  "last_update": "2026-09-09",
+  "current_day_idx": 112,
+  "last_update": "2026-09-10",
   "pending_signals": [],
   "cooldown_until": {
     "KULR": 111
