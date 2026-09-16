@@ -1,6 +1,6 @@
 {
   "initial_capital": 1000.0,
-  "cash": 195.08138685286997,
+  "cash": 59.91163590286996,
   "positions": [
     {
       "side": "LONG",
@@ -99,6 +99,20 @@
       "position_size_pct": 0.125,
       "trailing_stop_pct": 0.16,
       "holding_period_days": 20
+    },
+    {
+      "ticker": "INVE",
+      "side": "LONG",
+      "shares": 51.9105,
+      "entry_price": 2.6039,
+      "entry_date": "2026-09-15",
+      "entry_day_idx": 114,
+      "trailing_stop_pct": 0.16,
+      "holding_period_days": 20,
+      "high_price": 2.6039,
+      "low_price": 2.6039,
+      "stop_loss_price": 2.1873,
+      "position_size_pct": 0.125
     }
   ],
   "closed_trades": [
@@ -246,30 +260,22 @@
       "exit_reason": "expiry"
     },
     {
-      "ticker": "ONEW",
       "side": "LONG",
       "shares": 10.495382,
-      "entry_price": 11.91,
-      "entry_date": "2026-08-21",
-      "exit_price": 10.5941,
-      "exit_date": "2026-09-14",
-      "exit_reason": "trailing_stop",
+      "ticker": "ONEW",
       "pnl_pct": -0.1105,
       "pnl_usd": -13.81,
-      "days_held": 15
+      "days_held": 15,
+      "exit_date": "2026-09-14",
+      "entry_date": "2026-08-21",
+      "exit_price": 10.5941,
+      "entry_price": 11.91,
+      "exit_reason": "trailing_stop"
     }
   ],
-  "current_day_idx": 114,
-  "last_update": "2026-09-14",
-  "pending_signals": [
-    {
-      "ticker": "INVE",
-      "signal_date": "2026-09-14",
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.16,
-      "stop_loss_pct": 0.16
-    }
-  ],
+  "current_day_idx": 115,
+  "last_update": "2026-09-15",
+  "pending_signals": [],
   "cooldown_until": {
     "KULR": 111,
     "ONEW": 119
