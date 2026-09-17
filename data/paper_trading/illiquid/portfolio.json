@@ -1,21 +1,7 @@
 {
   "initial_capital": 1000.0,
-  "cash": 59.91163590286996,
+  "cash": 160.74538026956998,
   "positions": [
-    {
-      "side": "LONG",
-      "shares": 61.576355,
-      "ticker": "RBBN",
-      "low_price": 2.03,
-      "entry_date": "2026-08-21",
-      "high_price": 2.06,
-      "entry_price": 2.03,
-      "entry_day_idx": 99,
-      "stop_loss_price": 1.7136,
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.16,
-      "holding_period_days": 20
-    },
     {
       "side": "LONG",
       "shares": 38.94081,
@@ -101,18 +87,18 @@
       "holding_period_days": 20
     },
     {
-      "ticker": "INVE",
       "side": "LONG",
       "shares": 51.9105,
-      "entry_price": 2.6039,
-      "entry_date": "2026-09-15",
-      "entry_day_idx": 114,
-      "trailing_stop_pct": 0.16,
-      "holding_period_days": 20,
-      "high_price": 2.6039,
+      "ticker": "INVE",
       "low_price": 2.6039,
+      "entry_date": "2026-09-15",
+      "high_price": 2.6039,
+      "entry_price": 2.6039,
+      "entry_day_idx": 114,
       "stop_loss_price": 2.1873,
-      "position_size_pct": 0.125
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "holding_period_days": 20
     }
   ],
   "closed_trades": [
@@ -271,14 +257,36 @@
       "exit_price": 10.5941,
       "entry_price": 11.91,
       "exit_reason": "trailing_stop"
+    },
+    {
+      "ticker": "RBBN",
+      "side": "LONG",
+      "shares": 61.576355,
+      "entry_price": 2.03,
+      "entry_date": "2026-08-21",
+      "exit_price": 1.6375,
+      "exit_date": "2026-09-16",
+      "exit_reason": "trailing_stop",
+      "pnl_pct": -0.1933,
+      "pnl_usd": -24.17,
+      "days_held": 17
     }
   ],
-  "current_day_idx": 115,
-  "last_update": "2026-09-15",
-  "pending_signals": [],
+  "current_day_idx": 116,
+  "last_update": "2026-09-16",
+  "pending_signals": [
+    {
+      "ticker": "BIRD",
+      "signal_date": "2026-09-16",
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "stop_loss_pct": 0.16
+    }
+  ],
   "cooldown_until": {
     "KULR": 111,
-    "ONEW": 119
+    "ONEW": 119,
+    "RBBN": 121
   },
   "max_positions": 8,
   "holding_period_days": 20,
