@@ -101,18 +101,18 @@
       "holding_period_days": 20
     },
     {
-      "ticker": "BIRD",
       "side": "LONG",
       "shares": 54.6921,
-      "entry_price": 2.4336,
-      "entry_date": "2026-09-17",
-      "entry_day_idx": 116,
-      "trailing_stop_pct": 0.16,
-      "holding_period_days": 20,
-      "high_price": 2.44,
+      "ticker": "BIRD",
       "low_price": 2.4336,
+      "entry_date": "2026-09-17",
+      "high_price": 2.44,
+      "entry_price": 2.4336,
+      "entry_day_idx": 116,
       "stop_loss_price": 2.0443,
-      "position_size_pct": 0.125
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "holding_period_days": 20
     }
   ],
   "closed_trades": [
@@ -286,8 +286,8 @@
       "exit_reason": "trailing_stop"
     }
   ],
-  "current_day_idx": 117,
-  "last_update": "2026-09-17",
+  "current_day_idx": 118,
+  "last_update": "2026-09-18",
   "pending_signals": [],
   "cooldown_until": {
     "KULR": 111,
