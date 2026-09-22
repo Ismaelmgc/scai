@@ -1,8 +1,8 @@
 {
-  "last_train_date": "2026-09-15",
-  "train_count": 32,
+  "last_train_date": "2026-09-22",
+  "train_count": 33,
   "last_metrics": {
-    "n_train": 831329,
+    "n_train": 832904,
     "n_features": 28,
     "n_edgar_features": 2,
     "n_meta_features": 0,
