@@ -1,6 +1,6 @@
 {
   "initial_capital": 1000.0,
-  "cash": 398.93027629888,
+  "cash": -0.00022019662003458507,
   "positions": [
     {
       "side": "LONG",
@@ -71,6 +71,48 @@
       "position_size_pct": 0.125,
       "trailing_stop_pct": 0.16,
       "holding_period_days": 20
+    },
+    {
+      "ticker": "BHR",
+      "side": "LONG",
+      "shares": 73.2168,
+      "entry_price": 1.8327,
+      "entry_date": "2026-09-22",
+      "entry_day_idx": 119,
+      "trailing_stop_pct": 0.16,
+      "holding_period_days": 20,
+      "high_price": 1.8327,
+      "low_price": 1.8327,
+      "stop_loss_price": 1.5395,
+      "position_size_pct": 0.125
+    },
+    {
+      "ticker": "ONL",
+      "side": "LONG",
+      "shares": 54.1985,
+      "entry_price": 2.4737,
+      "entry_date": "2026-09-22",
+      "entry_day_idx": 119,
+      "trailing_stop_pct": 0.16,
+      "holding_period_days": 20,
+      "high_price": 2.57,
+      "low_price": 2.4737,
+      "stop_loss_price": 2.0779,
+      "position_size_pct": 0.125
+    },
+    {
+      "ticker": "FPH",
+      "side": "LONG",
+      "shares": 26.6822,
+      "entry_price": 4.8973,
+      "entry_date": "2026-09-22",
+      "entry_day_idx": 119,
+      "trailing_stop_pct": 0.1,
+      "holding_period_days": 20,
+      "high_price": 4.92,
+      "low_price": 4.8973,
+      "stop_loss_price": 4.4076,
+      "position_size_pct": 0.125
     }
   ],
   "closed_trades": [
@@ -244,70 +286,48 @@
       "exit_reason": "trailing_stop"
     },
     {
-      "ticker": "CVGI",
       "side": "LONG",
       "shares": 38.94081,
-      "entry_price": 3.21,
-      "entry_date": "2026-08-21",
-      "exit_price": 2.9855,
-      "exit_date": "2026-09-21",
-      "exit_reason": "expiry",
+      "ticker": "CVGI",
       "pnl_pct": -0.0699,
       "pnl_usd": -8.74,
-      "days_held": 20
+      "days_held": 20,
+      "exit_date": "2026-09-21",
+      "entry_date": "2026-08-21",
+      "exit_price": 2.9855,
+      "entry_price": 3.21,
+      "exit_reason": "expiry"
     },
     {
-      "ticker": "LFCR",
       "side": "LONG",
       "shares": 27.53304,
-      "entry_price": 4.54,
-      "entry_date": "2026-08-21",
-      "exit_price": 4.4733,
-      "exit_date": "2026-09-21",
-      "exit_reason": "expiry",
+      "ticker": "LFCR",
       "pnl_pct": -0.0147,
       "pnl_usd": -1.84,
-      "days_held": 20
+      "days_held": 20,
+      "exit_date": "2026-09-21",
+      "entry_date": "2026-08-21",
+      "exit_price": 4.4733,
+      "entry_price": 4.54,
+      "exit_reason": "expiry"
     },
     {
-      "ticker": "EDN",
       "side": "LONG",
       "shares": 5.605381,
-      "entry_price": 22.3,
-      "entry_date": "2026-08-21",
-      "exit_price": 23.5247,
-      "exit_date": "2026-09-21",
-      "exit_reason": "expiry",
+      "ticker": "EDN",
       "pnl_pct": 0.0549,
       "pnl_usd": 6.86,
-      "days_held": 20
+      "days_held": 20,
+      "exit_date": "2026-09-21",
+      "entry_date": "2026-08-21",
+      "exit_price": 23.5247,
+      "entry_price": 22.3,
+      "exit_reason": "expiry"
     }
   ],
-  "current_day_idx": 119,
-  "last_update": "2026-09-21",
-  "pending_signals": [
-    {
-      "ticker": "BHR",
-      "signal_date": "2026-09-21",
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.16,
-      "stop_loss_pct": 0.16
-    },
-    {
-      "ticker": "ONL",
-      "signal_date": "2026-09-21",
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.16,
-      "stop_loss_pct": 0.16
-    },
-    {
-      "ticker": "FPH",
-      "signal_date": "2026-09-21",
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.1,
-      "stop_loss_pct": 0.1
-    }
-  ],
+  "current_day_idx": 120,
+  "last_update": "2026-09-22",
+  "pending_signals": [],
   "cooldown_until": {
     "KULR": 111,
     "ONEW": 119,
