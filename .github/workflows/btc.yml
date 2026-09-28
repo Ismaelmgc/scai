@@ -1,0 +1,48 @@
+name: SCAI BTC trend daily
+
+# Paper book "btc_trend" (replaced the retired small-cap baseline 2026-09-28):
+# BTC long/flat on the daily close vs its 100-day SMA with a 3% band. Tracked on
+# the dashboard like the other books; state lives only in Supabase (no data commit).
+#
+# 00:10 UTC every day: the Binance daily candle closes at 00:00 UTC. Fills are the
+# official candle close, so a late or duplicate run is harmless (deterministic +
+# idempotent — never processes a candle twice; a missed day is caught up in order).
+
+on:
+  # Primary trigger: the Cloudflare Worker (cloudflare/scheduler) at 00:10 UTC.
+  # This GitHub-native cron is a best-effort BACKUP in case the worker wasn't
+  # redeployed with the btc cron. Manual runs via the button.
+  schedule:
+    - cron: "40 0 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scai-btc
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -e .
+
+      - name: BTC trend daily
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PYTHONPATH: src
+          PYTHONIOENCODING: utf-8
+        run: python scripts/btc_trend_daily.py

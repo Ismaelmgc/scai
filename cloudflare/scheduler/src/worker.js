@@ -12,6 +12,7 @@
  *   06:00 UTC every day -> daily.yml      (small-cap; daily so a failed Fri self-heals Sat/Sun)
  *   03:00 UTC weekdays  -> liquidcap.yml  (S&P 500 daily; yfinance EOD ready)
  *   09:32 ET (open+2m)  -> morning.yml    (fill pending BUYs at the open; weekdays)
+ *   00:10 UTC every day -> btc.yml        (BTC trend; daily candle closes 00:00 UTC)
  *
  * The morning cron is registered at BOTH 13:32 and 14:32 UTC (one expression);
  * the handler gates on New York local time == 09:32 so exactly one of the two
@@ -28,6 +29,7 @@ const WORKFLOWS = {
   daily: "daily.yml",
   morning: "morning.yml",
   bounce: "bounce.yml",
+  btc: "btc.yml",
 };
 
 // Map a matched cron expression (exactly as registered in wrangler.toml) to its
@@ -36,6 +38,7 @@ const CRON_JOBS = {
   "0 6 * * *": "daily",
   "0 3 * * 1-5": "liquidcap",
   "0 4 * * *": "bounce",
+  "10 0 * * *": "btc",
   "32 13,14 * * 1-5": "morning",
 };
 
@@ -85,7 +88,7 @@ export default {
     ctx.waitUntil(dispatch(env, job));
   },
 
-  // Manual trigger for testing: GET the worker URL with ?job=daily|liquidcap|morning
+  // Manual trigger for testing: GET the worker URL with ?job=daily|liquidcap|morning|bounce|btc
   // to dispatch immediately (bypasses the ET gate). No arg -> usage JSON.
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -93,7 +96,7 @@ export default {
     if (!job) {
       return Response.json({
         worker: "scai-scheduler",
-        usage: "GET ?job=daily|liquidcap|morning to dispatch now",
+        usage: "GET ?job=daily|liquidcap|morning|bounce|btc to dispatch now",
         jobs: Object.keys(WORKFLOWS),
       });
     }

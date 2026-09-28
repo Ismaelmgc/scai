@@ -12,6 +12,8 @@ Cloudflare's cron and dispatches the matching GitHub Actions workflow via
 | `0 6 * * *`           | `daily.yml`     | 06:00 UTC, every day |
 | `0 3 * * 1-5`         | `liquidcap.yml` | 03:00 UTC, weekdays |
 | `32 13,14 * * 1-5`    | `morning.yml`   | 09:32 ET (open+2min), weekdays |
+| `0 4 * * *`           | `bounce.yml`    | 04:00 UTC, every day |
+| `10 0 * * *`          | `btc.yml`       | 00:10 UTC, every day (BTC daily candle closes 00:00 UTC) |
 
 These mirror the workflows' former native schedules exactly — the Cloudflare
 Worker only changes *what triggers* them (reliably), not *when*. `daily.yml`
