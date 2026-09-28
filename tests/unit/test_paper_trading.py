@@ -108,3 +108,24 @@ class TestSplitReconciliation:
         assert len(closed) == 1
         assert closed[0].exit_reason == "trailing_stop"
         assert abs(closed[0].entry_price - 10.0) < 0.01  # entry NOT rescaled
+
+
+class TestNaNPriceGuard:
+    """A NaN close must never reach the book. Regression for HPE (2026-09-22):
+    an expiry exit on a NaN close set cash=NaN, Supabase stored null, and every
+    later liquidcap run crashed in _portfolio_value."""
+
+    def test_nan_close_on_expiry_holds_and_keeps_cash(self, tmp_path):
+        pos = _position(10.0)
+        pos["entry_day_idx"] = -30  # well past the 20d holding period
+        pt = _trader(pos, tmp_path)
+        cash0 = pt.state.cash
+        closed = pt.update_positions(_ohlcv(float("nan")), "2026-06-02")
+        assert closed == []                      # no exit on a NaN price
+        assert len(pt.state.positions) == 1      # held for the next session
+        assert pt.state.cash == cash0            # cash untouched (not NaN)
+
+    def test_portfolio_value_ignores_nan_price(self, tmp_path):
+        pt = _trader(_position(10.0), tmp_path)
+        prices = _ohlcv(float("nan")).set_index("ticker")
+        assert pt._portfolio_value(prices) == pt.state.cash + 10 * 10.0  # entry fallback

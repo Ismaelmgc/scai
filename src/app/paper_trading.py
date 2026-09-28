@@ -25,6 +25,23 @@ from app.utils import get_logger
 log = get_logger(__name__)
 
 
+def _finite_price(prices: pd.DataFrame, ticker: str, col: str) -> float | None:
+    """Price for ``ticker`` from a ticker-indexed frame, or None when the row is
+    absent OR the value is NaN/inf. A NaN close must never reach the book: it
+    turns cash into NaN, which Supabase then stores as null and every later run
+    crashes on load (liquidcap froze 2026-09-22 on a NaN HPE close)."""
+    if ticker not in prices.index:
+        return None
+    v = prices.loc[ticker, col]
+    if isinstance(v, pd.Series):  # duplicated ticker row → take the last
+        v = v.iloc[-1]
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return None
+    return v if np.isfinite(v) else None
+
+
 @dataclass
 class PaperPosition:
     """A single open position in the paper portfolio."""
@@ -226,8 +243,9 @@ class PaperTrader:
                 log.info("pending_blocked_cooldown", ticker=ticker,
                          days_left=cd - self.state.current_day_idx)
                 continue
-            if ticker not in prices.index:
-                # No price data → keep pending for next day (max 3 days)
+            fill_price = _finite_price(prices, ticker, price_col)
+            if fill_price is None:
+                # No (finite) price data → keep pending for next day (max 3 days)
                 sig.setdefault("_retry", 0)
                 sig["_retry"] += 1
                 if sig["_retry"] <= 3:
@@ -236,7 +254,6 @@ class PaperTrader:
                     log.warning("signal_expired", ticker=ticker)
                 continue
 
-            fill_price = float(prices.loc[ticker, price_col])
             entry_price = fill_price * (1 + cost_pct)  # slippage + commission
 
             # Fractional shares: each name lands at exactly its equal-weight target,
@@ -354,11 +371,13 @@ class PaperTrader:
 
         for pos in self.state.positions:
             ticker = pos["ticker"]
-            if ticker not in prices.index:
+            current_price = _finite_price(prices, ticker, "close")
+            if current_price is None:
+                # Missing OR NaN close → hold and re-evaluate next session.
+                log.warning("no_finite_close_hold", ticker=ticker, date=today)
                 remaining_positions.append(pos)
                 continue
 
-            current_price = float(prices.loc[ticker, "close"])
             exit_reason = None
 
             # Update watermarks
@@ -430,9 +449,9 @@ class PaperTrader:
         """Calculate total portfolio value (cash + positions)."""
         value = self.state.cash
         for pos in self.state.positions:
-            if prices_index is not None and pos["ticker"] in prices_index.index:
-                price = float(prices_index.loc[pos["ticker"], "close"])
-            else:
+            price = (_finite_price(prices_index, pos["ticker"], "close")
+                     if prices_index is not None else None)
+            if price is None:
                 price = pos["entry_price"]
             value += pos["shares"] * price
         return value
@@ -460,9 +479,8 @@ class PaperTrader:
 
         open_positions = []
         for pos in self.state.positions:
-            current = pos["entry_price"]
-            if prices_idx is not None and pos["ticker"] in prices_idx.index:
-                current = float(prices_idx.loc[pos["ticker"], "close"])
+            current = (_finite_price(prices_idx, pos["ticker"], "close")
+                       if prices_idx is not None else None) or pos["entry_price"]
             unrealized = (current / pos["entry_price"] - 1)
             # Compute effective trail (adaptive tightens to 6% after day 5 if profitable)
             trail_pct = pos["trailing_stop_pct"]
