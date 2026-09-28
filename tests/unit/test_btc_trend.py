@@ -14,7 +14,8 @@ import btc_trend_daily as bt  # noqa: E402
 
 def _fresh() -> dict:
     return {"initial_capital": 1000.0, "cash": 1000.0, "positions": [], "closed_trades": [],
-            "current_day_idx": 0, "last_update": "2025-12-31", "pending_signals": [], "max_positions": 1}
+            "current_day_idx": 0, "last_update": "2025-12-31", "pending_signals": [],
+            "max_positions": 1}
 
 
 def test_regime_band_hysteresis():
@@ -38,7 +39,8 @@ def test_buy_then_sell_applies_costs_and_records_trade():
     assert p["entry_price"] == pytest.approx(100 * (1 + bt.COST), abs=0.01)
     assert p["ticker"] == bt.TICKER
     # trail_trigger (high*(1-pct)) must show the exit level SMA*(1-BAND)
-    assert p["high_price"] * (1 - p["trailing_stop_pct"]) == pytest.approx(90 * (1 - bt.BAND), rel=1e-3)
+    exit_level = 90 * (1 - bt.BAND)
+    assert p["high_price"] * (1 - p["trailing_stop_pct"]) == pytest.approx(exit_level, rel=1e-3)
 
     bt.process_day(st, pd.Timestamp("2026-01-02"), 120.0, 1, 95.0)
     assert st["positions"][0]["high_price"] == 120.0
