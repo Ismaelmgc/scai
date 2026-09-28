@@ -864,6 +864,10 @@ def _get_missed_trading_days(ohlcv: pd.DataFrame, last_update: str, today: str) 
     return missed
 
 
+def _retired_skips(signals: pd.DataFrame) -> dict[str, str]:
+    return {t: "libro retirado (sustituido por BTC tendencia)" for t in signals["ticker"]}
+
+
 def run_paper_trading(signals: pd.DataFrame, ohlcv: pd.DataFrame,
                       today: str, capital: float, dry_run: bool = False,
                       model=None, features: pd.DataFrame | None = None,
@@ -905,6 +909,12 @@ def run_paper_trading(signals: pd.DataFrame, ohlcv: pd.DataFrame,
         # winners; baseline Sharpe 2.52->2.79, adaptive WR 59.7% maxDD -15.1%
         profit_target=0.40,
     )
+    # Book RETIRED 2026-09-28 (replaced by the BTC trend book): drop anything still
+    # queued so the morning fill opens nothing new; open positions run off under
+    # their normal exits (<=20 sessions). Signals keep being recorded below.
+    if pt.state.pending_signals:
+        print(f"  ⏏ Retired book: dropping {len(pt.state.pending_signals)} pending signals")
+        pt.state.pending_signals = []
 
     # Derive signal tracker and log paths from portfolio path
     p_dir = Path(p_path).parent
@@ -945,8 +955,7 @@ def run_paper_trading(signals: pd.DataFrame, ohlcv: pd.DataFrame,
         if can_generate_intermediate:
             day_signals = _generate_signals_for_date(model, features, ohlcv, day, verbose=True)
             if not day_signals.empty:
-                traded, skipped = pt.process_signals(day_signals, day)
-                tracker.record_signals(day_signals, traded, skipped, day)
+                tracker.record_signals(day_signals, set(), _retired_skips(day_signals), day)
                 intermediate_signals_count += len(day_signals[day_signals["recommendation"] == "BUY"])
 
     # Process today: execute pending + update positions
@@ -969,11 +978,9 @@ def run_paper_trading(signals: pd.DataFrame, ohlcv: pd.DataFrame,
     if intermediate_signals_count:
         print(f"  ✓ Intermediate signals generated: {intermediate_signals_count} BUY across {len(intermediate_days)} days")
 
-    # Queue today's new signals for tomorrow's execution
+    # Retired book: today's signals are recorded (live-IC monitor) but never queued.
     traded_tickers: set[str] = set()
-    skip_reasons: dict[str, str] = {}
-    if not dry_run and not signals.empty:
-        traded_tickers, skip_reasons = pt.process_signals(signals, today)
+    skip_reasons = _retired_skips(signals) if not signals.empty else {}
 
     # Record ALL BUY signals in tracker (traded + skipped)
     if not signals.empty:
@@ -1290,7 +1297,7 @@ def main() -> None:
             f"{cov_line}{gap_line}\n"
             f"🟢 Señales BUY: <b>{n_buy}</b>   🔁 Retrain: {'sí' if train_metrics else 'no'}\n"
             f"{pend_line}\n\n"
-            f"<b>Baseline</b>  €{summary_a['total_value']:,.2f} ({summary_a['total_return']})"
+            f"<b>Baseline (retirando)</b>  €{summary_a['total_value']:,.2f} ({summary_a['total_return']})"
             f" · {summary_a['n_open_positions']} pos · WR {summary_a['win_rate']}"
         )
 

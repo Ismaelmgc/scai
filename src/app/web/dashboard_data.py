@@ -37,11 +37,16 @@ _BENCH_FILE = {"SPY": "smallcap_spy.parquet", "IWM": "smallcap_iwm.parquet"}
 # would otherwise stretch the x-axis before the strategy actually existed.
 _INCEPTION = {"baseline": "2026-06-11",
               "liquidcap": "2026-07-06", "illiquid": "2026-07-24",
-              "bounce": "2026-08-28"}
+              "bounce": "2026-08-28", "btc_trend": "2026-09-28"}
+
+# Crypto trades every calendar day -> NAV points are daily incl. weekends.
+_PERIODS_PER_YEAR = {"btc_trend": 365}
 
 
 def _bench_for(strategy: str) -> str:
     """Investable benchmark ticker for a strategy's chart/alpha."""
+    if strategy == "btc_trend":
+        return "BTC"            # buy&hold BTC; its closes are passed in by the job
     return "IWM" if strategy in ("baseline", "illiquid") else "SPY"
 
 
@@ -59,11 +64,14 @@ def _load_bench(symbol: str) -> pd.DataFrame | None:
     return df
 
 
-def _bench_aligned(symbol: str, chart_dates: list[str], initial_capital: float) -> list[float]:
+def _bench_aligned(symbol: str, chart_dates: list[str], initial_capital: float,
+                   bench: pd.DataFrame | None = None) -> list[float]:
     """Benchmark equity normalised to `initial_capital` at the first chart date,
     sampled on-or-before each chart date (so a buy-and-hold of the same € overlays
-    the portfolio line). [] if the benchmark data is unavailable."""
-    bench = _load_bench(symbol)
+    the portfolio line). ``bench`` (date, close) overrides the on-disk ETF file for
+    books whose benchmark isn't committed (BTC). [] if the data is unavailable."""
+    if bench is None:
+        bench = _load_bench(symbol)
     if bench is None or not chart_dates:
         return []
     target = pd.DataFrame({"date": pd.to_datetime(chart_dates)})
@@ -75,7 +83,8 @@ def _bench_aligned(symbol: str, chart_dates: list[str], initial_capital: float) 
     return [round(float(initial_capital * c / base), 2) for c in closes]
 
 
-def _compute_stats(values: list[float], bench_values: list[float]) -> dict | None:
+def _compute_stats(values: list[float], bench_values: list[float],
+                   periods_per_year: int = 252) -> dict | None:
     """Sharpe (annualised), max drawdown and alpha vs the benchmark from the NAV
     series. None when there is too little history (<10 NAV points) for the figures
     to mean anything — the paper-trading was reset 2026-06-11, so early days are noisy."""
@@ -86,7 +95,7 @@ def _compute_stats(values: list[float], bench_values: list[float]) -> dict | Non
     running_max = np.maximum.accumulate(arr)
     max_dd = float((arr / running_max - 1).min()) * 100
     std = float(rets.std())
-    sharpe = float(rets.mean() / std * np.sqrt(252)) if std > 0 else 0.0
+    sharpe = float(rets.mean() / std * np.sqrt(periods_per_year)) if std > 0 else 0.0
     total_ret = (arr[-1] / arr[0] - 1) * 100
     alpha = None
     if bench_values and len(bench_values) == len(values) and bench_values[0]:
@@ -98,7 +107,8 @@ def _compute_stats(values: list[float], bench_values: list[float]) -> dict | Non
 def load_paper_trading(ohlcv: pd.DataFrame,
                        pt_dir: Path | None = None,
                        adaptive_stop: bool = False,
-                       strategy: str | None = None) -> dict | None:
+                       strategy: str | None = None,
+                       bench: pd.DataFrame | None = None) -> dict | None:
     pt_dir = pt_dir or PAPER_TRADING_DIR
     if strategy is None:
         strategy = "baseline"
@@ -220,8 +230,8 @@ def load_paper_trading(ohlcv: pd.DataFrame,
 
     bench_symbol = _bench_for(strategy)
     base_capital = chart_values[0] if chart_values else state["initial_capital"]
-    bench_values = _bench_aligned(bench_symbol, chart_dates, base_capital)
-    stats = _compute_stats(chart_values, bench_values)
+    bench_values = _bench_aligned(bench_symbol, chart_dates, base_capital, bench)
+    stats = _compute_stats(chart_values, bench_values, _PERIODS_PER_YEAR.get(strategy, 252))
 
     return {
         "positions": positions,
@@ -307,7 +317,8 @@ def _get_data_freshness(ohlcv: pd.DataFrame) -> dict:
 
 
 def build_view(ohlcv: pd.DataFrame, pt_dir: Path, adaptive_stop: bool,
-               strategy: str | None = None) -> dict | None:
+               strategy: str | None = None,
+               bench: pd.DataFrame | None = None) -> dict | None:
     """Render-ready view for one strategy: paper + signals + data freshness.
 
     This is exactly what the client needs to paint the dashboard, so it can be
@@ -317,7 +328,7 @@ def build_view(ohlcv: pd.DataFrame, pt_dir: Path, adaptive_stop: bool,
     liquidcap/illiquid whose pt_dir isn't the small-cap baseline dir).
     """
     paper = load_paper_trading(ohlcv, pt_dir, adaptive_stop=adaptive_stop,
-                               strategy=strategy)
+                               strategy=strategy, bench=bench)
     if paper is None:
         return None
     signals = load_signal_history(pt_dir, strategy=strategy)
