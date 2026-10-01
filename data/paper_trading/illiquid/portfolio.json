@@ -1,6 +1,6 @@
 {
   "initial_capital": 1000.0,
-  "cash": -5.979562004654326e-05,
+  "cash": 145.21881465937997,
   "positions": [
     {
       "side": "LONG",
@@ -14,20 +14,6 @@
       "stop_loss_price": 16.17,
       "position_size_pct": 0.125,
       "trailing_stop_pct": 0.16,
-      "holding_period_days": 20
-    },
-    {
-      "side": "LONG",
-      "shares": 83.5845,
-      "ticker": "ELME",
-      "low_price": 1.6825,
-      "entry_date": "2026-09-02",
-      "high_price": 1.75,
-      "entry_price": 1.6825,
-      "entry_day_idx": 106,
-      "stop_loss_price": 1.5143,
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.1,
       "holding_period_days": 20
     },
     {
@@ -50,7 +36,7 @@
       "ticker": "BIRD",
       "low_price": 2.4336,
       "entry_date": "2026-09-17",
-      "high_price": 2.44,
+      "high_price": 2.61,
       "entry_price": 2.4336,
       "entry_day_idx": 116,
       "stop_loss_price": 2.0443,
@@ -101,18 +87,18 @@
       "holding_period_days": 20
     },
     {
-      "ticker": "EXFY",
       "side": "LONG",
       "shares": 55.3218,
-      "entry_price": 2.1332,
-      "entry_date": "2026-09-29",
-      "entry_day_idx": 124,
-      "trailing_stop_pct": 0.16,
-      "holding_period_days": 20,
-      "high_price": 2.24,
+      "ticker": "EXFY",
       "low_price": 2.1332,
+      "entry_date": "2026-09-29",
+      "high_price": 2.25,
+      "entry_price": 2.1332,
+      "entry_day_idx": 124,
       "stop_loss_price": 1.7919,
-      "position_size_pct": 0.125
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "holding_period_days": 20
     }
   ],
   "closed_trades": [
@@ -336,11 +322,32 @@
       "exit_price": 1.6026,
       "entry_price": 1.9229,
       "exit_reason": "trailing_stop"
+    },
+    {
+      "ticker": "ELME",
+      "side": "LONG",
+      "shares": 83.5845,
+      "entry_price": 1.6825,
+      "entry_date": "2026-09-02",
+      "exit_price": 1.7374,
+      "exit_date": "2026-09-30",
+      "exit_reason": "expiry",
+      "pnl_pct": 0.0326,
+      "pnl_usd": 4.59,
+      "days_held": 20
     }
   ],
-  "current_day_idx": 125,
-  "last_update": "2026-09-29",
-  "pending_signals": [],
+  "current_day_idx": 126,
+  "last_update": "2026-09-30",
+  "pending_signals": [
+    {
+      "ticker": "ENGN",
+      "signal_date": "2026-09-30",
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "stop_loss_pct": 0.16
+    }
+  ],
   "cooldown_until": {
     "KULR": 111,
     "ONEW": 119,
