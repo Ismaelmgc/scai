@@ -1,6 +1,6 @@
 {
   "initial_capital": 1000.0,
-  "cash": 145.21881465937997,
+  "cash": 199.36678032338003,
   "positions": [
     {
       "side": "LONG",
@@ -26,20 +26,6 @@
       "entry_price": 2.6039,
       "entry_day_idx": 114,
       "stop_loss_price": 2.1873,
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.16,
-      "holding_period_days": 20
-    },
-    {
-      "side": "LONG",
-      "shares": 54.6921,
-      "ticker": "BIRD",
-      "low_price": 2.4336,
-      "entry_date": "2026-09-17",
-      "high_price": 2.61,
-      "entry_price": 2.4336,
-      "entry_day_idx": 116,
-      "stop_loss_price": 2.0443,
       "position_size_pct": 0.125,
       "trailing_stop_pct": 0.16,
       "holding_period_days": 20
@@ -92,13 +78,27 @@
       "ticker": "EXFY",
       "low_price": 2.1332,
       "entry_date": "2026-09-29",
-      "high_price": 2.25,
+      "high_price": 2.37,
       "entry_price": 2.1332,
       "entry_day_idx": 124,
       "stop_loss_price": 1.7919,
       "position_size_pct": 0.125,
       "trailing_stop_pct": 0.16,
       "holding_period_days": 20
+    },
+    {
+      "ticker": "ENGN",
+      "side": "LONG",
+      "shares": 67.7795,
+      "entry_price": 2.013,
+      "entry_date": "2026-10-01",
+      "entry_day_idx": 126,
+      "trailing_stop_pct": 0.16,
+      "holding_period_days": 20,
+      "high_price": 2.013,
+      "low_price": 2.013,
+      "stop_loss_price": 1.6909,
+      "position_size_pct": 0.125
     }
   ],
   "closed_trades": [
@@ -324,25 +324,38 @@
       "exit_reason": "trailing_stop"
     },
     {
-      "ticker": "ELME",
       "side": "LONG",
       "shares": 83.5845,
-      "entry_price": 1.6825,
-      "entry_date": "2026-09-02",
-      "exit_price": 1.7374,
-      "exit_date": "2026-09-30",
-      "exit_reason": "expiry",
+      "ticker": "ELME",
       "pnl_pct": 0.0326,
       "pnl_usd": 4.59,
-      "days_held": 20
+      "days_held": 20,
+      "exit_date": "2026-09-30",
+      "entry_date": "2026-09-02",
+      "exit_price": 1.7374,
+      "entry_price": 1.6825,
+      "exit_reason": "expiry"
+    },
+    {
+      "ticker": "BIRD",
+      "side": "LONG",
+      "shares": 54.6921,
+      "entry_price": 2.4336,
+      "entry_date": "2026-09-17",
+      "exit_price": 3.4848,
+      "exit_date": "2026-10-01",
+      "exit_reason": "profit_target",
+      "pnl_pct": 0.4319,
+      "pnl_usd": 57.49,
+      "days_held": 11
     }
   ],
-  "current_day_idx": 126,
-  "last_update": "2026-09-30",
+  "current_day_idx": 127,
+  "last_update": "2026-10-01",
   "pending_signals": [
     {
-      "ticker": "ENGN",
-      "signal_date": "2026-09-30",
+      "ticker": "DOUG",
+      "signal_date": "2026-10-01",
       "position_size_pct": 0.125,
       "trailing_stop_pct": 0.16,
       "stop_loss_pct": 0.16
