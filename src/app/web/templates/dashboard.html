@@ -780,7 +780,7 @@
                 const p = views[id].paper;
                 window._scaiPaper[id] = p;
                 if (p.chart_dates && p.chart_dates.length) {
-                    createPortfolioChart('portfolioChart-' + id, p.chart_dates, p.chart_values, p.initial_capital, p.bench_values || p.spy_values, p.bench_label || 'SPY');
+                    createPortfolioChart('portfolioChart-' + id, p.chart_dates, p.chart_values, p.initial_capital, p.bench_values || p.spy_values, p.bench_label || 'SPY', p.bench2_values, p.bench2_label);
                 }
             }
         }
@@ -793,7 +793,7 @@
             try { localStorage.setItem('scaiActiveTab', stratId); } catch { /* private mode: skip */ }
         }
 
-        function createPortfolioChart(canvasId, dates, values, initialCapital, benchValues, benchLabel) {
+        function createPortfolioChart(canvasId, dates, values, initialCapital, benchValues, benchLabel, bench2Values, bench2Label) {
             const el = document.getElementById(canvasId);
             if (!el) return;
             if (window.scaiCharts[canvasId]) { window.scaiCharts[canvasId].destroy(); }
@@ -822,6 +822,14 @@
                     label: (benchLabel || 'SPY') + ' (mismo €)', data: benchValues,
                     borderColor: 'rgba(123, 156, 209, 0.9)',
                     borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, fill: false, tension: 0.3,
+                });
+            }
+            if (bench2Values && bench2Values.length) {
+                // Optional second reference (e.g. Nasdaq-100 on the BTC book): opportunity cost.
+                datasets.push({
+                    role: 'bench2', label: (bench2Label || 'Ref. 2') + ' (mismo €)', data: bench2Values,
+                    borderColor: 'rgba(201, 162, 39, 0.85)',
+                    borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 4, fill: false, tension: 0.3,
                 });
             }
             window.scaiCharts[canvasId] = new Chart(ctx, {
@@ -994,6 +1002,11 @@
                 chart.data.datasets[2].data = open
                     ? bench.concat([bench[bench.length - 1]])
                     : bench.slice();
+            }
+            const b2 = chart.data.datasets.find(d => d.role === 'bench2');
+            if (b2 && p.bench2_values && p.bench2_values.length) {
+                b2.data = open ? p.bench2_values.concat([p.bench2_values[p.bench2_values.length - 1]])
+                               : p.bench2_values.slice();
             }
             chart.update('none');
         }

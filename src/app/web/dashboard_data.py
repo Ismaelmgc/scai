@@ -108,7 +108,8 @@ def load_paper_trading(ohlcv: pd.DataFrame,
                        pt_dir: Path | None = None,
                        adaptive_stop: bool = False,
                        strategy: str | None = None,
-                       bench: pd.DataFrame | None = None) -> dict | None:
+                       bench: pd.DataFrame | None = None,
+                       bench2: tuple[str, pd.DataFrame] | None = None) -> dict | None:
     pt_dir = pt_dir or PAPER_TRADING_DIR
     if strategy is None:
         strategy = "baseline"
@@ -232,6 +233,12 @@ def load_paper_trading(ohlcv: pd.DataFrame,
     base_capital = chart_values[0] if chart_values else state["initial_capital"]
     bench_values = _bench_aligned(bench_symbol, chart_dates, base_capital, bench)
     stats = _compute_stats(chart_values, bench_values, _PERIODS_PER_YEAR.get(strategy, 252))
+    # Optional second reference line (e.g. Nasdaq-100 on the BTC book): opportunity
+    # cost only — alpha/stats stay against the primary benchmark.
+    bench2_label, bench2_values = None, []
+    if bench2 is not None:
+        bench2_label = bench2[0]
+        bench2_values = _bench_aligned(bench2_label, chart_dates, base_capital, bench2[1])
 
     return {
         "positions": positions,
@@ -254,6 +261,8 @@ def load_paper_trading(ohlcv: pd.DataFrame,
         "bench_values": bench_values,
         "bench_label": bench_symbol,
         "spy_values": bench_values,  # back-compat alias for cached/older clients
+        "bench2_values": bench2_values,
+        "bench2_label": bench2_label,
         "stats": stats,
     }
 
@@ -318,7 +327,8 @@ def _get_data_freshness(ohlcv: pd.DataFrame) -> dict:
 
 def build_view(ohlcv: pd.DataFrame, pt_dir: Path, adaptive_stop: bool,
                strategy: str | None = None,
-               bench: pd.DataFrame | None = None) -> dict | None:
+               bench: pd.DataFrame | None = None,
+               bench2: tuple[str, pd.DataFrame] | None = None) -> dict | None:
     """Render-ready view for one strategy: paper + signals + data freshness.
 
     This is exactly what the client needs to paint the dashboard, so it can be
@@ -328,7 +338,7 @@ def build_view(ohlcv: pd.DataFrame, pt_dir: Path, adaptive_stop: bool,
     liquidcap/illiquid whose pt_dir isn't the small-cap baseline dir).
     """
     paper = load_paper_trading(ohlcv, pt_dir, adaptive_stop=adaptive_stop,
-                               strategy=strategy, bench=bench)
+                               strategy=strategy, bench=bench, bench2=bench2)
     if paper is None:
         return None
     signals = load_signal_history(pt_dir, strategy=strategy)
