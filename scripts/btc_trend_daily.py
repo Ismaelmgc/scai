@@ -128,6 +128,19 @@ def fetch_cta() -> pd.DataFrame:
     return out[np.isfinite(out).all(axis=1) & (out > 0).all(axis=1)]
 
 
+def fetch_nasdaq() -> pd.DataFrame | None:
+    """QQQ daily closes — the dashboard's second reference line (opportunity cost vs
+    the Nasdaq-100). Optional: None on failure, the chart just omits the line."""
+    try:
+        h = yf.Ticker("QQQ").history(period="2y", auto_adjust=True)
+    except Exception:
+        return None
+    if h is None or h.empty:
+        return None
+    out = pd.DataFrame({"date": pd.to_datetime(h.index.date), "close": h["Close"].to_numpy()})
+    return out[np.isfinite(out["close"]) & (out["close"] > 0)]
+
+
 def paris_open_utc(session: pd.Timestamp) -> pd.Timestamp:
     """09:00 Paris time of a session date, as a naive UTC hour (DST-aware)."""
     return (pd.Timestamp(session.date()).tz_localize("Europe/Paris") + pd.Timedelta(hours=9)) \
@@ -291,7 +304,9 @@ def main() -> None:
     bench = data.reset_index()[["date", "close"]]
     PT_DIR.mkdir(parents=True, exist_ok=True)
     from app.web import dashboard_data
-    view = dashboard_data.build_view(ohlcv, PT_DIR, adaptive_stop=False, strategy=STRATEGY, bench=bench)
+    qqq = fetch_nasdaq()
+    view = dashboard_data.build_view(ohlcv, PT_DIR, adaptive_stop=False, strategy=STRATEGY, bench=bench,
+                                     bench2=("Nasdaq-100", qqq) if qqq is not None else None)
     if view is None:
         return
     supabase_store.write_dashboard_view(STRATEGY, view)

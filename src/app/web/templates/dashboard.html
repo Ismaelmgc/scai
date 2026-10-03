@@ -780,7 +780,7 @@
                 const p = views[id].paper;
                 window._scaiPaper[id] = p;
                 if (p.chart_dates && p.chart_dates.length) {
-                    createPortfolioChart('portfolioChart-' + id, p.chart_dates, p.chart_values, p.initial_capital, p.bench_values || p.spy_values, p.bench_label || 'SPY');
+                    createPortfolioChart('portfolioChart-' + id, p.chart_dates, p.chart_values, p.initial_capital, p.bench_values || p.spy_values, p.bench_label || 'SPY', p.bench2_values, p.bench2_label);
                 }
             }
         }
@@ -793,7 +793,7 @@
             try { localStorage.setItem('scaiActiveTab', stratId); } catch { /* private mode: skip */ }
         }
 
-        function createPortfolioChart(canvasId, dates, values, initialCapital, benchValues, benchLabel) {
+        function createPortfolioChart(canvasId, dates, values, initialCapital, benchValues, benchLabel, bench2Values, bench2Label) {
             const el = document.getElementById(canvasId);
             if (!el) return;
             if (window.scaiCharts[canvasId]) { window.scaiCharts[canvasId].destroy(); }
@@ -822,6 +822,14 @@
                     label: (benchLabel || 'SPY') + ' (mismo €)', data: benchValues,
                     borderColor: 'rgba(123, 156, 209, 0.9)',
                     borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, fill: false, tension: 0.3,
+                });
+            }
+            if (bench2Values && bench2Values.length) {
+                // Optional second reference (e.g. Nasdaq-100 on the BTC book): opportunity cost.
+                datasets.push({
+                    role: 'bench2', label: (bench2Label || 'Ref. 2') + ' (mismo €)', data: bench2Values,
+                    borderColor: 'rgba(201, 162, 39, 0.85)',
+                    borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 4, fill: false, tension: 0.3,
                 });
             }
             window.scaiCharts[canvasId] = new Chart(ctx, {
@@ -865,9 +873,45 @@
         //    freshness from updated_at. ──
         let _liveTimer = null;
         let _livePrices = {};   // ticker -> last live price from the live_prices table
-        function stopLivePrices() { if (_liveTimer) { clearInterval(_liveTimer); _liveTimer = null; } }
+        function stopLivePrices() {
+            if (_liveTimer) { clearInterval(_liveTimer); _liveTimer = null; }
+            if (_cryptoTimer) { clearInterval(_cryptoTimer); _cryptoTimer = null; }
+        }
+        // ── Crypto (24/7): BINANCE:* positions are priced straight from Binance's
+        //    public market-data API (CORS-enabled, no key) every 15s at any hour —
+        //    the Finnhub worker above only runs during US market hours. ──
+        const _cryptoPanels = new Set();   // strategy ids with a working 24/7 crypto feed
+        let _cryptoTimer = null, _lastUseLive = false;
+        function setBadge(sid, text, ok) {
+            const b = document.getElementById('liveBadge-' + sid);
+            if (!b) return;
+            const dot = b.querySelector('.status-dot');
+            if (dot) { dot.classList.toggle('ok', ok); dot.classList.toggle('stale', !ok); }
+            const lbl = b.querySelector('.live-label');
+            if (lbl) lbl.textContent = text;
+        }
+        async function pullCrypto() {
+            const rows = [...document.querySelectorAll('.positions-table tbody tr[data-ticker^="BINANCE:"]')];
+            for (const t of new Set(rows.map(r => r.dataset.ticker))) {
+                let px = NaN;
+                try {
+                    const r = await fetch('https://data-api.binance.vision/api/v3/ticker/price?symbol='
+                        + encodeURIComponent(t.split(':')[1]), { cache: 'no-store' });
+                    if (r.ok) px = Number((await r.json()).price);
+                } catch (e) { /* keep the last price; badge shows the outage */ }
+                rows.filter(r => r.dataset.ticker === t).forEach(row => {
+                    const sid = (row.closest('.strategy-panel') || { id: '' }).id.replace('panel-', '');
+                    if (!sid) return;
+                    if (isFinite(px) && px > 0) { _cryptoPanels.add(sid); setBadge(sid, 'En vivo 24/7', true); }
+                    else setBadge(sid, 'Sin conexión cripto', false);
+                });
+                if (isFinite(px) && px > 0) { _livePrices[t] = px; applyPrice(t, px); }
+            }
+            updateLiveAggregates(_lastUseLive, marketOpenET());
+        }
         function setBadges(text, ok) {
             document.querySelectorAll('[id^="liveBadge-"]').forEach(b => {
+                if (_cryptoPanels.has(b.id.slice('liveBadge-'.length))) return;   // has its own 24/7 feed
                 const dot = b.querySelector('.status-dot');
                 if (dot) { dot.classList.toggle('ok', ok); dot.classList.toggle('stale', !ok); }
                 const lbl = b.querySelector('.live-label');
@@ -959,6 +1003,11 @@
                     ? bench.concat([bench[bench.length - 1]])
                     : bench.slice();
             }
+            const b2 = chart.data.datasets.find(d => d.role === 'bench2');
+            if (b2 && p.bench2_values && p.bench2_values.length) {
+                b2.data = open ? p.bench2_values.concat([p.bench2_values[p.bench2_values.length - 1]])
+                               : p.bench2_values.slice();
+            }
             chart.update('none');
         }
         function updateLiveAggregates(useLive, open) {
@@ -967,8 +1016,10 @@
                 const p = window._scaiPaper[sid];
                 const panel = document.getElementById('panel-' + sid);
                 if (!panel || !p) continue;
-                let posValue = 0;
+                let posValue = 0, hasCrypto = false;
                 panel.querySelectorAll('.positions-table tbody tr[data-ticker]').forEach(row => {
+                    const crypto = row.dataset.ticker.startsWith('BINANCE:');
+                    hasCrypto = hasCrypto || crypto;
                     const shares = parseFloat(row.dataset.shares) || 0;
                     const prevClose = parseFloat(row.dataset.prevclose) || 0;
                     const lp = _livePrices[row.dataset.ticker];
@@ -977,7 +1028,7 @@
                     // it's the latest close — fresher than a snapshot the daily job
                     // hasn't rebuilt yet). Only fall back to the snapshot's prevClose
                     // when live data is missing/genuinely stale (worker down for days).
-                    const px = (useLive && lp != null && isFinite(lp)) ? lp : prevClose;
+                    const px = ((useLive || crypto) && lp != null && isFinite(lp)) ? lp : prevClose;
                     posValue += shares * px;
                 });
                 const totalValue = (p.cash || 0) + posValue;
@@ -988,7 +1039,7 @@
                 setLiveAgg('tab-' + sid, f1(totalReturn) + '%', totalReturn);
                 const prof = document.querySelector('[data-live="profit-' + sid + '"]');
                 if (prof) prof.textContent = f2(profit) + '€ beneficio';
-                updateChartLive(sid, totalValue, open);
+                updateChartLive(sid, totalValue, open || (hasCrypto && _cryptoPanels.has(sid)));
             }
         }
         function startLivePrices() {
@@ -1008,7 +1059,9 @@
                 if (!rows || !rows.length) { setBadges('Esperando precios', false); return; }
                 const open = marketOpenET();
                 let newest = 0;
+                _lastUseLive = false;
                 for (const row of rows) {
+                    if (row.ticker.startsWith('BINANCE:') && _cryptoPanels.size) continue;   // 24/7 feed owns it
                     _livePrices[row.ticker] = Number(row.price);
                     const ts = Date.parse(row.updated_at) || 0;
                     if (ts > newest) newest = ts;
@@ -1019,7 +1072,11 @@
                 // fall back to the snapshot if live is genuinely stale (worker down).
                 const liveFresh = newest > 0 && (Date.now() - newest) < 5 * 24 * 3600 * 1000;
                 const useLive = open || liveFresh;
-                if (useLive) for (const row of rows) applyPrice(row.ticker, Number(row.price));
+                _lastUseLive = useLive;
+                if (useLive) for (const row of rows) {
+                    if (row.ticker.startsWith('BINANCE:') && _cryptoPanels.size) continue;
+                    applyPrice(row.ticker, Number(row.price));
+                }
                 updateLiveAggregates(useLive, open);   // live tab %, KPI card and chart point
                 const ageMin = (Date.now() - newest) / 60000;
                 if (open && ageMin < 3) setBadges('En vivo', true);
@@ -1028,6 +1085,10 @@
             }
             pull();
             _liveTimer = setInterval(pull, 60000);
+            if (document.querySelector('.positions-table tbody tr[data-ticker^="BINANCE:"]')) {
+                pullCrypto();
+                _cryptoTimer = setInterval(pullCrypto, 15000);
+            }
         }
 
         // ── App lifecycle ──
