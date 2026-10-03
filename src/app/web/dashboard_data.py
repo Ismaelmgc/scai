@@ -37,7 +37,7 @@ _BENCH_FILE = {"SPY": "smallcap_spy.parquet", "IWM": "smallcap_iwm.parquet"}
 # would otherwise stretch the x-axis before the strategy actually existed.
 _INCEPTION = {"baseline": "2026-06-11",
               "liquidcap": "2026-07-06", "illiquid": "2026-07-24",
-              "bounce": "2026-08-28", "btc_trend": "2026-09-28"}
+              "bounce": "2026-08-28", "btc_trend": "2026-08-19"}
 
 # Crypto trades every calendar day -> NAV points are daily incl. weekends.
 _PERIODS_PER_YEAR = {"btc_trend": 365}
