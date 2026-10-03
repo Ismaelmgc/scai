@@ -1,6 +1,6 @@
 {
   "initial_capital": 1000.0,
-  "cash": 199.36678032338003,
+  "cash": 64.91447893588,
   "positions": [
     {
       "side": "LONG",
@@ -87,17 +87,31 @@
       "holding_period_days": 20
     },
     {
-      "ticker": "ENGN",
       "side": "LONG",
       "shares": 67.7795,
-      "entry_price": 2.013,
+      "ticker": "ENGN",
+      "low_price": 2.013,
       "entry_date": "2026-10-01",
+      "high_price": 2.013,
+      "entry_price": 2.013,
       "entry_day_idx": 126,
+      "stop_loss_price": 1.6909,
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "holding_period_days": 20
+    },
+    {
+      "ticker": "DOUG",
+      "side": "LONG",
+      "shares": 86.6135,
+      "entry_price": 1.5523,
+      "entry_date": "2026-10-02",
+      "entry_day_idx": 127,
       "trailing_stop_pct": 0.16,
       "holding_period_days": 20,
-      "high_price": 2.013,
-      "low_price": 2.013,
-      "stop_loss_price": 1.6909,
+      "high_price": 1.5523,
+      "low_price": 1.5523,
+      "stop_loss_price": 1.304,
       "position_size_pct": 0.125
     }
   ],
@@ -337,30 +351,22 @@
       "exit_reason": "expiry"
     },
     {
-      "ticker": "BIRD",
       "side": "LONG",
       "shares": 54.6921,
-      "entry_price": 2.4336,
-      "entry_date": "2026-09-17",
-      "exit_price": 3.4848,
-      "exit_date": "2026-10-01",
-      "exit_reason": "profit_target",
+      "ticker": "BIRD",
       "pnl_pct": 0.4319,
       "pnl_usd": 57.49,
-      "days_held": 11
+      "days_held": 11,
+      "exit_date": "2026-10-01",
+      "entry_date": "2026-09-17",
+      "exit_price": 3.4848,
+      "entry_price": 2.4336,
+      "exit_reason": "profit_target"
     }
   ],
-  "current_day_idx": 127,
-  "last_update": "2026-10-01",
-  "pending_signals": [
-    {
-      "ticker": "DOUG",
-      "signal_date": "2026-10-01",
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.16,
-      "stop_loss_pct": 0.16
-    }
-  ],
+  "current_day_idx": 128,
+  "last_update": "2026-10-02",
+  "pending_signals": [],
   "cooldown_until": {
     "KULR": 111,
     "ONEW": 119,
