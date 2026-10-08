@@ -1,6 +1,6 @@
 {
   "initial_capital": 1000.0,
-  "cash": 176.03708063188003,
+  "cash": 45.46110201988003,
   "positions": [
     {
       "side": "LONG",
@@ -99,6 +99,20 @@
       "position_size_pct": 0.125,
       "trailing_stop_pct": 0.16,
       "holding_period_days": 20
+    },
+    {
+      "ticker": "POWW",
+      "side": "LONG",
+      "shares": 60.3613,
+      "entry_price": 2.1632,
+      "entry_date": "2026-10-07",
+      "entry_day_idx": 130,
+      "trailing_stop_pct": 0.16,
+      "holding_period_days": 20,
+      "high_price": 2.23,
+      "low_price": 2.1632,
+      "stop_loss_price": 1.8171,
+      "position_size_pct": 0.125
     }
   ],
   "closed_trades": [
@@ -350,36 +364,28 @@
       "exit_reason": "profit_target"
     },
     {
-      "ticker": "BHR",
       "side": "LONG",
       "shares": 73.2168,
-      "entry_price": 1.8327,
-      "entry_date": "2026-09-22",
-      "exit_price": 1.5177,
-      "exit_date": "2026-10-06",
-      "exit_reason": "trailing_stop",
+      "ticker": "BHR",
       "pnl_pct": -0.1719,
       "pnl_usd": -23.06,
-      "days_held": 11
+      "days_held": 11,
+      "exit_date": "2026-10-06",
+      "entry_date": "2026-09-22",
+      "exit_price": 1.5177,
+      "entry_price": 1.8327,
+      "exit_reason": "trailing_stop"
     }
   ],
-  "current_day_idx": 130,
-  "last_update": "2026-10-06",
-  "pending_signals": [
-    {
-      "ticker": "POWW",
-      "signal_date": "2026-10-06",
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.16,
-      "stop_loss_pct": 0.16
-    }
-  ],
+  "current_day_idx": 131,
+  "last_update": "2026-10-07",
+  "pending_signals": [],
   "cooldown_until": {
+    "BHR": 135,
     "KULR": 111,
     "ONEW": 119,
     "RBBN": 121,
-    "THRY": 129,
-    "BHR": 135
+    "THRY": 129
   },
   "max_positions": 8,
   "holding_period_days": 20,
