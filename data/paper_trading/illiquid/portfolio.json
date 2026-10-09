@@ -101,18 +101,18 @@
       "holding_period_days": 20
     },
     {
-      "ticker": "POWW",
       "side": "LONG",
       "shares": 60.3613,
-      "entry_price": 2.1632,
-      "entry_date": "2026-10-07",
-      "entry_day_idx": 130,
-      "trailing_stop_pct": 0.16,
-      "holding_period_days": 20,
-      "high_price": 2.23,
+      "ticker": "POWW",
       "low_price": 2.1632,
+      "entry_date": "2026-10-07",
+      "high_price": 2.25,
+      "entry_price": 2.1632,
+      "entry_day_idx": 130,
       "stop_loss_price": 1.8171,
-      "position_size_pct": 0.125
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "holding_period_days": 20
     }
   ],
   "closed_trades": [
@@ -377,8 +377,8 @@
       "exit_reason": "trailing_stop"
     }
   ],
-  "current_day_idx": 131,
-  "last_update": "2026-10-07",
+  "current_day_idx": 132,
+  "last_update": "2026-10-08",
   "pending_signals": [],
   "cooldown_until": {
     "BHR": 135,
