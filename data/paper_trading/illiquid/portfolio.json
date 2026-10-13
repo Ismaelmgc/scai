@@ -1,6 +1,6 @@
 {
   "initial_capital": 1000.0,
-  "cash": 45.46110201988003,
+  "cash": 279.03866433738006,
   "positions": [
     {
       "side": "LONG",
@@ -32,39 +32,11 @@
     },
     {
       "side": "LONG",
-      "shares": 54.1985,
-      "ticker": "ONL",
-      "low_price": 2.4737,
-      "entry_date": "2026-09-22",
-      "high_price": 2.57,
-      "entry_price": 2.4737,
-      "entry_day_idx": 119,
-      "stop_loss_price": 2.0779,
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.16,
-      "holding_period_days": 20
-    },
-    {
-      "side": "LONG",
-      "shares": 26.6822,
-      "ticker": "FPH",
-      "low_price": 4.8973,
-      "entry_date": "2026-09-22",
-      "high_price": 4.92,
-      "entry_price": 4.8973,
-      "entry_day_idx": 119,
-      "stop_loss_price": 4.4076,
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.1,
-      "holding_period_days": 20
-    },
-    {
-      "side": "LONG",
       "shares": 55.3218,
       "ticker": "EXFY",
       "low_price": 2.1332,
       "entry_date": "2026-09-29",
-      "high_price": 2.37,
+      "high_price": 2.44,
       "entry_price": 2.1332,
       "entry_day_idx": 124,
       "stop_loss_price": 1.7919,
@@ -375,17 +347,60 @@
       "exit_price": 1.5177,
       "entry_price": 1.8327,
       "exit_reason": "trailing_stop"
+    },
+    {
+      "ticker": "ONL",
+      "side": "LONG",
+      "shares": 54.1985,
+      "entry_price": 2.4737,
+      "entry_date": "2026-09-22",
+      "exit_price": 2.1468,
+      "exit_date": "2026-10-12",
+      "exit_reason": "trailing_stop",
+      "pnl_pct": -0.1322,
+      "pnl_usd": -17.72,
+      "days_held": 14
+    },
+    {
+      "ticker": "FPH",
+      "side": "LONG",
+      "shares": 26.6822,
+      "entry_price": 4.8973,
+      "entry_date": "2026-09-22",
+      "exit_price": 4.3934,
+      "exit_date": "2026-10-12",
+      "exit_reason": "trailing_stop",
+      "pnl_pct": -0.1029,
+      "pnl_usd": -13.45,
+      "days_held": 14
     }
   ],
-  "current_day_idx": 132,
-  "last_update": "2026-10-08",
-  "pending_signals": [],
+  "current_day_idx": 133,
+  "last_update": "2026-10-12",
+  "pending_signals": [
+    {
+      "ticker": "ATNI",
+      "signal_date": "2026-10-12",
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "stop_loss_pct": 0.16
+    },
+    {
+      "ticker": "DAO",
+      "signal_date": "2026-10-12",
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "stop_loss_pct": 0.16
+    }
+  ],
   "cooldown_until": {
     "BHR": 135,
     "KULR": 111,
     "ONEW": 119,
     "RBBN": 121,
-    "THRY": 129
+    "THRY": 129,
+    "ONL": 138,
+    "FPH": 138
   },
   "max_positions": 8,
   "holding_period_days": 20,
