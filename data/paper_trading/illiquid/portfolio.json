@@ -1,6 +1,6 @@
 {
   "initial_capital": 1000.0,
-  "cash": 252.77683239438,
+  "cash": -0.0005798266200116586,
   "positions": [
     {
       "side": "LONG",
@@ -22,7 +22,7 @@
       "ticker": "EXFY",
       "low_price": 2.1332,
       "entry_date": "2026-09-29",
-      "high_price": 2.44,
+      "high_price": 2.45,
       "entry_price": 2.1332,
       "entry_day_idx": 124,
       "stop_loss_price": 1.7919,
@@ -59,31 +59,59 @@
       "holding_period_days": 20
     },
     {
-      "ticker": "ATNI",
       "side": "LONG",
       "shares": 4.9053,
-      "entry_price": 26.4797,
+      "ticker": "ATNI",
+      "low_price": 26.4797,
       "entry_date": "2026-10-13",
+      "high_price": 26.4797,
+      "entry_price": 26.4797,
       "entry_day_idx": 133,
+      "stop_loss_price": 22.2429,
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "holding_period_days": 20
+    },
+    {
+      "side": "LONG",
+      "shares": 7.3486,
+      "ticker": "DAO",
+      "low_price": 17.6264,
+      "entry_date": "2026-10-13",
+      "high_price": 19.5,
+      "entry_price": 17.6264,
+      "entry_day_idx": 133,
+      "stop_loss_price": 14.8062,
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "holding_period_days": 20
+    },
+    {
+      "ticker": "BBCP",
+      "side": "LONG",
+      "shares": 13.9632,
+      "entry_price": 9.334,
+      "entry_date": "2026-10-14",
+      "entry_day_idx": 134,
       "trailing_stop_pct": 0.16,
       "holding_period_days": 20,
-      "high_price": 26.4797,
-      "low_price": 26.4797,
-      "stop_loss_price": 22.2429,
+      "high_price": 9.334,
+      "low_price": 9.334,
+      "stop_loss_price": 7.8405,
       "position_size_pct": 0.125
     },
     {
-      "ticker": "DAO",
+      "ticker": "ELA",
       "side": "LONG",
-      "shares": 7.3486,
-      "entry_price": 17.6264,
-      "entry_date": "2026-10-13",
-      "entry_day_idx": 133,
+      "shares": 10.423,
+      "entry_price": 11.7476,
+      "entry_date": "2026-10-14",
+      "entry_day_idx": 134,
       "trailing_stop_pct": 0.16,
       "holding_period_days": 20,
-      "high_price": 18.12,
-      "low_price": 17.6264,
-      "stop_loss_price": 14.8062,
+      "high_price": 11.9,
+      "low_price": 11.7476,
+      "stop_loss_price": 9.868,
       "position_size_pct": 0.125
     }
   ],
@@ -375,59 +403,44 @@
       "exit_reason": "trailing_stop"
     },
     {
-      "ticker": "INVE",
       "side": "LONG",
       "shares": 51.9105,
-      "entry_price": 2.6039,
-      "entry_date": "2026-09-15",
-      "exit_price": 2.3664,
-      "exit_date": "2026-10-13",
-      "exit_reason": "expiry",
+      "ticker": "INVE",
       "pnl_pct": -0.0912,
       "pnl_usd": -12.33,
-      "days_held": 20
+      "days_held": 20,
+      "exit_date": "2026-10-13",
+      "entry_date": "2026-09-15",
+      "exit_price": 2.3664,
+      "entry_price": 2.6039,
+      "exit_reason": "expiry"
     },
     {
-      "ticker": "ENGN",
       "side": "LONG",
       "shares": 67.7795,
-      "entry_price": 2.013,
-      "entry_date": "2026-10-01",
-      "exit_price": 1.6276,
-      "exit_date": "2026-10-13",
-      "exit_reason": "trailing_stop",
+      "ticker": "ENGN",
       "pnl_pct": -0.1915,
       "pnl_usd": -26.13,
-      "days_held": 8
+      "days_held": 8,
+      "exit_date": "2026-10-13",
+      "entry_date": "2026-10-01",
+      "exit_price": 1.6276,
+      "entry_price": 2.013,
+      "exit_reason": "trailing_stop"
     }
   ],
-  "current_day_idx": 134,
-  "last_update": "2026-10-13",
-  "pending_signals": [
-    {
-      "ticker": "BBCP",
-      "signal_date": "2026-10-13",
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.16,
-      "stop_loss_pct": 0.16
-    },
-    {
-      "ticker": "ELA",
-      "signal_date": "2026-10-13",
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.16,
-      "stop_loss_pct": 0.16
-    }
-  ],
+  "current_day_idx": 135,
+  "last_update": "2026-10-14",
+  "pending_signals": [],
   "cooldown_until": {
     "BHR": 135,
     "FPH": 138,
     "ONL": 138,
+    "ENGN": 139,
     "KULR": 111,
     "ONEW": 119,
     "RBBN": 121,
-    "THRY": 129,
-    "ENGN": 139
+    "THRY": 129
   },
   "max_positions": 8,
   "holding_period_days": 20,
