@@ -22,7 +22,7 @@
       "ticker": "EXFY",
       "low_price": 2.1332,
       "entry_date": "2026-09-29",
-      "high_price": 2.45,
+      "high_price": 2.525,
       "entry_price": 2.1332,
       "entry_day_idx": 124,
       "stop_loss_price": 1.7919,
@@ -87,32 +87,32 @@
       "holding_period_days": 20
     },
     {
-      "ticker": "BBCP",
       "side": "LONG",
       "shares": 13.9632,
-      "entry_price": 9.334,
-      "entry_date": "2026-10-14",
-      "entry_day_idx": 134,
-      "trailing_stop_pct": 0.16,
-      "holding_period_days": 20,
-      "high_price": 9.334,
+      "ticker": "BBCP",
       "low_price": 9.334,
+      "entry_date": "2026-10-14",
+      "high_price": 9.334,
+      "entry_price": 9.334,
+      "entry_day_idx": 134,
       "stop_loss_price": 7.8405,
-      "position_size_pct": 0.125
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "holding_period_days": 20
     },
     {
-      "ticker": "ELA",
       "side": "LONG",
       "shares": 10.423,
-      "entry_price": 11.7476,
-      "entry_date": "2026-10-14",
-      "entry_day_idx": 134,
-      "trailing_stop_pct": 0.16,
-      "holding_period_days": 20,
-      "high_price": 11.9,
+      "ticker": "ELA",
       "low_price": 11.7476,
+      "entry_date": "2026-10-14",
+      "high_price": 12.04,
+      "entry_price": 11.7476,
+      "entry_day_idx": 134,
       "stop_loss_price": 9.868,
-      "position_size_pct": 0.125
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "holding_period_days": 20
     }
   ],
   "closed_trades": [
@@ -429,8 +429,8 @@
       "exit_reason": "trailing_stop"
     }
   ],
-  "current_day_idx": 135,
-  "last_update": "2026-10-14",
+  "current_day_idx": 136,
+  "last_update": "2026-10-15",
   "pending_signals": [],
   "cooldown_until": {
     "BHR": 135,
