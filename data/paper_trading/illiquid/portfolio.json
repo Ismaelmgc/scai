@@ -106,7 +106,7 @@
       "ticker": "ELA",
       "low_price": 11.7476,
       "entry_date": "2026-10-14",
-      "high_price": 12.04,
+      "high_price": 12.06,
       "entry_price": 11.7476,
       "entry_day_idx": 134,
       "stop_loss_price": 9.868,
@@ -429,8 +429,8 @@
       "exit_reason": "trailing_stop"
     }
   ],
-  "current_day_idx": 136,
-  "last_update": "2026-10-15",
+  "current_day_idx": 137,
+  "last_update": "2026-10-16",
   "pending_signals": [],
   "cooldown_until": {
     "BHR": 135,
