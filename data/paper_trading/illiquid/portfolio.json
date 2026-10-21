@@ -22,7 +22,7 @@
       "ticker": "EXFY",
       "low_price": 2.1332,
       "entry_date": "2026-09-29",
-      "high_price": 2.525,
+      "high_price": 2.55,
       "entry_price": 2.1332,
       "entry_day_idx": 124,
       "stop_loss_price": 1.7919,
@@ -429,8 +429,8 @@
       "exit_reason": "trailing_stop"
     }
   ],
-  "current_day_idx": 138,
-  "last_update": "2026-10-19",
+  "current_day_idx": 139,
+  "last_update": "2026-10-20",
   "pending_signals": [],
   "cooldown_until": {
     "BHR": 135,
