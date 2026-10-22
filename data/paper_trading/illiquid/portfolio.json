@@ -22,7 +22,7 @@
       "ticker": "EXFY",
       "low_price": 2.1332,
       "entry_date": "2026-09-29",
-      "high_price": 2.55,
+      "high_price": 2.61,
       "entry_price": 2.1332,
       "entry_day_idx": 124,
       "stop_loss_price": 1.7919,
@@ -50,7 +50,7 @@
       "ticker": "POWW",
       "low_price": 2.1632,
       "entry_date": "2026-10-07",
-      "high_price": 2.33,
+      "high_price": 2.34,
       "entry_price": 2.1632,
       "entry_day_idx": 130,
       "stop_loss_price": 1.8171,
@@ -429,8 +429,8 @@
       "exit_reason": "trailing_stop"
     }
   ],
-  "current_day_idx": 139,
-  "last_update": "2026-10-20",
+  "current_day_idx": 140,
+  "last_update": "2026-10-21",
   "pending_signals": [],
   "cooldown_until": {
     "BHR": 135,
