@@ -10,15 +10,12 @@ GITHUB_REPO = "Ismaelmgc/scai"
 GITHUB_REF = "main"
 
 # Cloudflare cron is reliable (GitHub's scheduled cron is best-effort and runs
-# late / gets dropped). Times are UTC. These mirror the workflows' own former
-# schedules exactly — only the TRIGGER moves to Cloudflare, not the timing. The
-# worker routes each matched expression to a workflow and — for the morning one —
-# gates precisely by New York time so it fires at 09:32 ET (open+2min) year-round.
+# late / gets dropped). Times are UTC; the worker routes each matched
+# expression to its workflow (see src/worker.js).
 [triggers]
 crons = [
   "0 6 * * *",        # 06:00 UTC daily  -> daily.yml     (small-cap; every day = Fri-fail self-heal)
   "0 3 * * 1-5",      # 03:00 UTC L-V    -> liquidcap.yml (S&P 500 daily)
   "0 4 * * *",        # 04:00 UTC daily  -> bounce.yml    (dip-reversion; every day = Fri-fail self-heal)
-  "32 13,14 * * 1-5", # 13:32 & 14:32 UTC -> morning.yml   (fill at 09:32 ET)
   "10 0 * * *",       # 00:10 UTC daily  -> btc.yml       (BTC trend; candle closes 00:00 UTC)
 ]

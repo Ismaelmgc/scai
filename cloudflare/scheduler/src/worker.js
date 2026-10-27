@@ -8,16 +8,12 @@
  * on time regardless of GitHub's own scheduler. The workflows keep their
  * workflow_dispatch trigger (manual "Run workflow" still works).
  *
- * Jobs (times mirror the workflows' former native schedules exactly):
- *   06:00 UTC every day -> daily.yml      (small-cap; daily so a failed Fri self-heals Sat/Sun)
- *   03:00 UTC weekdays  -> liquidcap.yml  (S&P 500 daily; yfinance EOD ready)
- *   09:32 ET (open+2m)  -> morning.yml    (fill pending BUYs at the open; weekdays)
- *   00:10 UTC every day -> btc.yml        (BTC trend; daily candle closes 00:00 UTC)
- *
- * The morning cron is registered at BOTH 13:32 and 14:32 UTC (one expression);
- * the handler gates on New York local time == 09:32 so exactly one of the two
- * fires per season (EDT vs EST) — the same DST-robust trick the native workflow
- * uses, just 13 min earlier (open+2min instead of 09:45).
+ * Jobs:
+ *   00:10 UTC every day -> btc.yml        (BTC <-> managed futures; daily candle closes 00:00 UTC)
+ *   03:00 UTC weekdays  -> liquidcap.yml  (S&P 500 book; yfinance EOD ready)
+ *   04:00 UTC every day -> bounce.yml     (S&P 500 dip-reversion shadow book)
+ *   06:00 UTC every day -> daily.yml      (small-cap model + illiquid shadow book;
+ *                                          daily so a failed Fri self-heals Sat/Sun)
  *
  * Config: GITHUB_REPO, GITHUB_REF in wrangler.toml [vars].
  * Secret (wrangler secret put): GITHUB_TOKEN — fine-grained PAT on this repo
@@ -27,31 +23,17 @@
 const WORKFLOWS = {
   liquidcap: "liquidcap.yml",
   daily: "daily.yml",
-  morning: "morning.yml",
   bounce: "bounce.yml",
   btc: "btc.yml",
 };
 
-// Map a matched cron expression (exactly as registered in wrangler.toml) to its
-// job. The morning entry is additionally ET-gated in scheduled().
+// Map a matched cron expression (exactly as registered in wrangler.toml) to its job.
 const CRON_JOBS = {
   "0 6 * * *": "daily",
   "0 3 * * 1-5": "liquidcap",
   "0 4 * * *": "bounce",
   "10 0 * * *": "btc",
-  "32 13,14 * * 1-5": "morning",
 };
-
-function nyHourMinute(now = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-  }).formatToParts(now);
-  const get = (t) => Number(parts.find((x) => x.type === t).value);
-  return { hour: get("hour"), minute: get("minute") };
-}
 
 async function dispatch(env, job) {
   const file = WORKFLOWS[job];
@@ -79,24 +61,18 @@ export default {
   async scheduled(event, env, ctx) {
     const job = CRON_JOBS[event.cron];
     if (!job) return;
-    if (job === "morning") {
-      // The 13,14 cron fires twice (EDT and EST candidates); only the one that
-      // lands on 09:32 New York time is the real open+2min for the season.
-      const { hour, minute } = nyHourMinute();
-      if (!(hour === 9 && minute === 32)) return;
-    }
     ctx.waitUntil(dispatch(env, job));
   },
 
-  // Manual trigger for testing: GET the worker URL with ?job=daily|liquidcap|morning|bounce|btc
-  // to dispatch immediately (bypasses the ET gate). No arg -> usage JSON.
+  // Manual trigger for testing: GET the worker URL with ?job=daily|liquidcap|bounce|btc
+  // to dispatch immediately. No arg -> usage JSON.
   async fetch(request, env) {
     const url = new URL(request.url);
     const job = url.searchParams.get("job");
     if (!job) {
       return Response.json({
         worker: "scai-scheduler",
-        usage: "GET ?job=daily|liquidcap|morning|bounce|btc to dispatch now",
+        usage: "GET ?job=daily|liquidcap|bounce|btc to dispatch now",
         jobs: Object.keys(WORKFLOWS),
       });
     }

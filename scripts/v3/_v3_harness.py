@@ -59,8 +59,8 @@ V2_EDGAR_FEATURES = ['dilution_pct', 'current_ratio']
 # into the future (price T..T+20 leaked back as feature at T).
 # Fixed filter is `signal_date < current_date - 30d`, after which meta-features
 # show no improvement (IC 0.005 vs 0.012, return 20% vs 26%, WR equal).
-# Removed from production. See `_ab_meta.py` for the test.
-V2_META_FEATURES: list[str] = []
+# Removed from production (no spec uses meta-features). See
+# scripts/archived/_compare_meta.py for the comparison.
 
 V2_LGB_PARAMS = {
     "objective": "regression", "metric": "rmse",

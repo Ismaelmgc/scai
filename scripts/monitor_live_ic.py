@@ -53,7 +53,9 @@ MIN_TRADED = 30            # below this many matured TRADED signals, WR/selectio
 REF_IC = 0.008
 REF_WR_LO, REF_WR_HI = 0.51, 0.60
 
-STRATEGIES = ("baseline", "adaptive")
+# Signals the small-cap daily pipeline records under the historical key "baseline"
+# (the book itself retired 2026-10; the adaptive book retired 2026-08).
+STRATEGIES = ("baseline",)
 
 
 def _fwd_returns(ohlcv: pd.DataFrame) -> pd.DataFrame:

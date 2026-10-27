@@ -1,15 +1,9 @@
-"""Free data sources for SCAI historical extension and enrichment.
+"""Free data sources.
 
-Architecture:
-    Massive/Polygon = source of truth (2021+, vwap+transactions)
-    Yahoo           = historical OHLCV extension (2019-2021 gap)
-    SEC EDGAR       = fundamentals / corporate events (point-in-time)
-    FRED            = macro/regime context
-    Finnhub         = free real-time quotes (live prices, replaces paid snapshots)
+    Yahoo     = liquidcap prices (dividend-adjusted) + small-cap historical extension
+    SEC EDGAR = fundamentals, point-in-time by filing date (both products)
 
 Usage:
     from app.data.free_sources.yahoo import download_yahoo_ohlcv
     from app.data.free_sources.sec_edgar import download_company_facts
-    from app.data.free_sources.fred import download_fred_macro
-    from app.data.free_sources.finnhub import get_quotes, public_token
 """

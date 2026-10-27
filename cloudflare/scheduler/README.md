@@ -5,23 +5,18 @@ best-effort (runs late / gets dropped under load); this Worker fires on
 Cloudflare's cron and dispatches the matching GitHub Actions workflow via
 `workflow_dispatch`, so the jobs run on time.
 
-## What it triggers (weekdays)
+## What it triggers
 
-| Cloudflare cron (UTC) | Workflow        | When              |
-| --------------------- | --------------- | ----------------- |
-| `0 6 * * *`           | `daily.yml`     | 06:00 UTC, every day |
-| `0 3 * * 1-5`         | `liquidcap.yml` | 03:00 UTC, weekdays |
-| `32 13,14 * * 1-5`    | `morning.yml`   | 09:32 ET (open+2min), weekdays |
-| `0 4 * * *`           | `bounce.yml`    | 04:00 UTC, every day |
-| `10 0 * * *`          | `btc.yml`       | 00:10 UTC, every day (BTC daily candle closes 00:00 UTC) |
+| Cloudflare cron (UTC) | Workflow        | When |
+| --------------------- | --------------- | ---- |
+| `10 0 * * *`          | `btc.yml`       | 00:10 UTC every day (BTC daily candle closes 00:00 UTC) |
+| `0 3 * * 1-5`         | `liquidcap.yml` | 03:00 UTC weekdays |
+| `0 4 * * *`           | `bounce.yml`    | 04:00 UTC every day |
+| `0 6 * * *`           | `daily.yml`     | 06:00 UTC every day |
 
-These mirror the workflows' former native schedules exactly — the Cloudflare
-Worker only changes *what triggers* them (reliably), not *when*. `daily.yml`
-runs every day on purpose: it's idempotent, and a weekend run self-heals a failed
-Friday.
-
-The morning cron fires at both 13:32 and 14:32 UTC; the Worker only dispatches
-the one that is 09:32 in New York, so it stays at open+2min across EDT and EST.
+All jobs are idempotent (Supabase state guards), so a duplicate trigger — e.g.
+a workflow's own backup `schedule:` firing as well — is harmless. `daily.yml`
+runs every day on purpose: a weekend run self-heals a failed Friday.
 
 ## Config & secret
 
@@ -45,19 +40,10 @@ wrangler deploy
 The deploy prints the Worker URL (`https://scai-scheduler.<subdomain>.workers.dev`).
 
 ```bash
-curl "https://scai-scheduler.<subdomain>.workers.dev/?job=daily"      # dispatch small-cap daily now
-curl "https://scai-scheduler.<subdomain>.workers.dev/?job=liquidcap"  # dispatch liquidcap daily now
-curl "https://scai-scheduler.<subdomain>.workers.dev/?job=morning"    # dispatch morning fill now
+curl "https://scai-scheduler.<subdomain>.workers.dev/?job=btc"        # dispatch the BTC book now
+curl "https://scai-scheduler.<subdomain>.workers.dev/?job=liquidcap"  # dispatch liquidcap now
 ```
 
 A successful dispatch returns `{"job":...,"status":204}` and a run appears under
 GitHub → Actions for that workflow. Watch a scheduled fire live with
 `wrangler tail`.
-
-## Rollout note
-
-While both this Worker and the workflows' own `schedule:` crons are active, a job
-can be triggered twice (harmless — the jobs are idempotent via Supabase state).
-Once the Worker is verified, remove the `schedule:` block from `daily.yml`,
-`liquidcap.yml`, and `morning.yml` (keep `workflow_dispatch:`) so the Worker is
-the sole scheduled trigger and there is no duplicate work.

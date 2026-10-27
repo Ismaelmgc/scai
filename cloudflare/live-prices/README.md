@@ -3,8 +3,9 @@
 A Cloudflare Worker that polls Finnhub REST for the open-position tickers every
 minute during US market hours and upserts them into the Supabase `live_prices`
 table (one row per ticker, constant size). The logged-in dashboard reads that
-table to show live prices for small-caps (Finnhub's free WebSocket doesn't
-stream them; its REST does, but only server-side — no CORS).
+table to show live prices for the stock positions (Finnhub's REST has no CORS, so
+it must be called server-side). Crypto positions don't need this worker: the
+dashboard prices them 24/7 straight from Binance's public API in the browser.
 
 ## One-time deploy
 
