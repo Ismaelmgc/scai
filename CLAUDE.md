@@ -10,7 +10,9 @@ Plataforma de investigación + *paper trading* algorítmico, automatizada en Git
 Actions con estado en Supabase. Libros en vivo (€1.000 c/u):
 
 - **liquidcap** — S&P 500, LGB LambdaRank (25 features: 15 precio/volumen + 10
-  fundamentales EDGAR point-in-time), top-8, 20d, entrada al cierre (MOC-sim). Producto principal.
+  fundamentales EDGAR point-in-time), **4 tandas de top-8 (máx. 2/sector GICS)**, 20d,
+  entrada al cierre (MOC-sim). Producto principal. Motor único `app/engine/cohort_book.py`
+  (el backtest y el job diario ejecutan el mismo `step()`; test de paridad).
 - **btc_trend** — BTC comprado si cierre > SMA100·1,03, fuera si < SMA100·0,97; fuera →
   ETF UCITS de futuros gestionados (`DBMF.PA`). Libro re-sembrado desde la señal real (2026-08-19).
 - **bounce** (sombra) — compra de caídas en el S&P 500. **illiquid** (sombra) — prima de
@@ -28,8 +30,10 @@ Desarrollado en macOS arm64; esta copia corre en **Windows** (`.venv/`, Python 3
 ## Métricas honestas (no citar las antiguas)
 
 - **liquidcap**: backtest purgado 34 folds 2018-26 = +1,69%/mes coste plano 5 pb,
-  +0,95%/mes con spread. "Sharpe 2,43" = media de Sharpes por fold de 3 meses; el
-  Sharpe mensual de cartera es ≈0,7 (≈ SPY).
+  +0,95%/mes con spread. "Sharpe 2,43" = media de Sharpes por fold de 3 meses. Con el
+  motor de tandas + límite de sector: ~22%/año, Sharpe 0,89, caída máx. −27%. Hasta
+  2026-10 el libro en vivo operaba 8 huecos (Sharpe 0,65, caída −48% en la misma
+  reproducción). Sus features tienen sector "Unknown": target relativo al MERCADO.
 - **btc_trend**: 2015-26 ~69%/año pero **máx. caída ~−71%** (2018); 2019-26 ~59-63%/año,
   máx. caída −21% mensual / −31% diaria. Las tablas que empiezan en 2019 infravaloran el riesgo.
 - **small cap**: +1-1,4%/mes con coste plano, ~0% con spread. Las cifras pre-julio
@@ -42,7 +46,7 @@ Desarrollado en macOS arm64; esta copia corre en **Windows** (`.venv/`, Python 3
 make test lint          # lo que corre el CI (pytest tests/unit + ruff src/ tests/)
 make btc-dry            # cualquier libro sin escribir: btc-dry / liquidcap-dry / bounce-dry / smallcap-dry
 make web                # dashboard local → http://localhost:8501
-make leak-check         # verificador anti-fuga (puerta MANUAL al cambiar features/spec)
+make leak-check         # verificador anti-fuga a demanda (también corre en cada reentreno)
 ```
 
 `make smallcap-dry` / `scai run` necesitan `data/processed/ohlcv_smallcap.parquet` (en git).
@@ -53,10 +57,15 @@ El panel de liquidcap está en `.gitignore` y lo reconstruye su job.
 - `scripts/liquidcap/daily_liquidcap.py` — ★ libro S&P 500 (reentreno semanal purgado
   por construcción + refresco EDGAR + panel **ajustado por dividendos** vía yfinance;
   NO usar Polygon aquí: solo ajusta splits y corrompe features en ex-dividendo).
+  Puntúa y procesa TODAS las sesiones pendientes (recupera caídas solo).
+- `src/app/engine/cohort_book.py` — motor de liquidcap; `scripts/liquidcap/backtest_cohorts.py`
+  lo aplica a las predicciones del harness (local: necesita panel + caché).
+- `src/app/books/publish.py` — `publish_book()`: publicación común de los 4 libros.
+- `src/app/features/leak_checks.py` — puerta anti-fuga que corre en cada reentrenamiento.
 - `scripts/btc_trend_daily.py` — libro BTC ↔ CTA (órdenes pendientes hasta la siguiente
   apertura de París; nunca rellena con precios no finitos).
-- `scripts/daily_pipeline.py` — modelo small cap: datos Polygon, features, reentreno c/7d,
-  señales (registradas en Supabase `signals` con clave histórica `"baseline"`). Ya no opera libro.
+- `scripts/daily_pipeline.py` — orquesta el modelo small cap (`src/app/smallcap/`: data,
+  features, model, signals); señales en Supabase `signals` clave `"baseline"`. Sin libro.
 - `scripts/illiquid_shadow.py`, `scripts/bounce_daily.py` — libros sombra.
 - `scripts/monitor_live_ic.py` — única alarma fuera de muestra del modelo small cap
   (IC en vivo por fecha; DEGRADADO → exit 2 → run en rojo → email).
@@ -68,8 +77,8 @@ El panel de liquidcap está en `.gitignore` y lo reconstruye su job.
 
 1. **Anti-fuga (OBLIGATORIO)**: features = info disponible a las 00:00 de T; `as_of()` /
    `lag_safe_merge()`; datos externos por fecha de publicación. Cambiar features o spec
-   exige pasar el harness purgado **y** `scripts/v3/18_verify_no_leak.py` (no se ejecuta
-   solo en los reentrenos semanales: hay que lanzarlo).
+   exige pasar el harness purgado. La puerta `leak_checks` corre sola en cada reentreno
+   (falla → run rojo, se conserva el modelo anterior).
 2. **n_jobs=1** en todos los modelos ML.
 3. Sin código muerto, sin abstracciones prematuras, sin configuración decorativa. Al
    borrar un módulo, borrar sus tests.
@@ -78,8 +87,10 @@ El panel de liquidcap está en `.gitignore` y lo reconstruye su job.
    instrumento ejecutable (PRIIPs); usar acciones, cripto nativa de IBKR o UCITS.
 6. Git: rama → PR → CI verde → merge. Los *hotfix* de producción de los jobs pueden ir
    directos a `main`. Antes de subir: `make lint test`.
-7. Dependencias pesadas con techo de versión en `pyproject.toml` (el CI instala desde
-   cero en cada ejecución; pyarrow 26 rompió todos los jobs el 2026-10-09).
+7. Dependencias **bloqueadas** en `requirements.lock` (CI instala exactamente eso; tras
+   tocar `pyproject.toml`: `make lock`). Motivo: pyarrow 26 rompió todos los jobs el 2026-10-09.
+8. Si backtest y vivo comparten lógica, UNA implementación en `src/app/` + test de paridad
+   (backtest y vivo divergieron 3 veces: entrada apertura/cierre, splits, construcción).
 
 ## Fuentes de datos
 

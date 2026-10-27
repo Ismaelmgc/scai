@@ -23,7 +23,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install
-        run: pip install -e .
+        run: pip install -r requirements.lock && pip install --no-deps -e .
 
       - name: Refresh universe
         env:

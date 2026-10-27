@@ -23,7 +23,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -e ".[dev]"
+          pip install -r requirements.lock && pip install --no-deps -e .
 
       - name: Lint
         run: ruff check src/ tests/

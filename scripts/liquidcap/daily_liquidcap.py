@@ -5,8 +5,12 @@ Frozen spec (combo screen 2026-07-06, `GI_fs15_fund_20d`):
              membership monthly with build_universe_sp500.py)
   model      LGB LambdaRank 16 bins, 300 trees, 25 features =
              FS15 price/volume + 10 SEC-EDGAR fundamental ratios
-  portfolio  top-8 equal-weight, hold 20d, rebalance implicit via slots,
-             trailing ATR [10%,16%] + profit target +40%, cost-aware fills
+  portfolio  app.engine.cohort_book — the SAME engine the backtest runs
+             (scripts/liquidcap/backtest_cohorts.py): 4 overlapping cohorts, one
+             rotates every 5 sessions into the top-8 (max 2 per GICS sector),
+             trailing ATR [10%,16%] + profit target +40% + 20-session expiry,
+             fills at the close ±15 bps. Until 2026-10 the live book ran 8
+             refill-on-exit slots instead (≈1.3x the validated volatility).
   backtest   +1.69%/mo flat 5bps (+0.95%/mo spread-aware), 34 purged folds
              2018-2026. "Sharpe 2.43" is the MEAN of per-fold 3-month Sharpes; the
              monthly portfolio Sharpe rebuilt from the trades is ~0.7 (≈ SPY's) —
@@ -17,10 +21,11 @@ Flow per run (after US close):
   2. weekly: refresh EDGAR facts + rebuild fundamentals + FULL feature build
      + retrain (purged by construction: recent rows have NaN 20d targets and
      are dropped) -> model pkl
-  3. daily: features on a trailing window, score the latest session
-  4. PaperTrader: update positions/exits at close(S) -> select today's top-8
-     -> enter them at that SAME close(S) (MOC-sim close-entry, matches backtest)
-  5. state -> Supabase strategy "liquidcap"
+  3. daily: features on a trailing window; score EVERY session not processed
+     yet (a missed run is caught up automatically, in order)
+  4. engine step per session: exits at close(S), then the due cohort enters
+     the top-8 at that SAME close(S) (market-on-close simulation)
+  5. publish: state, signals, NAV per session, dashboard view -> Supabase
 
 Usage:
     PYTHONPATH=src python scripts/liquidcap/daily_liquidcap.py [--dry-run]
@@ -32,7 +37,6 @@ import json
 import subprocess
 import sys
 import time
-from dataclasses import asdict
 from datetime import date
 from pathlib import Path
 
@@ -48,15 +52,18 @@ from dotenv import load_dotenv
 load_dotenv(ROOT / ".env")
 
 import lightgbm as lgb  # noqa: E402
-from app.features.lags import add_lag_features  # noqa: E402
-
-from app.data import supabase_store  # noqa: E402
-from app.data.free_sources.yahoo import download_yahoo_ohlcv  # noqa: E402
-from app.features.pipeline import build_feature_matrix  # noqa: E402
-from app.paper_trading import PaperTrader  # noqa: E402
-from app.utils import notify_telegram  # noqa: E402
 from build_features_liquidcap import add_new_features  # noqa: E402
 from build_fundamentals import RATIOS  # noqa: E402
+
+from app.books.publish import publish_book  # noqa: E402
+from app.data import supabase_store  # noqa: E402
+from app.data.free_sources.yahoo import download_yahoo_ohlcv  # noqa: E402
+from app.engine import cohort_book as cb  # noqa: E402
+from app.features.lags import add_lag_features  # noqa: E402
+from app.features.leak_checks import assert_no_leak  # noqa: E402
+from app.features.pipeline import build_feature_matrix  # noqa: E402
+from app.features.tradability import tradable_mask  # noqa: E402
+from app.utils import notify_telegram  # noqa: E402
 
 DATA = ROOT / "data" / "liquidcap"
 PANEL_FP = DATA / "ohlcv_sp500.parquet"
@@ -68,6 +75,8 @@ STRATEGY = "liquidcap"
 TARGET = "fwd_ret_20d_sector_rel"
 RETRAIN_DAYS = 7
 SCORE_WINDOW_DAYS = 700  # calendar; covers the 252-trading-day features
+CFG = cb.BookConfig()    # frozen live config (cost 15 bps/side = IBKR-like + slippage)
+SECTORS_FP = DATA / "gics_sectors.json"
 
 FS15 = ["ret_252d", "sector_ret_60d", "rev_21d", "realized_vol_120d", "amihud_60d",
         "beta_60d", "downside_vol_60d", "sma_200", "ema_26", "max_dd_60d",
@@ -150,6 +159,7 @@ def retrain(panel: pd.DataFrame, spy: pd.DataFrame, members: list[str]) -> None:
     tr["_rel"] = tr["_rel"].fillna(0).astype(int).clip(0, 15)
     tr = tr.sort_values("date")
     feat_cols = [f for f in FEATURES if f in tr.columns]
+    assert_no_leak(tr, feat_cols, TARGET)                     # raises -> model not saved
     ds = lgb.Dataset(tr[feat_cols].fillna(0).values, tr["_rel"].values,
                      group=tr.groupby("date").size().values,
                      feature_name=feat_cols, free_raw_data=True)
@@ -197,117 +207,89 @@ def main() -> None:
     if retrained:
         retrain(panel, spy, members)
 
-    # Daily scoring on a trailing window (features need 252 trading days)
+    # Score on a trailing window (features need 252 trading days) — every
+    # session the book has not processed yet, not just the latest one.
     cutoff = panel["date"].max() - pd.Timedelta(days=SCORE_WINDOW_DAYS)
-    feats = build_features(panel[panel.date >= cutoff], spy[spy.date >= cutoff],
-                           members)
-    latest = feats["date"].max()
-    today = str(latest.date())
-    day = feats[feats["date"] == latest].dropna(subset=["close"]).copy()
+    feats = build_features(panel[panel.date >= cutoff], spy[spy.date >= cutoff], members)
     meta = json.loads((DATA / "model_meta.json").read_text())
     model = lgb.Booster(model_file=str(MODEL_FP))
-    day["score"] = model.predict(day[meta["features"]].fillna(0).values)
-    day = day.sort_values("score", ascending=False)
+    sectors = json.loads(SECTORS_FP.read_text(encoding="utf-8")) if SECTORS_FP.exists() else {}
 
-    top = day.head(8).copy()
-    atr = top["atr_pct_20d"].fillna(0.02).clip(lower=0.005)
-    top["recommendation"] = "BUY"
-    top["position_size_pct"] = 1.0 / 8
-    top["trailing_stop_pct"] = (atr * 5.3).clip(0.10, 0.16)
-    top["stop_loss_pct"] = top["trailing_stop_pct"]
-    signals = top[["ticker", "recommendation", "position_size_pct",
-                   "trailing_stop_pct", "stop_loss_pct"]]
-    print(f"  {today}: top-8 = {list(signals.ticker)}")
+    raw = supabase_store.read_state(STRATEGY)
+    if raw is None:
+        state = cb.new_book(1000.0, CFG, last_update=str((feats["date"].max()
+                                                          - pd.Timedelta(days=1)).date()))
+        print("  new cohort book (€1,000)")
+    elif raw.get("engine") != "cohorts_v1":
+        state = cb.from_slot_book(raw, CFG, sectors)       # one-off, no sales
+        print(f"  migrated 8-slot book -> cohorts ({len(state.legacy)} legacy positions)")
+    else:
+        state = cb.from_dict(raw)
+
+    ohlcv_live = panel[panel.ticker.isin(members)]
+    closes_by = {str(d.date()): dict(zip(g.ticker, g.close, strict=True))
+                 for d, g in ohlcv_live.groupby("date")}
+    todo = sorted(d for d in feats["date"].unique()
+                  if str(pd.Timestamp(d).date()) > state.last_update)
+    today = str(feats["date"].max().date())
+
+    # Corporate actions: today's (split-adjusted) history vs the stored entry closes.
+    entry_closes = {(p.ticker, p.entry_date): closes_by.get(p.entry_date, {}).get(p.ticker)
+                    for c in state.cohorts for p in c.positions} | {
+                    (p.ticker, p.entry_date): closes_by.get(p.entry_date, {}).get(p.ticker)
+                    for p in state.legacy}
+    rescaled = cb.reconcile_splits(state, entry_closes, CFG)
+    if rescaled:
+        print(f"  split-adjusted positions: {rescaled}")
+
+    nav, entered, exited, latest_ranked = {}, [], [], []
+    for d in todo:
+        ds = str(pd.Timestamp(d).date())
+        day = feats[feats["date"] == d].dropna(subset=["close"]).copy()
+        day = day[tradable_mask(day)]
+        day["score"] = model.predict(day[meta["features"]].fillna(0).values)
+        day = day.sort_values("score", ascending=False)
+        ranked = [cb.Candidate(r.ticker, float(r.score), float(r.atr_pct_20d),
+                               sectors.get(r.ticker)) for r in day.itertuples()]
+        out = cb.step(state, ds, closes_by.get(ds, {}), ranked, CFG)
+        nav[ds] = cb.equity(state, closes_by.get(ds, {}))
+        entered += [f"{t} {ds}" for t in out["entered"]]
+        exited += out["exited"]
+        latest_ranked, latest_out = ranked, out
+    already = not todo
+    print(f"  {today}: processed {len(todo)} session(s) · entered {entered or '—'} · "
+          f"exited {[(t['ticker'], t['exit_reason']) for t in exited] or '—'}")
 
     if args.dry_run:
-        print("  DRY RUN — no state changes")
+        print(f"  DRY RUN — equity €{cb.equity(state, closes_by.get(today, {})):,.2f}, "
+              f"cohort cash {[round(c.cash, 2) for c in state.cohorts]}, "
+              f"reserve {state.reserve:.2f}")
         return
 
-    PT_DIR.mkdir(parents=True, exist_ok=True)
-    state = supabase_store.read_state(STRATEGY)
-    p_path = PT_DIR / "portfolio.json"
-    if state is not None:
-        p_path.write_text(json.dumps(state))
-    pt = PaperTrader.load_or_create(
-        str(p_path), initial_capital=1000.0, max_positions=8,
-        holding_period_days=20, adaptive_stop=False, profit_target=0.40)
-
-    # Idempotency guard: never PROCESS the same session twice. `today` is the
-    # latest bar in the panel, which does NOT change until the next US session —
-    # so a second run on a weekend/holiday (or a double CI run) sees the same
-    # `today`. Re-processing would double-enter the top-8 (at the close, below)
-    # and double-advance the day index. So we skip the trading mutations when
-    # already advanced — but STILL (re)publish the view + NAV below, so a re-run
-    # after a partial failure (e.g. a crash between the state write and the view
-    # write) self-heals the dashboard instead of leaving it frozen on a stale
-    # session.
-    ohlcv_today = panel[panel.ticker.isin(members)]
-    already = bool(pt.state.last_update and str(pt.state.last_update) >= today)
-    if already:
-        print(f"  session {today} already processed "
-              f"(last_update={pt.state.last_update}) — refreshing view + NAV only")
-        entered, closed, traded, skipped = [], [], set(), {}
-    else:
-        # CLOSE-entry (MOC-sim, 2026-08): the signal is generated from close(S)
-        # and we enter at that SAME close(S) — matching the backtest exactly and
-        # capturing the overnight drift that the old open(S+1) fill forfeited
-        # (~+0.16pp/mo). Order: exits on held positions first, then queue today's
-        # top-8, then fill them at close(S) in this same nightly run. The official
-        # yfinance close is the fill price (no Finnhub → no source-gap). For real
-        # money this is a ~15:45-ET MOC order; the paper book simulates it since
-        # the slow daily model's top-8 barely moves in the last 15 min.
-        closed = pt.update_positions(ohlcv_today, today)
-        traded, skipped = pt.process_signals(signals, today)
-        entered = pt.execute_pending(ohlcv_today, today, price_col="close")
-        pt.save()
-        supabase_store.write_state(STRATEGY, asdict(pt.state))
-        # Persist the day's top-8 to the signals table so the S&P 500 tab shows a
-        # signal history like the small-cap books (load_signal_history reads it).
-        # actual_ret_20d stays null (no live-IC monitor here).
-        supabase_store.upsert_signals(STRATEGY, [{
-            "signal_date": today,
-            "ticker": r["ticker"],
-            "score": round(float(r["score"]), 6),
-            "recommendation": "BUY",
-            "was_traded": r["ticker"] in traded,
-            "skip_reason": skipped.get(r["ticker"], ""),
-            "actual_ret_20d": None,
-        } for _, r in top.iterrows()])
-
-    # Always (re)publish the render-ready view + one NAV point for the session.
-    # Both are idempotent upserts (keyed by strategy[,date]) reflecting current
-    # state, so republishing on an already-processed re-run repairs a stale web.
-    from app.web import dashboard_data
-    view = dashboard_data.build_view(ohlcv_today, PT_DIR, STRATEGY)
-    if view is not None:
-        supabase_store.write_dashboard_view(STRATEGY, view)
-        supabase_store.upsert_nav(STRATEGY, today, float(view["paper"]["total_value"]))
-        # Overwrite live_prices with the official close so the web matches the
-        # Telegram/snapshot from job-run until the next open (the live-prices
-        # worker resumes with Finnhub quotes when the market reopens).
-        supabase_store.upsert_live_prices(
-            {p["ticker"]: p["current_price"]
-             for p in view["paper"].get("positions", [])})
-    print(f"  entered={entered or '[]'} closed={[t.ticker for t in closed] or '[]'} "
-          f"queued={sorted(traded) or '[]'} skipped={skipped}")
-
-    # Telegram run summary (best-effort; no-op without secrets) — only on a real
-    # processing run, not a view-only refresh (which has nothing new to report).
+    # Idempotent: a re-run on the same session processes nothing and only
+    # republishes the view/NAV (repairs a stale web after a partial failure).
+    signals = None
+    if not already:
+        top = {c.ticker for c in latest_ranked[:CFG.top_k]}
+        signals = [{"signal_date": today, "ticker": c.ticker, "score": round(c.score, 6),
+                    "recommendation": "BUY", "was_traded": c.ticker in latest_out["entered"],
+                    "skip_reason": "" if c.ticker in latest_out["entered"] else
+                    ("cohorte no rota hoy" if latest_out["cohort"] is None else "límite de sector"),
+                    "actual_ret_20d": None} for c in latest_ranked if c.ticker in top]
+    view = publish_book(STRATEGY, cb.to_dict(state, CFG, closes_by.get(today, {})),
+                        ohlcv_live, PT_DIR, nav=nav or None, signals=signals,
+                        write_state=not already)
     if view is not None and not already:
         paper = view["paper"]
-        opened = ", ".join(entered) if entered else "—"
-        closed_names = ", ".join(t.ticker for t in closed) if closed else "—"
         notify_telegram(
             f"✅ <b>SCAI LiquidCap OK</b> — {date.today():%Y-%m-%d}\n"
-            f"📅 Última sesión en datos: <b>{today}</b>\n"
-            f"🟢 Señales BUY (top-8): <b>{len(traded)}</b>   "
+            f"📅 Sesiones procesadas: <b>{len(todo)}</b> (última {today})   "
             f"🔁 Retrain: {'sí' if retrained else 'no'}\n"
-            f"🟢 Abiertas: {opened}\n"
-            f"🔴 Cerradas: {closed_names}\n"
+            f"🟢 Abiertas: {', '.join(entered) if entered else '—'}\n"
+            f"🔴 Cerradas: {', '.join(t['ticker'] for t in exited) if exited else '—'}\n"
             f"<b>LiquidCap</b>  €{paper['total_value']:,.2f} "
             f"({paper['total_return']:+.2f}%) · {paper['n_open']} pos · "
-            f"WR {paper['win_rate']:.0f}%"
-        )
+            f"WR {paper['win_rate']:.0f}%")
     print(f"  Runtime {(time.time() - t0) / 60:.1f} min")
 
 

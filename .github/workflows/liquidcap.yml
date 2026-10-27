@@ -45,9 +45,10 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: requirements.lock
 
       - name: Install
-        run: pip install -e .
+        run: pip install -r requirements.lock && pip install --no-deps -e .
 
       # The weekly retrain builds the full-panel feature matrix (~1.5M rows x
       # ~470 cols), whose transient peak RSS is ~13GB — above the hosted runner's

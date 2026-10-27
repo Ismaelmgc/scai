@@ -41,9 +41,10 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: requirements.lock
 
       - name: Install
-        run: pip install -e .
+        run: pip install -r requirements.lock && pip install --no-deps -e .
 
       - name: Bounce daily
         env:
