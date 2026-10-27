@@ -5,7 +5,7 @@ Frozen config (backtest 2014-2026; spread-aware ~+2.1-2.4%/mo, alpha +0.9-1.2%/m
 15-30bps — higher than liquidcap/smallcap AND it survives cost, but in-sample-
 mined vs their purged numbers, so LIVE PAPER IS THE ARBITER):
   universe   current S&P 500 members (data/liquidcap/membership_sp500.parquet)
-  entry      RSI(14)<30  AND  A/D-normalized(100)<15  AND  ROC(20)<=-7%
+  entry      RSI(14)<35  AND  A/D-normalized(150)<20  AND  ROC(20)<=-7%
   ranking    biggest 20d drop first when >free slots signal the same day
   portfolio  max 8 concurrent, equal-weight 1/8 (idle slots = cash), 5-bar cooldown
   exit       stop -12% until +12% arms a trailing = max(entry*1.10, peak*0.98);
@@ -268,7 +268,7 @@ def main() -> None:
 
     PT_DIR.mkdir(parents=True, exist_ok=True)
     from app.web import dashboard_data
-    view = dashboard_data.build_view(ohlcv, PT_DIR, adaptive_stop=False, strategy=STRATEGY)
+    view = dashboard_data.build_view(ohlcv, PT_DIR, STRATEGY)
     if view is not None:
         supabase_store.write_dashboard_view(STRATEGY, view)
         supabase_store.upsert_nav(STRATEGY, today, float(view["paper"]["total_value"]))

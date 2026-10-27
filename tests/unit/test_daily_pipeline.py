@@ -13,7 +13,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from daily_pipeline import _get_missed_trading_days, conviction_sizes  # noqa: E402
+from daily_pipeline import conviction_sizes  # noqa: E402
 
 
 def _signals(scores: list[float], tradable: list[bool] | None = None) -> pd.DataFrame:
@@ -65,38 +65,3 @@ class TestConvictionSizes:
         df = _signals([5.0, 4.0], tradable=[False, False])
         sizes = conviction_sizes(df, top_k=8)
         assert (sizes == 0).all()
-
-
-def _ohlcv(dates: list[str]) -> pd.DataFrame:
-    return pd.DataFrame({"date": pd.to_datetime(dates), "ticker": ["X"] * len(dates)})
-
-
-# Five years of (sparse) trading days from 2021 to today.
-OHLCV = _ohlcv([
-    "2021-06-09", "2021-06-23", "2024-01-02",
-    "2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11", "2026-06-12",
-])
-
-
-class TestFreshPortfolio:
-    def test_empty_last_update_starts_today(self):
-        # The bug: empty last_update fell back to ohlcv_dates[0] (2021) and
-        # replayed 5 years. Must now return only today.
-        missed = _get_missed_trading_days(OHLCV, "", "2026-06-12")
-        assert missed == ["2026-06-12"]
-
-    def test_empty_last_update_never_returns_old_dates(self):
-        missed = _get_missed_trading_days(OHLCV, "", "2026-06-12")
-        assert not any(d.startswith("2021") or d.startswith("2024") for d in missed)
-
-
-class TestExistingPortfolioCatchUp:
-    def test_replays_real_gap(self):
-        # A portfolio last updated 06-09 that missed 06-10..06-12 must catch up
-        # those days (this behaviour is intentionally preserved).
-        missed = _get_missed_trading_days(OHLCV, "2026-06-09", "2026-06-12")
-        assert missed == ["2026-06-10", "2026-06-11", "2026-06-12"]
-
-    def test_no_missed_days_when_up_to_date(self):
-        missed = _get_missed_trading_days(OHLCV, "2026-06-12", "2026-06-12")
-        assert missed == []

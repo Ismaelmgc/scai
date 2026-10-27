@@ -3,7 +3,7 @@
 The published page ships with NO trade data: it logs in via Supabase Auth and
 then fetches the render-ready `dashboard_view` (RLS authenticated-only) to paint
 the dashboard client-side. So this just renders the shell with the embedded
-public config (Supabase URL + anon key, Finnhub token, brand assets) and copies
+public config (Supabase URL + anon key, brand assets) and copies
 the PWA manifest + icons.
 
 Output: ./site/index.html  (+ .nojekyll, manifest, icons)

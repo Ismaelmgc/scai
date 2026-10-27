@@ -1,12 +1,15 @@
-PYTHON = .venv/bin/python3
-PIP = $(PYTHON) -m pip
+# Local developer shortcuts. Production runs in GitHub Actions (.github/workflows/).
+PYTHON ?= python
+export PYTHONPATH := src
+export PYTHONIOENCODING := utf-8
 
-.PHONY: install lint format typecheck test test-cov run-api download-data build-features train backtest
+.PHONY: install lint format typecheck test test-cov web dashboard-static \
+        smallcap-dry liquidcap-dry btc-dry bounce-dry leak-check clean
 
-install:
-	$(PIP) install -e ".[dev]"
+install:          ## editable install + dev tools
+	$(PYTHON) -m pip install -e ".[dev]"
 
-lint:
+lint:             ## what CI runs
 	ruff check src/ tests/
 
 format:
@@ -15,47 +18,33 @@ format:
 typecheck:
 	mypy src/
 
-test:
-	pytest tests/unit -v
-
-test-all:
-	pytest tests/ -v
+test:             ## what CI runs
+	$(PYTHON) -m pytest tests/unit -q
 
 test-cov:
-	pytest tests/ --cov=app --cov-report=html
+	$(PYTHON) -m pytest tests/unit --cov=app --cov-report=term-missing
 
-run-api:
-	PYTHONPATH=src $(PYTHON) -m uvicorn app.web.server:app --host 127.0.0.1 --port 8501 --reload
+web:              ## local dashboard on http://localhost:8501
+	$(PYTHON) -m uvicorn app.web.server:app --host 127.0.0.1 --port 8501
 
-download-data:
-	$(PYTHON) scripts/download_data.py
+dashboard-static: ## render the Pages login shell into site/
+	$(PYTHON) scripts/render_static_dashboard.py
 
-build-features:
-	$(PYTHON) scripts/build_features.py
+smallcap-dry:     ## small-cap model pipeline, no writes (needs the committed OHLCV panel)
+	$(PYTHON) scripts/daily_pipeline.py --dry-run --skip-download
 
-train:
-	$(PYTHON) scripts/train_models.py
+liquidcap-dry:    ## S&P 500 book, no writes
+	$(PYTHON) scripts/liquidcap/daily_liquidcap.py --dry-run
 
-backtest:
-	$(PYTHON) scripts/run_backtest.py
+btc-dry:          ## BTC <-> managed-futures book, no writes
+	$(PYTHON) scripts/btc_trend_daily.py --dry-run
 
-real-backtest:
-	$(PYTHON) scripts/run_real_backtest.py
+bounce-dry:       ## S&P 500 dip-reversion shadow book, no writes
+	$(PYTHON) scripts/bounce_daily.py --dry-run
 
-report:
-	$(PYTHON) scripts/generate_report.py
-
-docker-build:
-	docker compose build
-
-docker-up:
-	docker compose up -d
-
-docker-down:
-	docker compose down
+leak-check:       ## anti-leakage gate the production retrain must pass
+	$(PYTHON) scripts/v3/18_verify_no_leak.py
 
 clean:
-	find . -type d -name __pycache__ -exec rm -rf {} +
-	find . -type d -name .pytest_cache -exec rm -rf {} +
-	find . -type d -name .mypy_cache -exec rm -rf {} +
-	rm -rf htmlcov/ .coverage
+	find . -type d -name __pycache__ -prune -exec rm -rf {} +
+	rm -rf .pytest_cache .mypy_cache .ruff_cache htmlcov .coverage

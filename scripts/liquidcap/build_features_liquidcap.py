@@ -1,6 +1,6 @@
 """LIQUIDCAP — feature matrix for the PIT S&P 500 panel.
 
-Reuses the production anti-leak path (build_feature_matrix + _add_lag_features,
+Reuses the production anti-leak path (build_feature_matrix + add_lag_features,
 26 base features minus vwap/transactions unavailable here) and adds 6 NEW
 point-in-time families computed from trailing bars only (windows END at T):
 
@@ -32,9 +32,8 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, str(ROOT / "scripts"))
 
-from run_smallcap_pipeline import _add_lag_features  # noqa: E402
+from app.features.lags import add_lag_features  # noqa: E402
 
 from app.features.pipeline import build_feature_matrix  # noqa: E402
 
@@ -114,7 +113,7 @@ def main() -> None:
     universe = [{"ticker": t} for t in panel["ticker"].unique()]  # Unknown sector
     feats = build_feature_matrix(panel, fundamentals=None, market_df=spy,
                                  universe=universe, horizons=[1, 5, 10, 20])
-    feats = _add_lag_features(feats)
+    feats = add_lag_features(feats)
     feats = add_new_features(feats, panel, spy)
 
     # PIT membership filter — LAST, so rolling windows saw the full history.

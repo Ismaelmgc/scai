@@ -305,7 +305,7 @@ def main() -> None:
     PT_DIR.mkdir(parents=True, exist_ok=True)
     from app.web import dashboard_data
     qqq = fetch_nasdaq()
-    view = dashboard_data.build_view(ohlcv, PT_DIR, adaptive_stop=False, strategy=STRATEGY, bench=bench,
+    view = dashboard_data.build_view(ohlcv, PT_DIR, STRATEGY, bench=bench,
                                      bench2=("Nasdaq-100", qqq) if qqq is not None else None)
     if view is None:
         return

@@ -1,12 +1,14 @@
-"""SCAI CLI — entry point for daily pipeline + web dashboard.
+"""SCAI CLI — local entry point for the small-cap daily pipeline + web dashboard.
 
 Usage:
-    scai run          # Run daily pipeline (both strategies)
+    scai run          # small-cap daily pipeline (data, features, retrain, signals)
     scai run --dry-run
     scai run --force-retrain
-    scai web          # Start web dashboard
+    scai web          # local web dashboard (http://localhost:8501)
     scai web --port 8080
-    scai monitor      # Run intraday trailing stop check
+
+The production books (liquidcap, btc_trend, bounce, illiquid) run in GitHub
+Actions; see .github/workflows/.
 """
 from __future__ import annotations
 
@@ -31,7 +33,7 @@ def _env() -> dict[str, str]:
 
 
 def cmd_run(args: argparse.Namespace) -> None:
-    """Run the daily pipeline (both baseline + adaptive strategies)."""
+    """Run the small-cap daily pipeline."""
     script = str(ROOT / "scripts" / "daily_pipeline.py")
     cmd = [sys.executable, script]
     if args.force_retrain:
@@ -42,8 +44,6 @@ def cmd_run(args: argparse.Namespace) -> None:
         cmd.append("--skip-download")
     if args.skip_features:
         cmd.append("--skip-features")
-    if args.capital != 1000.0:
-        cmd.extend(["--capital", str(args.capital)])
 
     result = subprocess.run(cmd, env=_env(), cwd=str(ROOT))
     sys.exit(result.returncode)
@@ -62,20 +62,10 @@ def cmd_web(args: argparse.Namespace) -> None:
     )
 
 
-def cmd_monitor(args: argparse.Namespace) -> None:
-    """Run intraday trailing stop monitor."""
-    script = str(ROOT / "scripts" / "intraday_monitor.py")
-    cmd = [sys.executable, script]
-    if args.force:
-        cmd.append("--force")
-    result = subprocess.run(cmd, env=_env(), cwd=str(ROOT))
-    sys.exit(result.returncode)
-
-
 def app() -> None:
     parser = argparse.ArgumentParser(
         prog="scai",
-        description="SCAI — Small Cap AI Trading Platform",
+        description="SCAI — algorithmic trading research platform",
     )
     sub = parser.add_subparsers(dest="command")
 
@@ -85,15 +75,10 @@ def app() -> None:
     p_run.add_argument("--dry-run", action="store_true")
     p_run.add_argument("--skip-download", action="store_true")
     p_run.add_argument("--skip-features", action="store_true")
-    p_run.add_argument("--capital", type=float, default=1000.0)
 
     # scai web
     p_web = sub.add_parser("web", help="Start web dashboard")
     p_web.add_argument("--port", type=int, default=8501)
-
-    # scai monitor
-    p_mon = sub.add_parser("monitor", help="Intraday trailing stop check")
-    p_mon.add_argument("--force", action="store_true")
 
     args = parser.parse_args()
 
@@ -101,8 +86,6 @@ def app() -> None:
         cmd_run(args)
     elif args.command == "web":
         cmd_web(args)
-    elif args.command == "monitor":
-        cmd_monitor(args)
     else:
         parser.print_help()
 

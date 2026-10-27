@@ -4,7 +4,7 @@
 -- The public dashboard is a shell: it logs in, then reads `dashboard_view`.
 
 create table if not exists portfolio_state (
-  strategy   text primary key,           -- 'baseline' | 'adaptive'
+  strategy   text primary key,           -- 'liquidcap' | 'btc_trend' | 'bounce' | 'illiquid' (+ retired 'baseline')
   state      jsonb not null,             -- full PortfolioState (asdict)
   updated_at timestamptz not null default now()
 );
@@ -56,7 +56,7 @@ create table if not exists nav_history (
 -- OHLCV + the service key); the logged-in client reads it. Keeps raw tables out
 -- of the browser and avoids client-side computation.
 create table if not exists dashboard_view (
-  strategy   text primary key,           -- 'baseline' | 'adaptive'
+  strategy   text primary key,           -- 'liquidcap' | 'btc_trend' | 'bounce' | 'illiquid' (+ retired 'baseline')
   view       jsonb not null,             -- {paper, signals, data_info, ...}
   updated_at timestamptz not null default now()
 );

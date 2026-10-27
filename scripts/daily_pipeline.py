@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""SCAI Daily Pipeline — Automated paper trading with V3 LambdaRank model.
+"""SCAI small-cap daily pipeline — data, features, weekly retrain and model signals.
 
-Model: LightGBM LambdaRank on fwd_ret_20d_sector_rel (V3 Sprint 2 candidate).
-Signal: rank by predicted ranking score, top-8 equal-weight.
-Retraining: every 7 days, expanding window with sector-enriched universe.
+Model: LightGBM LambdaRank on fwd_ret_20d_sector_rel (sector-relative 20-day
+return binned into 16 relevance levels), 28 features (26 price/volume + 2 EDGAR),
+retrained every 7 days on the FULL stored OHLCV (delisted names included →
+no survivorship bias). Selection = tradability gate → top-8 by score.
 
-V3 metrics vs V2 baseline (16-fold walk-forward):
-  Sharpe   2.94 → 3.71  (+0.77)
-  WinRate  44.88% → 49.56%
-  SelMed   -2.42% → +0.47%  (top-K median crossed positive)
-  +folds   13/16 → 14/16
+No paper book trades these signals any more: the "baseline" book was retired
+2026-10 (no edge after realistic costs) and replaced by the BTC trend book. The
+pipeline still runs because (1) the illiquid shadow book scores with this model
+and these features, and (2) the live-IC monitor measures the model out of sample
+from the signals recorded here (Supabase `signals`, historical key "baseline").
 
 Usage:
     python scripts/daily_pipeline.py
@@ -41,9 +42,11 @@ log = get_logger(__name__)
 
 # ── Constants ───────────────────────────────────────────────
 RETRAIN_EVERY_DAYS = 7          # Retrain model every N calendar days
-PORTFOLIO_PATH = "data/paper_trading/portfolio.json"
-TRADE_LOG_PATH = "data/paper_trading/trades.parquet"
 DAILY_LOG_PATH = "data/paper_trading/daily_log.jsonl"
+SIGNAL_HISTORY_PATH = "data/paper_trading/signal_history.parquet"
+# Supabase `signals` key: kept as "baseline" (the retired book's name) so the
+# live-IC monitor keeps one continuous history.
+SIGNALS_KEY = "baseline"
 MODEL_REGISTRY = "data/paper_trading/model_registry.json"
 MODEL_PATH = "data/models/smallcap_v3_lambdarank.pkl"
 
@@ -82,10 +85,6 @@ V2_EDGAR_FEATURES = [
     'dilution_pct',
     'current_ratio',
 ]
-
-# Meta-learning: REMOVED 2026-05-22 (A/B test showed no gain when leak-free)
-V2_META_FEATURES: list[str] = []
-SIGNAL_HISTORY_BACKTEST = "data/paper_trading/signal_history_backtest.parquet"
 
 
 def _already_ran_today() -> bool:
@@ -164,18 +163,6 @@ def update_ohlcv(cfg, predict_to: str) -> pd.DataFrame:
     active_mask = uni_df["active"] == True if "active" in uni_df.columns else pd.Series(True, index=uni_df.index)
     tickers = uni_df[active_mask]["ticker"].tolist()
 
-    # Also include tickers with open positions (may not be in universe anymore)
-    portfolio_path = Path(PORTFOLIO_PATH)
-    if portfolio_path.exists():
-        with open(portfolio_path) as f:
-            portfolio = json.load(f)
-        held_tickers = {p["ticker"] for p in portfolio.get("positions", [])}
-        pending_tickers = {p["ticker"] for p in portfolio.get("pending_signals", [])}
-        extra = (held_tickers | pending_tickers) - set(tickers)
-        if extra:
-            tickers = tickers + sorted(extra)
-            print(f"  + {len(extra)} tickers con posición abierta añadidos: {', '.join(sorted(extra))}")
-
     ohlcv["date"] = pd.to_datetime(ohlcv["date"])
     last_date = ohlcv["date"].max().date()
     predict_to_date = pd.Timestamp(predict_to).date()
@@ -207,8 +194,7 @@ def update_ohlcv(cfg, predict_to: str) -> pd.DataFrame:
     aggs = AggregatesAPI(client)
 
     # Import the downloaders from the main pipeline
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from run_smallcap_pipeline import download_ohlcv, download_ohlcv_grouped
+    from app.data.smallcap_ohlcv import download_ohlcv, download_ohlcv_grouped
 
     # Per-ticker pull for the small set grouped_daily can't cover from the global
     # frontier: brand-new tickers (no bars) + individually stale ones (own last bar
@@ -362,40 +348,11 @@ def rebuild_features(ohlcv: pd.DataFrame, cfg) -> pd.DataFrame:
     )
 
     # Add lag features
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from run_smallcap_pipeline import _add_lag_features
-    features = _add_lag_features(features)
-
-    # Add sentiment features
-    try:
-        from app.features.sentiment import build_sentiment_features, build_market_sentiment_features
-        news_df = store.read("smallcap_news") if store.exists("smallcap_news") else None
-        if news_df is not None and not news_df.empty:
-            sent = build_sentiment_features(news_df, ohlcv, lookback_days=7)
-            if not sent.empty:
-                features["date"] = pd.to_datetime(features["date"])
-                sent["date"] = pd.to_datetime(sent["date"])
-                features = features.merge(sent, on=["ticker", "date"], how="left")
-                for c in sent.columns:
-                    if c not in ("ticker", "date"):
-                        features[c] = features[c].fillna(0)
-
-            mkt = build_market_sentiment_features(news_df, ohlcv, lookback_days=7)
-            if not mkt.empty:
-                mkt["date"] = pd.to_datetime(mkt["date"])
-                features = features.merge(mkt, on="date", how="left")
-                for c in mkt.columns:
-                    if c != "date":
-                        features[c] = features[c].fillna(0)
-            print(f"  ✓ Sentiment features added")
-    except Exception as e:
-        log.warning("sentiment_features_failed", error=str(e))
+    from app.features.lags import add_lag_features
+    features = add_lag_features(features)
 
     # Add EDGAR fundamental features (dilution_pct, current_ratio)
     features = _merge_edgar_features(features)
-
-    # Add meta-learning features (Error-Aware Features)
-    features = _merge_meta_features(features, uni_df)
 
     store.write("features_smallcap", features)
     print(f"  ✓ Features: {len(features):,} rows × {len(features.columns)} cols")
@@ -453,84 +410,6 @@ def _merge_edgar_features(features: pd.DataFrame) -> pd.DataFrame:
         return features
 
 
-def _merge_meta_features(features: pd.DataFrame, universe_df: pd.DataFrame) -> pd.DataFrame:
-    """Merge meta-learning features from signal history into the feature matrix."""
-    try:
-        from app.features.meta_features import build_meta_feature_panel
-        from app.features.pipeline import assign_sectors
-
-        # Load signal history (backtest + live)
-        signal_hist = _load_combined_signal_history()
-        if signal_hist.empty or signal_hist["outcome_filled"].sum() < 30:
-            return features
-
-        # Build sector map
-        tmp = assign_sectors(
-            universe_df[["ticker"]].drop_duplicates().assign(date=pd.Timestamp("2024-01-01")),
-            universe_df.to_dict("records"),
-        )
-        sector_map = dict(zip(tmp["ticker"], tmp["sector"]))
-
-        features["date"] = pd.to_datetime(features["date"])
-        # Only compute for dates where signal history exists
-        sig_min = pd.to_datetime(signal_hist["signal_date"]).min() + pd.Timedelta(days=30)
-        meta_dates = sorted(features[features["date"] >= sig_min]["date"].unique())
-
-        if not meta_dates:
-            return features
-
-        meta_panel = build_meta_feature_panel(signal_hist, meta_dates, sector_map)
-        if meta_panel.empty:
-            return features
-
-        meta_panel["date"] = pd.to_datetime(meta_panel["date"])
-        features = features.merge(
-            meta_panel[["date", "ticker"] + V2_META_FEATURES],
-            on=["date", "ticker"],
-            how="left",
-        )
-        n_filled = features[V2_META_FEATURES[0]].notna().sum()
-        print(f"  ✓ Meta features added ({n_filled:,} rows with data)")
-
-    except Exception as e:
-        log.warning("meta_features_failed", error=str(e))
-
-    return features
-
-
-def _load_combined_signal_history() -> pd.DataFrame:
-    """Load signal history: backtest (historical) + live (recent)."""
-    from app.data.store.parquet_store import ParquetStore
-    store = ParquetStore()
-    parts = []
-
-    # Backtest-generated history
-    bt_path = Path(SIGNAL_HISTORY_BACKTEST)
-    if bt_path.exists():
-        bt = pd.read_parquet(bt_path)
-        parts.append(bt)
-
-    # Live signal history
-    sh_path = Path("data/paper_trading/signal_history.parquet")
-    if sh_path.exists():
-        live = pd.read_parquet(sh_path)
-        if not live.empty:
-            parts.append(live)
-
-    if not parts:
-        return pd.DataFrame()
-
-    combined = pd.concat(parts, ignore_index=True)
-    combined["signal_date"] = pd.to_datetime(combined["signal_date"])
-    # Deduplicate: live takes priority over backtest for overlapping dates
-    combined = combined.sort_values("signal_date")
-    if "source" in combined.columns:
-        combined = combined.drop_duplicates(
-            subset=["signal_date", "ticker"], keep="last"
-        )
-    return combined
-
-
 # ── Step 3: Train or load models ──────────────────────────
 
 def train_or_load_models(features: pd.DataFrame, predict_from: str, cfg,
@@ -568,19 +447,15 @@ def train_or_load_models(features: pd.DataFrame, predict_from: str, cfg,
     train_data = features[features["date"] < pd.Timestamp(predict_from)].copy()
     predict_data = features[features["date"] >= pd.Timestamp(predict_from)].copy()
 
-    # Check required columns exist — base features + EDGAR + meta features
+    # Check required columns exist — base features + EDGAR
     available_features = [f for f in V2_FEATURES if f in train_data.columns]
     available_edgar = [f for f in V2_EDGAR_FEATURES if f in train_data.columns]
-    available_meta = [f for f in V2_META_FEATURES if f in train_data.columns]
-    all_train_features = available_features + available_edgar + available_meta
+    all_train_features = available_features + available_edgar
     if len(available_features) < 15:
         print(f"  ⚠ Only {len(available_features)}/{len(V2_FEATURES)} features available")
     if available_edgar:
         n_edgar = train_data[available_edgar[0]].notna().sum()
         print(f"  EDGAR features: {len(available_edgar)} ({n_edgar:,} rows with data)")
-    if available_meta:
-        n_meta = train_data[available_meta[0]].notna().sum()
-        print(f"  Meta features: {len(available_meta)} ({n_meta:,} rows with data)")
 
     # Clean training data — V3 LambdaRank: relevance bins per date + group structure
     train_clean = train_data.dropna(subset=[V2_TARGET]).sort_values("date").copy()
@@ -611,7 +486,6 @@ def train_or_load_models(features: pd.DataFrame, predict_from: str, cfg,
         "n_train": len(train_clean),
         "n_features": len(all_train_features),
         "n_edgar_features": len(available_edgar),
-        "n_meta_features": len(available_meta),
         "target": V2_TARGET,
         "model_type": "lgb_lambdarank_v3",
     }
@@ -700,11 +574,10 @@ def generate_today_signals(model, predict_data, ohlcv, today: str) -> pd.DataFra
     print(f"  ✓ Tradability gate: {today_data['_tradable'].sum()} tradable, "
           f"{n_excluded} excluded (price/liquidity)")
 
-    # Score all stocks with V2 model (base + EDGAR + meta features)
+    # Score all stocks (base + EDGAR features)
     available_features = [f for f in V2_FEATURES if f in today_data.columns]
     available_edgar = [f for f in V2_EDGAR_FEATURES if f in today_data.columns]
-    available_meta = [f for f in V2_META_FEATURES if f in today_data.columns]
-    all_features = available_features + available_edgar + available_meta
+    all_features = available_features + available_edgar
     X = today_data[all_features].fillna(0).values
     today_data["v2_score"] = model.predict(X)
 
@@ -764,312 +637,43 @@ def generate_today_signals(model, predict_data, ohlcv, today: str) -> pd.DataFra
     return signals
 
 
-# ── Step 5: Paper trading execution ──────────────────────
+# ── Step 5: Record signals (live-IC monitor) ──────────
 
-def _generate_signals_for_date(model, features: pd.DataFrame, ohlcv: pd.DataFrame,
-                               target_date: str, verbose: bool = False) -> pd.DataFrame:
-    """Generate signals for a specific date using pre-built features.
-
-    Like generate_today_signals but targets a specific historical date
-    instead of always using the latest available date.
-    """
-    target_ts = pd.Timestamp(target_date)
-    features["date"] = pd.to_datetime(features["date"])
-    day_data = features[features["date"] == target_ts].copy()
-
-    if day_data.empty:
-        return pd.DataFrame()
-
-    available_features = [f for f in V2_FEATURES if f in day_data.columns]
-    available_edgar = [f for f in V2_EDGAR_FEATURES if f in day_data.columns]
-    available_meta = [f for f in V2_META_FEATURES if f in day_data.columns]
-    all_features = available_features + available_edgar + available_meta
-    X = day_data[all_features].fillna(0).values
-    day_data["v2_score"] = model.predict(X)
-    day_data = day_data.sort_values("v2_score", ascending=False)
-
-    # Same tradability gate as generate_today_signals (selection only)
-    day_data["_tradable"] = tradable_mask(day_data)
-    pos_sizes = conviction_sizes(day_data, V2_TOP_K)
-
-    records = []
-    n_buys = 0
-    for idx, row in day_data.iterrows():
-        ticker = str(row.get("ticker", ""))
-        rejection = ""
-        if not bool(row["_tradable"]):
-            recommendation = "HOLD"
-            position_size = 0.0
-            rejection = "untradable: below min price/liquidity"
-        elif n_buys < V2_TOP_K:
-            recommendation = "BUY"
-            position_size = float(pos_sizes.loc[idx])  # conviction-linear weight
-            n_buys += 1
-        else:
-            recommendation = "HOLD"
-            position_size = 0.0
-
-        vol = float(row.get("realized_vol_20d", 0.3))
-        atr_pct = float(row.get("atr_pct_20d", vol / np.sqrt(252) * 2))
-        median_atr = (
-            day_data.head(V2_TOP_K)["atr_pct_20d"].median()
-            if "atr_pct_20d" in day_data.columns else 0.03
-        )
-        if median_atr > 0 and recommendation == "BUY":
-            adaptive_trail = np.clip(0.16 * (atr_pct / median_atr), 0.10, 0.16)
-        else:
-            adaptive_trail = 0.16
-
-        records.append({
-            "ticker": ticker, "date": target_date,
-            "recommendation": recommendation,
-            "ensemble_score": float(row["v2_score"]),
-            "calibrated_prob": float(row["v2_score"]),
-            "expected_return": float(row["v2_score"]),
-            "position_size_pct": position_size,
-            "trailing_stop_pct": adaptive_trail,
-            "stop_loss_pct": adaptive_trail,
-            "rejection_reasons": rejection,
-        })
-
-    signals = pd.DataFrame(records)
-    if verbose:
-        buys = signals[signals["recommendation"] == "BUY"]
-        if not buys.empty:
-            tickers = ", ".join(f"{r['ticker']}({r['ensemble_score']:.3f})" for _, r in buys.iterrows())
-            print(f"    {target_date}: {tickers}")
-    return signals
-
-
-def _get_missed_trading_days(ohlcv: pd.DataFrame, last_update: str, today: str) -> list[str]:
-    """Get trading days between last_update and today (exclusive of last_update, inclusive of today).
-
-    If the pipeline wasn't run for several days, we need to replay each
-    missed day to correctly execute pending signals, check trailing stops,
-    and count holding periods.
-    """
-    today_dt = date.fromisoformat(today)
-    # A freshly created/reset portfolio has no last_update. It must start
-    # trading TODAY — never replay the full OHLCV history (which begins in
-    # 2021). Replaying history into a "live" portfolio fabricated thousands
-    # of backtest trades dated 2021+ after the V4 reset (bug fixed 2026-06-12).
-    if not last_update:
-        return [today]
-
-    ohlcv_dates = sorted(ohlcv["date"].dt.date.unique())
-    last_dt = date.fromisoformat(last_update)
-
-    # Return all trading days after last_update up to and including today
-    missed = [str(d) for d in ohlcv_dates if last_dt < d <= today_dt]
-    return missed
-
-
-def _retired_skips(signals: pd.DataFrame) -> dict[str, str]:
-    return {t: "libro retirado (sustituido por BTC tendencia)" for t in signals["ticker"]}
-
-
-def run_paper_trading(signals: pd.DataFrame, ohlcv: pd.DataFrame,
-                      today: str, capital: float, dry_run: bool = False,
-                      model=None, features: pd.DataFrame | None = None,
-                      portfolio_path: str | None = None,
-                      adaptive_stop: bool = False,
-                      strategy_label: str = "") -> dict:
-    """Execute paper trading cycle with full signal tracking.
-
-    Replays ALL missed trading days since last execution to ensure:
-    - Pending signals execute at the correct day's open (not days later)
-    - Trailing stops are checked every day (not just today)
-    - Holding period counter advances correctly
-    - NEW: Generates signals for each missed day (not just today)
-    """
-    from app.paper_trading import PaperTrader
+def record_signals(signals: pd.DataFrame, ohlcv: pd.DataFrame, today: str,
+                   dry_run: bool) -> None:
+    """Track the model's daily signals: local SignalTracker history (20d outcomes
+    backfilled as they mature) + Supabase `signals` rows for the live-IC monitor."""
     from app.signal_tracker import SignalTracker
 
-    p_path = portfolio_path or PORTFOLIO_PATH
-
-    # State lives in Supabase (source of truth). Hydrate the local JSON from it
-    # so the run continues the real portfolio even on a fresh checkout (no state
-    # committed to git). If Supabase is unreachable the read raises and the run
-    # fails loudly — preferable to silently resetting the portfolio.
-    strat = strategy_label or ("adaptive" if adaptive_stop else "baseline")
-    if supabase_store.is_configured():
-        remote = supabase_store.read_state(strat)
-        if remote is not None:
-            Path(p_path).parent.mkdir(parents=True, exist_ok=True)
-            Path(p_path).write_text(json.dumps(remote))
-            print(f"  ↻ Hydrated {strat} portfolio from Supabase")
-
-    pt = PaperTrader.load_or_create(
-        p_path,
-        initial_capital=capital,
-        max_positions=8,
-        holding_period_days=20,
-        adaptive_stop=adaptive_stop,
-        # V4 exit sweep (2026-06-11): +40% profit target locks runaway
-        # winners; baseline Sharpe 2.52->2.79, adaptive WR 59.7% maxDD -15.1%
-        profit_target=0.40,
-    )
-    # Book RETIRED 2026-09-28 (replaced by the BTC trend book): drop anything still
-    # queued so the morning fill opens nothing new; open positions run off under
-    # their normal exits (<=20 sessions). Signals keep being recorded below.
-    if pt.state.pending_signals:
-        print(f"  ⏏ Retired book: dropping {len(pt.state.pending_signals)} pending signals")
-        pt.state.pending_signals = []
-
-    # Derive signal tracker and log paths from portfolio path
-    p_dir = Path(p_path).parent
-    tracker_path = str(p_dir / "signal_history.parquet")
-    trade_log = str(p_dir / "trades.parquet")
-    daily_log = str(p_dir / "daily_log.jsonl")
-
-    tracker = SignalTracker(path=tracker_path)
-
-    # Determine missed days since last execution
-    last_update = pt.state.last_update or ""
-    missed_days = _get_missed_trading_days(ohlcv, last_update, today)
-
-    # Separate intermediate days (need signal generation) from today
-    intermediate_days = [d for d in missed_days if d != today]
-    can_generate_intermediate = model is not None and features is not None
-
-    if intermediate_days:
-        if can_generate_intermediate:
-            print(f"  ⚠ Catching up {len(intermediate_days)} missed days with full signal replay ({intermediate_days[0]} → {intermediate_days[-1]})")
-        else:
-            print(f"  ⚠ Catching up {len(intermediate_days)} missed days (positions only, no model for signals)")
-
-    # Replay each missed day: execute pending → update positions → generate new signals
-    all_closed = []
-    all_entered = []
-    intermediate_signals_count = 0
-    for day in intermediate_days:
-        # 1. Execute pending signals at this day's open
-        entered = pt.execute_pending(ohlcv, day)
-        if entered:
-            all_entered.extend(entered)
-        # 2. Check trailing stops and holding period expiry
-        closed = pt.update_positions(ohlcv, day)
-        if closed:
-            all_closed.extend(closed)
-        # 3. Generate and queue new signals for this day (if model available)
-        if can_generate_intermediate:
-            day_signals = _generate_signals_for_date(model, features, ohlcv, day, verbose=True)
-            if not day_signals.empty:
-                tracker.record_signals(day_signals, set(), _retired_skips(day_signals), day)
-                intermediate_signals_count += len(day_signals[day_signals["recommendation"] == "BUY"])
-
-    # Process today: execute pending + update positions
-    if today in missed_days:
-        entered = pt.execute_pending(ohlcv, today)
-        if entered:
-            all_entered.extend(entered)
-        closed = pt.update_positions(ohlcv, today)
-        if closed:
-            all_closed.extend(closed)
-
-    # Report catch-up activity
-    if all_entered:
-        print(f"  ✓ Entered (catch-up): {', '.join(all_entered)}")
-    if all_closed:
-        for t in all_closed:
-            print(f"  ✗ Closed {t.ticker}: {t.pnl_pct:+.2%} ({t.exit_reason}) on {t.exit_date}")
-        from dataclasses import asdict
-        tracker.update_trade_outcomes([asdict(t) for t in all_closed])
-    if intermediate_signals_count:
-        print(f"  ✓ Intermediate signals generated: {intermediate_signals_count} BUY across {len(intermediate_days)} days")
-
-    # Retired book: today's signals are recorded (live-IC monitor) but never queued.
-    traded_tickers: set[str] = set()
-    skip_reasons = _retired_skips(signals) if not signals.empty else {}
-
-    # Record ALL BUY signals in tracker (traded + skipped)
+    tracker = SignalTracker(path=SIGNAL_HISTORY_PATH)
     if not signals.empty:
-        tracker.record_signals(signals, traded_tickers, skip_reasons, today)
-
-    # 5. Backfill outcomes for signals old enough (20+ trading days)
+        tracker.record_signals(signals, set(), {}, today)
     n_filled = tracker.backfill_outcomes(ohlcv, horizon_days=V2_HOLD_DAYS)
     if n_filled:
         print(f"  ✓ Outcomes backfilled: {n_filled} signals")
-
-    # 6. Show tracker stats
     stats = tracker.summary_stats()
-    if stats.get("outcomes_available", 0) > 0:
+    if "score_return_correlation" in stats:
         print(f"  ✓ Signal history: {stats['total_signals']} signals, "
-              f"{stats['outcomes_available']} with outcomes")
-        if "score_return_correlation" in stats:
-            print(f"    Score↔Return correlation: {stats['score_return_correlation']:.3f}")
-        if "traded_avg_ret_20d" in stats:
-            print(f"    Traded avg 20d ret: {stats['traded_avg_ret_20d']:+.2%} "
-                  f"(hit rate: {stats['traded_hit_rate']:.0%})")
-        if "missed_avg_ret_20d" in stats:
-            print(f"    Missed avg 20d ret: {stats['missed_avg_ret_20d']:+.2%} "
-                  f"(hit rate: {stats['missed_hit_rate']:.0%})")
+              f"{stats['outcomes_available']} with outcomes, "
+              f"score↔return corr {stats['score_return_correlation']:.3f}")
+    tracker.save()
 
-    # 7. Get summary
-    summary = pt.summary(ohlcv)
-
-    # 8. Save state
-    if not dry_run:
-        pt.save()
-        tracker.save()
-
-        # Also save trades to parquet (append)
-        trades_df = pt.trades_to_dataframe()
-        if not trades_df.empty:
-            tp = Path(trade_log)
-            tp.parent.mkdir(parents=True, exist_ok=True)
-            trades_df.to_parquet(tp, index=False)
-
-        # Write daily log entry for this strategy
-        dl = Path(daily_log)
-        dl.parent.mkdir(parents=True, exist_ok=True)
-        log_entry = {
-            "date": today,
-            "portfolio_value": summary["total_value"],
-            "cash": summary["cash"],
-            "n_positions": summary["n_open_positions"],
-            "n_closed": summary["n_closed_trades"],
-        }
-        with open(dl, "a") as f:
-            f.write(json.dumps(log_entry, default=str) + "\n")
-
-        # Dual-write to Supabase (single source of truth, migrating off git).
-        # Best-effort: a Supabase failure must never break the pipeline.
-        if supabase_store.is_configured():
-            from dataclasses import asdict
-            try:
-                supabase_store.write_state(strat, asdict(pt.state))
-                if all_closed:
-                    supabase_store.append_trades(strat, [asdict(t) for t in all_closed])
-                supabase_store.upsert_nav(strat, today, float(summary["total_value"]))
-                if not signals.empty:
-                    sig_rows = [{
-                        "signal_date": today,
-                        "ticker": r["ticker"],
-                        "score": float(r["ensemble_score"]),
-                        "recommendation": r["recommendation"],
-                        "was_traded": r["ticker"] in traded_tickers,
-                        "skip_reason": (skip_reasons.get(r["ticker"])
-                                        or r.get("rejection_reasons") or None),
-                        "actual_ret_20d": None,
-                    } for _, r in signals.iterrows()]
-                    supabase_store.upsert_signals(strat, sig_rows)
-                # Overwrite live_prices with the official close so the web (which
-                # reads that table) matches this Telegram/snapshot from job-run
-                # until the next market open. The live-prices worker resumes
-                # overwriting with Finnhub quotes when the market reopens.
-                supabase_store.upsert_live_prices(
-                    {p["ticker"]: p["current_price"]
-                     for p in summary["open_positions"]})
-                print(f"  ✓ Supabase: state + nav + {len(all_closed)} trades "
-                      f"+ {len(signals)} signals ({strat})")
-            except Exception as e:
-                log.warning("supabase_write_failed", strategy=strat, error=str(e))
-                print(f"  ⚠ Supabase write failed ({strat}): {e}")
-    else:
-        tracker.save()  # Always save signal history, even in dry-run
-
-    return summary
+    if dry_run or signals.empty or not supabase_store.is_configured():
+        return
+    try:
+        supabase_store.upsert_signals(SIGNALS_KEY, [{
+            "signal_date": today,
+            "ticker": r["ticker"],
+            "score": float(r["ensemble_score"]),
+            "recommendation": r["recommendation"],
+            "was_traded": False,
+            "skip_reason": r.get("rejection_reasons") or None,
+            "actual_ret_20d": None,
+        } for _, r in signals.iterrows()])
+        print(f"  ✓ Supabase: {len(signals)} signals")
+    except Exception as e:  # best-effort: the monitor tolerates a missing day
+        log.warning("supabase_signals_failed", error=str(e))
+        print(f"  ⚠ Supabase signals write failed: {e}")
 
 
 # ── Main ──────────────────────────────────────────────────
@@ -1079,9 +683,7 @@ def main() -> None:
     parser.add_argument("--force-retrain", action="store_true",
                         help="Force model retraining regardless of schedule")
     parser.add_argument("--dry-run", action="store_true",
-                        help="Generate signals but don't execute trades")
-    parser.add_argument("--capital", type=float, default=1000.0,
-                        help="Initial paper trading capital (default: 1000)")
+                        help="Generate signals but don't write them anywhere")
     parser.add_argument("--skip-download", action="store_true",
                         help="Skip OHLCV download (use cached data)")
     parser.add_argument("--skip-features", action="store_true",
@@ -1153,9 +755,8 @@ def main() -> None:
     print("=" * 60)
     print("  SCAI Daily Pipeline")
     print(f"  Date:          {today}")
-    print(f"  Mode:          {'DRY RUN' if args.dry_run else 'LIVE PAPER'}")
+    print(f"  Mode:          {'DRY RUN' if args.dry_run else 'LIVE'}")
     print(f"  Retrain:       {'FORCED' if args.force_retrain else f'every {RETRAIN_EVERY_DAYS}d (last: {_days_since_train()}d ago)'}")
-    print(f"  Capital:       €{args.capital:,.0f}")
     print("=" * 60)
     print()
 
@@ -1211,49 +812,15 @@ def main() -> None:
         signals.to_parquet(signals_path, index=False)
     print()
 
-    # ── Step 5: Paper trading ────
-    print("STEP 5/5 ▸ Paper trading execution...")
-
-    # Baseline book (standard trailing stop). The Adaptive-Stop book was retired
-    # 2026-08-27 (poor live performance); the generic adaptive_stop flag stays on
-    # PaperTrader but no production book enables it.
-    print("  ── Baseline ──")
-    summary_a = run_paper_trading(
-        signals, ohlcv, today, args.capital, args.dry_run,
-        model=model, features=features,
-        portfolio_path=PORTFOLIO_PATH,
-        adaptive_stop=False,
-        strategy_label="baseline",
-    )
+    # ── Step 5: Record signals ───────────────────────
+    print("STEP 5/5 ▸ Recording signals...")
+    record_signals(signals, ohlcv, today, args.dry_run)
     print()
-
-    # ── Summary ──────────────────────────────────────
-    for label, summary in [("BASELINE", summary_a)]:
-        print("=" * 60)
-        print(f"  {label}")
-        print("=" * 60)
-        print(f"  Portfolio:     €{summary['total_value']:,.2f} ({summary['total_return']})")
-        print(f"  Cash:          €{summary['cash']:,.2f}")
-        print(f"  Open:          {summary['n_open_positions']} positions")
-        print(f"  Closed today:  check log")
-        print(f"  Total trades:  {summary['n_closed_trades']} (win rate: {summary['win_rate']})")
-        print(f"  Pending:       {summary['pending_signals']} signals")
-        if summary["open_positions"]:
-            print()
-            print(f"  {'Ticker':8s} {'Entry':>8s} {'Current':>8s} {'P&L':>8s} {'Trail@':>8s} {'Trail%':>6s}")
-            print(f"  {'─'*8} {'─'*8} {'─'*8} {'─'*8} {'─'*8} {'─'*6}")
-            for pos in summary["open_positions"]:
-                trail_str = f"{pos.get('trail_pct', 0):.0f}%"
-                print(f"  {pos['ticker']:8s} {pos['entry_price']:8.2f} {pos['current_price']:8.2f} "
-                      f"{pos['pnl_pct']:>8s} {pos['trail_trigger']:8.2f} {trail_str:>6s}")
-        print()
 
     # Telegram run summary (best-effort; no-op without secrets). Shows the latest
     # session actually in the data so a stale-but-green run is still visible.
     if not args.dry_run:
         n_buy = int((signals["recommendation"] == "BUY").sum()) if not signals.empty else 0
-        pend_a = summary_a["pending_signals"]
-        pend_line = f"⏳ Pendientes: <b>{pend_a}</b>"
         # Download health: tickers in the latest session vs the median of the 5
         # prior sessions. A partial frontier (e.g. 2026-07-01 landed with 1 ticker
         # when the grouped bar hadn't published) shows up as ⚠️ PARCIAL instead of
@@ -1295,52 +862,17 @@ def main() -> None:
             f"✅ <b>SCAI daily OK</b> — {date.today():%Y-%m-%d}\n"
             f"📅 Última sesión en datos: <b>{today}</b>\n"
             f"{cov_line}{gap_line}\n"
-            f"🟢 Señales BUY: <b>{n_buy}</b>   🔁 Retrain: {'sí' if train_metrics else 'no'}\n"
-            f"{pend_line}\n\n"
-            f"<b>Baseline (retirando)</b>  €{summary_a['total_value']:,.2f} ({summary_a['total_return']})"
-            f" · {summary_a['n_open_positions']} pos · WR {summary_a['win_rate']}"
+            f"🟢 Señales BUY: <b>{n_buy}</b>   🔁 Retrain: {'sí' if train_metrics else 'no'}"
         )
 
-    # Log daily entry (baseline as primary)
     _log_daily({
         "date": today,
-        "portfolio_value": summary_a["total_value"],
-        "cash": summary_a["cash"],
-        "n_positions": summary_a["n_open_positions"],
-        "n_closed": summary_a["n_closed_trades"],
+        "n_signals": len(signals),
         "retrained": bool(train_metrics),
         "dry_run": args.dry_run,
     })
 
-    # Write render-ready dashboard views to Supabase. The logged-in web client
-    # reads these single rows (RLS authenticated-only); raw trade tables never
-    # reach the browser and no client-side computation is needed. Best-effort.
-    if not args.dry_run and supabase_store.is_configured():
-        try:
-            from app.web import dashboard_data
-            view = dashboard_data.build_view(
-                ohlcv, dashboard_data.PAPER_TRADING_DIR, False)
-            if view is not None:
-                supabase_store.write_dashboard_view("baseline", view)
-            print("  ✓ Supabase: dashboard view (baseline)")
-        except Exception as e:
-            log.warning("dashboard_view_write_failed", error=str(e))
-            print(f"  ⚠ Dashboard view write failed: {e}")
-
     print("  ✓ Done\n")
-
-
-def _check_meta_learning_readiness() -> None:
-    """Report meta-learning signal history status."""
-    try:
-        combined = _load_combined_signal_history()
-        if combined.empty:
-            return
-        n_total = len(combined)
-        n_filled = combined.get("outcome_filled", pd.Series(dtype=bool)).sum()
-        print(f"  ℹ Meta-learning: {n_filled:,} signals with outcomes (total: {n_total:,})")
-    except Exception:
-        pass
 
 
 if __name__ == "__main__":

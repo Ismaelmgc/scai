@@ -1,26 +1,19 @@
 name: SCAI daily
 
-# Runs the production daily pipeline on GitHub's servers (no PC required),
-# commits the updated paper-trading state back to the repo, and publishes a
-# static snapshot of the dashboard to GitHub Pages.
+# Small-cap model pipeline + illiquid shadow book + Pages deploy.
+#   - daily_pipeline.py: incremental Polygon download (grouped daily bars),
+#     feature rebuild, weekly LambdaRank retrain, today's model signals (recorded
+#     for the live-IC monitor; no book trades them since the baseline retired)
+#   - illiquid_shadow.py: shadow book scored with the same model/features
+#   - render_static_dashboard.py + Pages deploy, and the updated small-cap data
+#     (OHLCV panel, model) committed back to the repo
 #
-# Timing: GitHub cron is UTC. Runs in the MADRUGADA (06:00 UTC ≈ 02:00 ET) and
-# targets the PREVIOUS session's close (today's bar doesn't exist until after the
-# 20:00 UTC close, and free Polygon only publishes a session's grouped bar hours
-# later — next morning UTC). So the madrugada run ingests yesterday's just-published
-# close, generates signals, and morning.yml fills at today's open (close → next
-# open, like the backtest).
-# Why NOT evening (the old 23:00 UTC): free hadn't published the same-day bar yet
-# at 23:00-00:00 UTC → 403, and the run committed stale data in GREEN (2026-06-29).
-# Why NOT mid/late morning: GitHub delays scheduled runs ~3h (up to 5h); a 10-11:00
-# UTC cron then lands too close to / past the 13:30 UTC open. 06:00 UTC + 5h delay +
-# ~1h runtime finishes by ~12:00 UTC — a margin before the open even in the worst
-# case — while still being late enough that free has published the prior session.
-# Silent failures are now caught: download_ohlcv_grouped raises on a PAST-session
-# error (red run), and daily_pipeline sends a Telegram summary every run.
-# Runs EVERY day: on a weekend it skips if data is current, but a failed Friday run
-# SELF-HEALS on Sat/Sun (catches up instead of waiting until Monday). Idempotent.
-# Use "Run workflow" (workflow_dispatch) to run on demand.
+# 06:00 UTC: free Polygon only publishes a session's grouped bar hours after the
+# 20:00 UTC close, so the overnight run ingests yesterday's close (an evening
+# run got 403s and committed stale data — 2026-06-29). A PAST-session download
+# error raises (red run) and a Telegram summary is sent every run. Runs EVERY
+# day: weekends skip if data is current, but a failed Friday run self-heals on
+# Sat/Sun. Idempotent. "Run workflow" (workflow_dispatch) runs it on demand.
 
 on:
   # Scheduled by the Cloudflare Worker (cloudflare/scheduler) at 06:00 UTC every

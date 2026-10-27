@@ -17,16 +17,9 @@ from app.data import supabase_store
 
 ROOT = Path(__file__).resolve().parents[3]
 DATA_DIR = ROOT / "data" / "processed"
-PAPER_TRADING_DIR = ROOT / "data" / "paper_trading"
 
 
-def _load_ohlcv() -> pd.DataFrame:
-    ohlcv = pd.read_parquet(DATA_DIR / "ohlcv_smallcap.parquet")
-    ohlcv["date"] = pd.to_datetime(ohlcv["date"])
-    return ohlcv
-
-
-# Benchmark per product: the small-cap books (baseline/illiquid) belong against
+# Benchmark per product: the small-cap book (illiquid) belongs against
 # the Russell 2000 (IWM); the S&P-500 book (liquidcap) against SPY. SPY is ALSO the
 # feature market-proxy (beta/regime) — do not repurpose it; IWM is a separate file.
 _bench_cache: dict[str, pd.DataFrame | None] = {}
@@ -35,8 +28,7 @@ _BENCH_FILE = {"SPY": "smallcap_spy.parquet", "IWM": "smallcap_iwm.parquet"}
 # Strategy inception (paper-trading reset): the chart + benchmark start here so
 # both lines span the SAME live window. Drops any stray pre-reset NAV points that
 # would otherwise stretch the x-axis before the strategy actually existed.
-_INCEPTION = {"baseline": "2026-06-11",
-              "liquidcap": "2026-07-06", "illiquid": "2026-07-24",
+_INCEPTION = {"liquidcap": "2026-07-06", "illiquid": "2026-07-24",
               "bounce": "2026-08-28", "btc_trend": "2026-08-19"}
 
 # Crypto trades every calendar day -> NAV points are daily incl. weekends.
@@ -47,7 +39,7 @@ def _bench_for(strategy: str) -> str:
     """Investable benchmark ticker for a strategy's chart/alpha."""
     if strategy == "btc_trend":
         return "BTC"            # buy&hold BTC; its closes are passed in by the job
-    return "IWM" if strategy in ("baseline", "illiquid") else "SPY"
+    return "IWM" if strategy == "illiquid" else "SPY"
 
 
 def _load_bench(symbol: str) -> pd.DataFrame | None:
@@ -104,15 +96,9 @@ def _compute_stats(values: list[float], bench_values: list[float],
     return {"sharpe": round(sharpe, 2), "max_dd": round(max_dd, 1), "alpha": alpha}
 
 
-def load_paper_trading(ohlcv: pd.DataFrame,
-                       pt_dir: Path | None = None,
-                       adaptive_stop: bool = False,
-                       strategy: str | None = None,
+def load_paper_trading(ohlcv: pd.DataFrame, pt_dir: Path, strategy: str,
                        bench: pd.DataFrame | None = None,
                        bench2: tuple[str, pd.DataFrame] | None = None) -> dict | None:
-    pt_dir = pt_dir or PAPER_TRADING_DIR
-    if strategy is None:
-        strategy = "baseline"
 
     # Source of truth is Supabase; fall back to the local JSON (offline/dev).
     state = supabase_store.read_state(strategy)
@@ -136,12 +122,7 @@ def load_paper_trading(ohlcv: pd.DataFrame,
         invested = pos["shares"] * pos["entry_price"]
         current_value = pos["shares"] * current_price
         profit = current_value - invested
-        # Compute effective trail pct (adaptive tightens to 6% after day 5 if profitable)
         effective_trail_pct = pos["trailing_stop_pct"]
-        days_held = state.get("current_day_idx", 0) - pos.get("entry_day_idx", 0)
-        if (adaptive_stop and effective_trail_pct > 0 and days_held > 5
-                and current_price > pos["entry_price"]):
-            effective_trail_pct = min(effective_trail_pct, 0.06)
         trail_trigger = pos["high_price"] * (1 - effective_trail_pct)
         positions.append({
             "ticker": ticker,
@@ -267,11 +248,7 @@ def load_paper_trading(ohlcv: pd.DataFrame,
     }
 
 
-def load_signal_history(pt_dir: Path | None = None,
-                        strategy: str | None = None) -> list[dict]:
-    pt_dir = pt_dir or PAPER_TRADING_DIR
-    if strategy is None:
-        strategy = "baseline"
+def load_signal_history(pt_dir: Path, strategy: str) -> list[dict]:
 
     # Source of truth is Supabase; fall back to the local parquet (offline/dev).
     rows = supabase_store.read_signals(strategy, limit=50)
@@ -325,8 +302,7 @@ def _get_data_freshness(ohlcv: pd.DataFrame) -> dict:
     }
 
 
-def build_view(ohlcv: pd.DataFrame, pt_dir: Path, adaptive_stop: bool,
-               strategy: str | None = None,
+def build_view(ohlcv: pd.DataFrame, pt_dir: Path, strategy: str,
                bench: pd.DataFrame | None = None,
                bench2: tuple[str, pd.DataFrame] | None = None) -> dict | None:
     """Render-ready view for one strategy: paper + signals + data freshness.
@@ -334,14 +310,13 @@ def build_view(ohlcv: pd.DataFrame, pt_dir: Path, adaptive_stop: bool,
     This is exactly what the client needs to paint the dashboard, so it can be
     stored in Supabase (`dashboard_view`) and fetched in one read after login.
 
-    ``strategy`` overrides the pt_dir-based name (used by extra books like
-    liquidcap/illiquid whose pt_dir isn't the small-cap baseline dir).
+    ``strategy`` is the Supabase key; ``pt_dir`` is only the offline/dev
+    fallback location of the local portfolio.json / signal_history.parquet.
     """
-    paper = load_paper_trading(ohlcv, pt_dir, adaptive_stop=adaptive_stop,
-                               strategy=strategy, bench=bench, bench2=bench2)
+    paper = load_paper_trading(ohlcv, pt_dir, strategy, bench=bench, bench2=bench2)
     if paper is None:
         return None
-    signals = load_signal_history(pt_dir, strategy=strategy)
+    signals = load_signal_history(pt_dir, strategy)
     return {
         "paper": paper,
         "signals": signals,

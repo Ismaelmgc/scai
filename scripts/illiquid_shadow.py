@@ -1,7 +1,7 @@
-"""ILLIQUID paper book — out-of-sample test of the small-cap illiquidity edge
-(see [[smallcap-illiquidity-edge]]) as a real €1000 rolling-8 book, tracked on the
-web dashboard like the other strategies (Supabase state + view + NAV), WITHOUT
-touching the baseline book.
+"""ILLIQUID paper book — out-of-sample test of the small-cap illiquidity edge (the
+one small-cap effect that survived the research battery, though not significantly)
+as a real €1000 rolling-8 book, tracked on the web dashboard like the other
+strategies (Supabase state + view + NAV).
 
 Selection = production tradability gate → bottom ADV tercile → drop widest-20%
 cs_spread_20d → rank by the production model score (all from OHLC-derived features;
@@ -44,7 +44,7 @@ from app.utils import notify_telegram  # noqa: E402
 # reuse the EXACT production feature lists + model path from the daily pipeline
 _spec = importlib.util.spec_from_file_location("dp", ROOT / "scripts/daily_pipeline.py")
 dp = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(dp)
-FEAT = [f for f in (dp.V2_FEATURES + dp.V2_EDGAR_FEATURES + dp.V2_META_FEATURES)]
+FEAT = dp.V2_FEATURES + dp.V2_EDGAR_FEATURES
 
 FEATURES_FP = ROOT / "data/processed/features_smallcap.parquet"
 OHLCV_FP = ROOT / "data/processed/ohlcv_smallcap.parquet"
@@ -261,7 +261,7 @@ def main() -> None:
     # single point (no chart, stats=None needs >=10) and only self-heals next run.
     _backfill_nav_if_missing(ohlcv)
     from app.web import dashboard_data
-    view = dashboard_data.build_view(ohlcv, PT_DIR, adaptive_stop=False, strategy=STRATEGY)
+    view = dashboard_data.build_view(ohlcv, PT_DIR, STRATEGY)
     if view is not None:
         supabase_store.write_dashboard_view(STRATEGY, view)
         supabase_store.upsert_nav(STRATEGY, today, float(view["paper"]["total_value"]))

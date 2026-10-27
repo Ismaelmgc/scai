@@ -1,23 +1,17 @@
 name: SCAI liquidcap daily
 
-# Second paper-trading book: systematic swing on the S&P 500 (spec
-# GI_fs15_fund_20d). Same architecture as the small-cap daily.yml:
-#   - runs in the MORNING (before the US open), ingesting yesterday's close
-#   - queues today's top-8 as pending; the SHARED morning.yml (09:45 ET) fills
-#     them at the open via Finnhub — morning_execute.py now handles all three
-#     strategies (baseline, adaptive, liquidcap), so no separate fill job
-#   - writes state + dashboard_view to Supabase (strategy "liquidcap"); the S&P
-#     500 tab then appears on the Pages dashboard automatically (client fetches
-#     all views), so daily.yml's Pages deploy needs no change
-#   - commits only the FOUNDATIONAL data back (delisted slice, EDGAR facts,
-#     model, meta); current bars / fundamentals / features are rebuilt each run
-#
-# 03:00 UTC (overnight / madrugada CET) — unlike the small-cap Polygon free tier,
-# yfinance publishes the prior session's EOD hours after the 20:00-21:00 UTC US
-# close, so an overnight run has yesterday's bars. Running this early (vs the
-# small-cap 11:05) leaves a ~10h buffer before the 13:30 UTC open so GitHub's
-# cron delay (up to 3-5h) can't push it near the open. The fill still happens at
-# the open via the shared morning.yml (13:45 UTC). Idempotent + stateless.
+# S&P 500 paper book "liquidcap" (spec GI_fs15_fund_20d): LightGBM LambdaRank on
+# 15 price/volume + 10 point-in-time SEC fundamentals, top-8, 20-day hold.
+#   - ingests the prior session's close (yfinance, dividend-adjusted) overnight
+#   - updates exits, then enters today's top-8 at that CLOSE (market-on-close
+#     simulation) in the same run — no separate open-fill job
+#   - writes state + dashboard_view + NAV to Supabase (strategy "liquidcap")
+#   - retrains weekly (purged by construction) and commits only the FOUNDATIONAL
+#     data back (delisted slice, EDGAR facts, model, meta); current bars /
+#     fundamentals / features are rebuilt each run
+# Idempotent: a session is processed once (last_update guard); re-runs only
+# refresh the view/NAV. NOTE: a session missed by an outage is NOT replayed
+# automatically — exits for skipped days need a manual replay.
 
 on:
   # PRIMARY trigger: the Cloudflare Worker (cloudflare/scheduler) dispatches at
@@ -25,7 +19,7 @@ on:
   # EVERY day so (a) a dropped Worker fire self-heals the next run and (b) Friday's
   # session is processed on Saturday — matching the small-cap daily (0 6 * * *) —
   # instead of being left until Monday. GitHub's cron is late/best-effort, but
-  # liquidcap has a wide buffer (close-entry, no morning fill) so late is harmless,
+  # liquidcap fills at the official close, so a late run gives the same result,
   # and historically the native schedule fired every weekday without a miss. The
   # `concurrency` group below + the last_update idempotency guard in
   # daily_liquidcap.py make an overlapping worker+native double-fire safe: the

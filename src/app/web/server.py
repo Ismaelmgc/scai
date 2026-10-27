@@ -75,14 +75,14 @@ async def run_pipeline():
         )
 
     script = str(ROOT / "scripts" / "daily_pipeline.py")
-    python = str(ROOT / ".venv" / "bin" / "python")
     log_path = PAPER_TRADING_DIR / "logs"
     log_path.mkdir(parents=True, exist_ok=True)
 
     env = {
         "PYTHONPATH": str(ROOT / "src"),
         "DYLD_LIBRARY_PATH": str(ROOT / ".local" / "lib"),
-        "PATH": f"{ROOT / '.venv' / 'bin'}:/usr/local/bin:/usr/bin:/bin",
+        "PATH": os.environ.get("PATH", ""),
+        "PYTHONIOENCODING": "utf-8",
         "HOME": os.environ.get("HOME", ""),
     }
     # Load .env file for API keys
@@ -99,7 +99,7 @@ async def run_pipeline():
     stderr_log = open(log_path / "web_pipeline_stderr.log", "w")  # noqa: SIM115
 
     _pipeline_proc = subprocess.Popen(
-        [python, script],
+        [sys.executable, script],
         cwd=str(ROOT),
         env=env,
         stdout=stdout_log,

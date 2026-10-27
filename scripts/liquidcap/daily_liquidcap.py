@@ -1,4 +1,4 @@
-"""LIQUIDCAP paper-trading book — daily EOD job (phase 1: runs locally).
+"""LIQUIDCAP paper-trading book — daily EOD job (GitHub Actions, liquidcap.yml).
 
 Frozen spec (combo screen 2026-07-06, `GI_fs15_fund_20d`):
   universe   current S&P 500 members (membership_sp500.parquet; refresh the
@@ -7,8 +7,10 @@ Frozen spec (combo screen 2026-07-06, `GI_fs15_fund_20d`):
              FS15 price/volume + 10 SEC-EDGAR fundamental ratios
   portfolio  top-8 equal-weight, hold 20d, rebalance implicit via slots,
              trailing ATR [10%,16%] + profit target +40%, cost-aware fills
-  backtest   +1.69%/mo flat 5bps (+0.95%/mo spread-aware), fold-Sharpe 2.43,
-             34 purged folds 2018-2026 — LIVE PAPER MUST CONFIRM THIS.
+  backtest   +1.69%/mo flat 5bps (+0.95%/mo spread-aware), 34 purged folds
+             2018-2026. "Sharpe 2.43" is the MEAN of per-fold 3-month Sharpes; the
+             monthly portfolio Sharpe rebuilt from the trades is ~0.7 (≈ SPY's) —
+             the edge is excess return, not a smoother ride. LIVE PAPER IS THE ARBITER.
 
 Flow per run (after US close):
   1. incremental yfinance update of the panel (current members + SPY)
@@ -39,7 +41,6 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "scripts" / "liquidcap"))
 
 from dotenv import load_dotenv
@@ -47,7 +48,7 @@ from dotenv import load_dotenv
 load_dotenv(ROOT / ".env")
 
 import lightgbm as lgb  # noqa: E402
-from run_smallcap_pipeline import _add_lag_features  # noqa: E402
+from app.features.lags import add_lag_features  # noqa: E402
 
 from app.data import supabase_store  # noqa: E402
 from app.data.free_sources.yahoo import download_yahoo_ohlcv  # noqa: E402
@@ -99,7 +100,8 @@ def assemble_panel(members: list[str]) -> pd.DataFrame:
     Rebuilding current bars every run (instead of an incremental append) both
     kills the retroactive dividend re-adjustment drift and keeps the CI stateless
     — only the tiny delisted slice, model and EDGAR facts need to persist. The
-    merged panel is written for morning_execute's view and gitignored."""
+    merged panel is also written to ohlcv_sp500.parquet (gitignored) for local
+    research runs (the evaluation harness reads it)."""
     delisted = pd.read_parquet(DELISTED_FP)
     delisted["date"] = pd.to_datetime(delisted["date"])
     print(f"  delisted (committed, static): {delisted.ticker.nunique()} tickers")
@@ -124,7 +126,7 @@ def build_features(panel: pd.DataFrame, spy: pd.DataFrame,
     universe = [{"ticker": t} for t in px["ticker"].unique()]
     feats = build_feature_matrix(px, fundamentals=None, market_df=spy,
                                  universe=universe, horizons=[1, 5, 10, 20])
-    feats = _add_lag_features(feats)
+    feats = add_lag_features(feats)
     feats = add_new_features(feats, px, spy)
     feats["date"] = pd.to_datetime(feats["date"])
     fnd = pd.read_parquet(FUND_FP)
@@ -276,8 +278,7 @@ def main() -> None:
     # Both are idempotent upserts (keyed by strategy[,date]) reflecting current
     # state, so republishing on an already-processed re-run repairs a stale web.
     from app.web import dashboard_data
-    view = dashboard_data.build_view(ohlcv_today, PT_DIR, adaptive_stop=False,
-                                     strategy=STRATEGY)
+    view = dashboard_data.build_view(ohlcv_today, PT_DIR, STRATEGY)
     if view is not None:
         supabase_store.write_dashboard_view(STRATEGY, view)
         supabase_store.upsert_nav(STRATEGY, today, float(view["paper"]["total_value"]))
