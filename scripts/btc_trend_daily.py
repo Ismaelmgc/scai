@@ -41,6 +41,7 @@ import yfinance as yf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from app.books.publish import publish_book  # noqa: E402
 from app.data import supabase_store  # noqa: E402
 from app.utils import notify_telegram  # noqa: E402
 
@@ -294,24 +295,17 @@ def main() -> None:
         print(f"  DRY RUN — cash €{st['cash']:.2f}, posiciones {[p['ticker'] for p in st['positions']]}")
         return
 
-    supabase_store.write_state(STRATEGY, st)
-    if results:
-        supabase_store.upsert_signals(STRATEGY, [_signal_row(r) for r in results])
-
     ohlcv = pd.concat([data.reset_index()[["date", "close"]].assign(ticker=TICKER),
                        cta.rename_axis("date").reset_index()[["date", "close"]].assign(ticker=CTA)],
                       ignore_index=True)
     bench = data.reset_index()[["date", "close"]]
-    PT_DIR.mkdir(parents=True, exist_ok=True)
-    from app.web import dashboard_data
     qqq = fetch_nasdaq()
-    view = dashboard_data.build_view(ohlcv, PT_DIR, STRATEGY, bench=bench,
-                                     bench2=("Nasdaq-100", qqq) if qqq is not None else None)
+    view = publish_book(STRATEGY, st, ohlcv, PT_DIR,
+                        signals=[_signal_row(r) for r in results] or None,
+                        nav_date=str(last_day.date()), bench=bench,
+                        bench2=("Nasdaq-100", qqq) if qqq is not None else None)
     if view is None:
         return
-    supabase_store.write_dashboard_view(STRATEGY, view)
-    supabase_store.upsert_nav(STRATEGY, str(last_day.date()), float(view["paper"]["total_value"]))
-    supabase_store.upsert_live_prices({p["ticker"]: p["current_price"] for p in view["paper"]["positions"]})
     if not already:
         paper, c, m = view["paper"], data["close"].iloc[-1], sma.iloc[-1]
         held = {p["ticker"] for p in st["positions"]}

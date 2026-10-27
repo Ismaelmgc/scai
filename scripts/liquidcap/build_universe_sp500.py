@@ -17,6 +17,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -131,6 +132,17 @@ def main() -> None:
     print(f"  window: {df.start.min().date()} -> {df.end.max().date()}")
     df.to_parquet(fp, index=False)
     print(f"  saved {fp}")
+    save_sectors(cur)
+
+
+def save_sectors(cur) -> None:
+    """GICS sector per ticker for the liquidcap sector cap (committed, small).
+    Merged with the previous file so departed members keep their last-known sector."""
+    fp = DATA / "gics_sectors.json"
+    sectors = json.loads(fp.read_text(encoding="utf-8")) if fp.exists() else {}
+    sectors.update({norm(t): s for t, s in zip(cur["Symbol"], cur["GICS Sector"]) if norm(t)})
+    fp.write_text(json.dumps(dict(sorted(sectors.items())), indent=0), encoding="utf-8")
+    print(f"  saved {fp.name} ({len(sectors)} tickers)")
 
 
 if __name__ == "__main__":

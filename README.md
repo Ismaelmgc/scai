@@ -15,7 +15,7 @@ corrected; the history is documented in [PROJECT.md](PROJECT.md).
 
 | Book | What it does | Type | Since |
 |---|---|---|---|
-| **liquidcap** | S&P 500 cross-sectional ranking: LightGBM LambdaRank on 15 price/volume + 10 point-in-time SEC fundamentals; top-8, 20-day hold, ATR trailing stop, market-on-close entry | ML | 2026-07 |
+| **liquidcap** | S&P 500 cross-sectional ranking: LightGBM LambdaRank on 15 price/volume + 10 point-in-time SEC fundamentals; 4 overlapping cohorts of top-8 (max 2 per sector), 20-day hold, ATR trailing stop, market-on-close entry | ML | 2026-07 |
 | **btc_trend** | BTC long/flat on the daily close vs its 100-day SMA (±3% band); while out of BTC the book sits in a managed-futures UCITS ETF | Rule-based | 2026-08 |
 | **bounce** | S&P 500 dip-reversion (RSI + accumulation/distribution + 20-day drop), trailing-lock exit | Rule-based, shadow | 2026-08 |
 | **illiquid** | Small-cap illiquidity premium: low-ADV, spread-trimmed names ranked by the small-cap LambdaRank model | ML, shadow | 2026-07 |
@@ -27,8 +27,10 @@ realistic spreads) and an adaptive-stop variant.
 **What the backtests honestly say** (details and caveats in PROJECT.md):
 
 - *liquidcap* — 34 purged walk-forward folds 2018-2026: +1.7%/month at flat
-  5 bps, +0.95%/month with spread-aware costs. The monthly portfolio Sharpe is
-  ≈0.7 (similar to the index): the edge is excess return, not lower risk.
+  5 bps, +0.95%/month with spread-aware costs. Replayed through the live engine
+  (cohorts + sector cap): ~22%/yr, Sharpe ≈0.9, max drawdown ≈−27%. Until 2026-10
+  the live book used a different construction (8 refill-on-exit slots, ≈−48% max
+  drawdown in the same replay); backtest and live now share one engine.
 - *btc_trend* — 2015-2026 with a managed-futures proxy: ~69%/yr CAGR but a
   **~−71% max drawdown** (2018). Trend-following in crypto works on the long
   side only and mainly by avoiding crashes; it lags buy-and-hold in strong bull years.
@@ -62,8 +64,11 @@ src/app/
                  free sources (Yahoo, SEC EDGAR), small-cap download + universe discovery
   features/      point-in-time feature pipeline: price/volume, volatility, liquidity,
                  microstructure, cross-sectional/sector, fundamentals, tradability gate
-  paper_trading.py   PaperTrader engine (fills, trailing stops, profit target, splits,
-                     NaN-price guard) shared by the ML books
+  engine/        cohort_book: THE liquidcap strategy engine — the backtest and the live
+                 book run the same `step()` (cohorts, sector cap, exits, split guard)
+  books/         publish_book: state / signals / NAV / dashboard view, shared by all books
+  smallcap/      small-cap model pipeline (data, features, model, signals)
+  paper_trading.py   PaperTrader engine (illiquid shadow book)
   signal_tracker.py  signal history + matured-outcome backfill
   web/           dashboard view builder, FastAPI local server, HTML template
 scripts/
@@ -81,7 +86,7 @@ tests/unit/      unit tests run by CI
 ## Quick start
 
 ```bash
-python -m pip install -e ".[dev]"      # Python 3.11
+make install                          # Python 3.11: exact pinned deps (requirements.lock) + package
 cp .env.example .env                  # fill in keys (Polygon, Supabase, …)
 make test lint                        # what CI runs
 make btc-dry                          # run a book without writing anything

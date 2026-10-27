@@ -54,7 +54,7 @@ Every book sends a Telegram summary per run and an alert on failure.
 make test lint          # what CI runs
 make btc-dry            # any book: btc-dry / liquidcap-dry / bounce-dry / smallcap-dry
 make web                # local dashboard on http://localhost:8501
-make leak-check         # anti-leakage gate for the small-cap retrain
+make leak-check         # anti-leakage gate on demand (it also runs in every retrain)
 ```
 
 `.env` (from `.env.example`) provides the same keys locally. The small-cap
@@ -65,11 +65,10 @@ panel is git-ignored and rebuilt by its job (bootstrap with
 ## Runbook
 
 **All parquet-reading jobs fail at once, no code change** (e.g. `Unable to find a
-usable engine; tried using: 'pyarrow'`). CI installs fresh dependencies every
-run, so a new upstream release can break it overnight. Compare the first failure
-time with PyPI upload times. 2026-10-09: pyarrow 26 required NumPy 2 while we pin
-`numpy<2` → fixed by `pyarrow<26`. Heavy dependencies have upper bounds in
-`pyproject.toml` for this reason.
+usable engine; tried using: 'pyarrow'`). 2026-10-09: pyarrow 26 required NumPy 2
+while we pin `numpy<2`. Since 2026-10 CI installs the exact versions in
+`requirements.lock`, so this can only happen when the lock is regenerated
+(`make lock`) — run `make test` in a fresh venv before committing a new lock.
 
 **A book crashes on arithmetic with `None`** (`unsupported operand ... NoneType`).
 A NaN price reached the book and was stored as `null` in `portfolio_state`; every
@@ -78,11 +77,20 @@ non-finite prices (`_finite_price`), and the BTC book refuses to mark itself
 without prices. To repair: inspect `read_state(<book>)`, rebuild the bad fields
 from the ledger (initial capital + Σ closed P&L − Σ open cost), back up first.
 
-**A job was down for several sessions.** `bounce`, `btc_trend` and the small-cap
-pipeline catch up missed days automatically. `liquidcap` and `illiquid` process
-only the latest session: exits that should have happened on skipped days must
-be replayed manually with the same `PaperTrader` config and the real closes of
-those days, then the NAV backfilled.
+**A job was down for several sessions.** `liquidcap` (cohort engine), `bounce`,
+`btc_trend` and the small-cap pipeline catch up missed days automatically, in
+order. Only `illiquid` (PaperTrader) processes just the latest session: exits on
+skipped days must be replayed manually with the same config and real closes.
+
+**A retrain fails with `anti-leak gate FAILED`.** A feature correlates with the
+forward target far more than any legitimate feature does (pooled |Pearson| > 0.10
+or |mean daily IC| > 0.25). The previous model is kept. Find the feature in the
+message and check it for future data (merge by period-end instead of filing date,
+a rolling window over the wrong group, a target-derived column).
+
+**Liquidcap drawdown looks too large.** Rebuild the NAV from the trades and real
+closes before suspecting the market (2026-10: prices and accounting matched to
+0.02%; the cause was a sector correction plus the old 8-slot construction).
 
 **Liquidcap run "canceled" during the weekly retrain.** Out of memory: the full
 feature build peaks above the runner's RAM. The workflow enlarges swap to 16 GB

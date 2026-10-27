@@ -3,11 +3,14 @@ PYTHON ?= python
 export PYTHONPATH := src
 export PYTHONIOENCODING := utf-8
 
-.PHONY: install lint format typecheck test test-cov web dashboard-static \
+.PHONY: install lock lint format typecheck test test-cov web dashboard-static \
         smallcap-dry liquidcap-dry btc-dry bounce-dry leak-check clean
 
-install:          ## editable install + dev tools
-	$(PYTHON) -m pip install -e ".[dev]"
+install:          ## exact pinned deps (same as CI) + editable package
+	$(PYTHON) -m pip install -r requirements.lock && $(PYTHON) -m pip install --no-deps -e .
+
+lock:             ## re-pin requirements.lock after editing pyproject.toml deps (needs `pip install uv`)
+	$(PYTHON) -m uv pip compile pyproject.toml --extra dev --universal --python-version 3.11 --no-header -o requirements.lock
 
 lint:             ## what CI runs
 	ruff check src/ tests/

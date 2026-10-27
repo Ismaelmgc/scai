@@ -35,6 +35,7 @@ import yfinance as yf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from app.books.publish import publish_book  # noqa: E402
 from app.data import supabase_store  # noqa: E402
 from app.utils import notify_telegram  # noqa: E402
 
@@ -256,28 +257,17 @@ def main() -> None:
         return
 
     ohlcv = build_ohlcv(data)
-    supabase_store.write_state(STRATEGY, st)
     cands = st.pop("_today_candidates", [])
+    sig_rows = None
     if not already and cands:
         entered_set = set(result["entered"])
-        supabase_store.upsert_signals(STRATEGY, [{
+        sig_rows = [{
             "signal_date": today, "ticker": tk, "score": round(-roc, 4),
             "recommendation": "BUY", "was_traded": tk in entered_set,
             "skip_reason": "" if tk in entered_set else "slots llenos / ranking",
-            "actual_ret_20d": None} for tk, roc in cands[:MAX_CANDIDATES]])
-
-    PT_DIR.mkdir(parents=True, exist_ok=True)
-    from app.web import dashboard_data
-    view = dashboard_data.build_view(ohlcv, PT_DIR, STRATEGY)
+            "actual_ret_20d": None} for tk, roc in cands[:MAX_CANDIDATES]]
+    view = publish_book(STRATEGY, st, ohlcv, PT_DIR, signals=sig_rows, nav_date=today)
     if view is not None:
-        supabase_store.write_dashboard_view(STRATEGY, view)
-        supabase_store.upsert_nav(STRATEGY, today, float(view["paper"]["total_value"]))
-        # Overwrite live_prices with the official close so the web matches the
-        # Telegram/snapshot from job-run until the next open (the live-prices
-        # worker resumes with Finnhub quotes when the market reopens).
-        supabase_store.upsert_live_prices(
-            {p["ticker"]: p["current_price"]
-             for p in view["paper"].get("positions", [])})
         paper = view["paper"]
         if not already:
             notify_telegram(

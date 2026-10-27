@@ -36,8 +36,9 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from app.features.tradability import tradable_mask  # noqa: E402
+from app.books.publish import publish_book  # noqa: E402
 from app.data import supabase_store  # noqa: E402
+from app.features.tradability import tradable_mask  # noqa: E402
 from app.paper_trading import PaperTrader  # noqa: E402
 from app.utils import notify_telegram  # noqa: E402
 
@@ -239,13 +240,13 @@ def main() -> None:
         print(f"  session {today} already processed "
               f"(last_update={pt.state.last_update}) — refreshing view + NAV only")
         entered, closed, traded, skipped = [], [], set(), {}
+        sig_rows = None
     else:
         entered = pt.execute_pending(ohlcv, today)
         closed = pt.update_positions(ohlcv, today)
         traded, skipped = pt.process_signals(signals, today)
         pt.save()
-        supabase_store.write_state(STRATEGY, asdict(pt.state))
-        supabase_store.upsert_signals(STRATEGY, [{
+        sig_rows = [{
             "signal_date": today,
             "ticker": r["ticker"],
             "score": round(float(r["score"]), 6),
@@ -253,18 +254,15 @@ def main() -> None:
             "was_traded": r["ticker"] in traded,
             "skip_reason": skipped.get(r["ticker"], ""),
             "actual_ret_20d": None,
-        } for _, r in top.iterrows()])
+        } for _, r in top.iterrows()]
 
     # Backfill the legacy month's daily NAV into the table BEFORE building the view:
     # build_view reads read_nav to fill chart_dates/values + compute stats, so the
     # historical points must already be there — otherwise the view is written with a
     # single point (no chart, stats=None needs >=10) and only self-heals next run.
     _backfill_nav_if_missing(ohlcv)
-    from app.web import dashboard_data
-    view = dashboard_data.build_view(ohlcv, PT_DIR, STRATEGY)
-    if view is not None:
-        supabase_store.write_dashboard_view(STRATEGY, view)
-        supabase_store.upsert_nav(STRATEGY, today, float(view["paper"]["total_value"]))
+    view = publish_book(STRATEGY, asdict(pt.state), ohlcv, PT_DIR, signals=sig_rows,
+                        nav_date=today, write_state=not already)
     print(f"  entered={entered or '[]'} closed={[t.ticker for t in closed] or '[]'} "
           f"queued={sorted(traded) or '[]'} skipped={skipped}")
 

@@ -24,7 +24,7 @@ Todo corre en la nube a diario con datos gratuitos, cada libro con €1.000 fict
 
 | Libro | Tipo | Desde | Universo | Idea |
 |---|---|---|---|---|
-| `liquidcap` | ML | 2026-07-06 | S&P 500 (miembros point-in-time) | LambdaRank sobre 25 features → top-8, 20 días |
+| `liquidcap` | ML | 2026-07-06 | S&P 500 (miembros point-in-time) | LambdaRank sobre 25 features → 4 tandas de top-8 (máx. 2 por sector), 20 días |
 | `btc_trend` | Reglas | 2026-08-19 | BTC + ETF de futuros gestionados | Comprado si cierre > SMA100·1,03; fuera si < SMA100·0,97; fuera → CTA |
 | `bounce` | Reglas (sombra) | 2026-08-28 | S&P 500 | Compra caídas: RSI<35, A/D-norm(150)<20, ROC(20) ≤ −7% |
 | `illiquid` | ML (sombra) | 2026-07-24 | Small caps | Prima de iliquidez: tercil de menor ADV, sin el 20% de mayor spread, ordenado por el modelo small-cap |
@@ -87,13 +87,17 @@ src/app/
 │                        volatility, liquidity, microstructure, market_regime, sector,
 │                        cross_sectional, fundamentals, alpha_features, lags, tradability
 ├── utils/               logging, semillas, Telegram, point_in_time (as_of, lag_safe_merge)
-├── paper_trading.py     motor PaperTrader (libros ML)
+├── engine/cohort_book.py  motor ÚNICO de liquidcap: backtest y libro en vivo usan el mismo step()
+├── books/publish.py     publicación común de los 4 libros (estado, señales, NAV, vista, precios)
+├── smallcap/            pipeline del modelo small cap: data, features, model, signals
+├── paper_trading.py     motor PaperTrader (libro illiquid)
 ├── signal_tracker.py    histórico de señales + resultado a 20 días
 └── web/                 dashboard_data (vistas), server (FastAPI local), templates/
 scripts/
-├── daily_pipeline.py    modelo small cap: datos, features, reentreno, señales
+├── daily_pipeline.py    orquesta el modelo small cap (app.smallcap)
 ├── illiquid_shadow.py   libro sombra illiquid
-├── liquidcap/           universo S&P 500, fundamentales, features, job diario, bootstrap
+├── liquidcap/           universo S&P 500 (+ gics_sectors.json), fundamentales, features, job
+│                        diario, backtest_cohorts.py (backtest con el motor en vivo), bootstrap
 ├── btc_trend_daily.py   libro BTC ↔ CTA
 ├── bounce_daily.py      libro sombra bounce
 ├── monitor_live_ic.py   monitor de IC en vivo
@@ -140,8 +144,12 @@ con cierre ≥ $1,50 y volumen medio 20d ≥ $500K. (En vivo se llegaron a compr
   los activos de esa fecha son los documentos.
 - **Target**: `fwd_ret_20d_sector_rel` = retorno a 20 días **menos la media de su
   sector ese día**, discretizado por fecha en 16 niveles de relevancia (qcut).
-  Ordenar dentro del sector neutraliza el sector y el mercado: el modelo aprende
-  selección, no *timing*.
+  Neutraliza el mercado: el modelo aprende selección, no *timing*. **Ojo en
+  liquidcap**: sus features se construyen con todos los tickers en el sector
+  "Unknown", así que allí el target es en realidad relativo a **todo el mercado** y
+  `sector_ret_60d` es el retorno del mercado (igual para todos en una fecha). El A/B
+  con sectores GICS reales (agosto, re-evaluado con el motor de tandas en octubre)
+  dio lo mismo (Sharpe 0,89 vs 0,88) → spec congelada sin cambios.
 - **Entrenamiento**: semanal, ventana expansiva sobre todo el histórico (deslistados
   incluidos). Purgado por construcción: las filas cuyo retorno a 20 días aún no se
   conoce tienen target NaN y se descartan.
@@ -155,12 +163,31 @@ con cierre ≥ $1,50 y volumen medio 20d ≥ $500K. (En vivo se llegaron a compr
   `price_roc_smooth_120d`, `obv`) + 10 ratios fundamentales point-in-time
   (`earnings_yield`, `cfo_yield`, `sales_yield`, `book_to_market`, `debt_to_equity`,
   `roa`, `op_margin`, `accruals`, `asset_growth`, `earnings_chg`).
-- 300 árboles, 16 bins. Selección del top-8 a peso igual, mantenimiento 20 días,
-  *trailing stop* ATR·5,3 acotado a [10%, 16%], objetivo +40%.
+- 300 árboles, 16 bins.
+- **Construcción de cartera (motor `app/engine/cohort_book.py`)**: el capital se divide
+  en 4 tandas; cada 5 sesiones una tanda vende lo que le quede y compra el top-8 del
+  día (peso igual, **máx. 2 por sector GICS**) → ~12-13 valores distintos a la vez.
+  Salidas: objetivo +40%, *trailing stop* ATR·5,3 acotado a [10%, 16%] desde el
+  máximo de cierre, vencimiento a 20 sesiones; el dinero de una salida **espera en su
+  tanda** hasta su próxima rotación (no se recompra el siguiente del ranking).
+- **Un solo motor para backtest y vivo**: `scripts/liquidcap/backtest_cohorts.py`
+  aplica a las predicciones fuera de muestra la misma función `step()` que ejecuta el
+  job diario; un test de paridad garantiza que avanzar día a día con el estado
+  guardado/recargado en JSON da exactamente el mismo resultado que el backtest.
+  Hasta 2026-10 el libro en vivo usaba otra construcción (8 huecos que se
+  rellenaban al día siguiente de cada salida): en la misma reproducción, Sharpe 0,65
+  y caída máx. −48% frente a 0,89 y −27% → la caída de octubre (−18% en 12 sesiones
+  durante la corrección de semiconductores) era normal para lo que se operaba, no
+  para lo validado. Migración sin ventas: las 8 posiciones pasaron a "herencia",
+  sus salidas alimentan una reserva y cada tanda se rellena al rotar (convergencia en
+  un ciclo de 20 sesiones).
+- **Recupera sesiones perdidas solo**: el job puntúa y procesa en orden todas las
+  sesiones posteriores a `last_update`.
 - **Entrada al cierre** de la misma sesión de la señal (simula una orden MOC);
   antes entraba a la apertura siguiente y perdía ~0,16 pp por operación.
 - **Backtest purgado**, 34 folds 2018-2026, universo point-in-time con deslistados:
-  **+1,69%/mes con coste plano de 5 pb; +0,95%/mes con coste según spread**.
+  **+1,69%/mes con coste plano de 5 pb; +0,95%/mes con coste según spread**; con el
+  motor de tandas + límite de sector: ~22%/año, Sharpe 0,89, caída máx. −27%.
   Ojo: el "Sharpe 2,43" que aparece en los resultados es la **media de Sharpes por
   fold de 3 meses**; reconstruido mes a mes como cartera, el Sharpe es ≈0,7 (≈ SPY).
   La ventaja es exceso de rentabilidad, no menos riesgo.
@@ -228,10 +255,14 @@ juntas inflaban el backtest (+4%/mes, Sharpe ~3 → honesto ~+1%/mes). Desde ent
 4. Prefijos/sufijos de label prohibidos en features (`fwd_*`, `future_*`, `actual_ret*`, `tb_label*`, `*_positive`).
 5. **Walk-forward purgado**: se descartan del entrenamiento las filas cuyo horizonte
    de 20 días solapa con el periodo de test.
-6. **Verificador** `scripts/v3/18_verify_no_leak.py` (`make leak-check`): nombres
-   prohibidos, columnas degeneradas, |Pearson| < 0,10 y mediana |Spearman| por fecha
-   < 0,15 frente al target. **Es una puerta manual** al cambiar features o spec; los
-   reentrenos semanales con spec congelada están purgados por construcción.
+6. **Puerta anti-fuga automática** (`app/features/leak_checks.py`): **cada
+   reentrenamiento de producción** (small cap y liquidcap) la ejecuta antes de guardar
+   el modelo; si falla, el run se pone en rojo y se conserva el modelo anterior.
+   Comprueba nombres de label, columnas degeneradas, |Pearson| < 0,10 y |IC medio por
+   fecha| < 0,25. Se usa el IC **con signo**: una exposición como beta tiene mucha
+   correlación diaria pero cambia de signo con el mercado; una fuga es constante.
+   Calibrada con datos reales (features legítimas ≤ 0,12; una copia ruidosa del target
+   0,74). A mano: `make leak-check` / `scripts/v3/18_verify_no_leak.py --book liquidcap`.
 
 ### 9.2 Estadística de dos niveles
 
@@ -283,7 +314,7 @@ Los resultados por configuración del harness están en `data/v3_benchmarks/`.
 1. **Historial en vivo corto** (2-4 meses por libro): el paper trading es el árbitro y aún no ha hablado.
 2. **Regímenes**: el histórico small cap empieza en 2021; BTC tiene ~3 ciclos completos.
 3. **Selección de la regla de BTC** tras probar muchas variantes → esperar menos que el backtest.
-4. **Sesiones perdidas**: liquidcap e illiquid no reprocesan días saltados (ver runbook).
+4. **Sesiones perdidas**: liquidcap las recupera solo; *illiquid* (PaperTrader) no.
 5. **Divisa**: los backtests están en USD; un inversor en EUR añade riesgo EUR/USD.
 6. **Impuestos** (19-28% en España) no incluidos en ningún backtest.
 
@@ -300,6 +331,10 @@ Los resultados por configuración del harness están en `data/v3_benchmarks/`.
 6. Flujo git: rama → PR a `main` → CI en verde → merge. Los *hotfix* de producción de
    los jobs pueden ir directos a `main`. El bot de datos hace push directo de datos.
 7. Antes de subir: `make lint test`.
+8. **Dependencias fijadas** en `requirements.lock` (universal Windows/Linux, generado
+   con `uv`): el CI instala exactamente eso. Tras cambiar `pyproject.toml`: `make lock`.
+9. **Una estrategia, una implementación**: si backtest y vivo necesitan la misma
+   lógica, va en un único módulo de `src/app/` y un test de paridad lo protege.
 
 ---
 
@@ -317,3 +352,4 @@ Los resultados por configuración del harness están en `data/v3_benchmarks/`.
 | 2026-08-27 | liquidcap pasa a entrar al cierre (MOC) |
 | 2026-09/10 | Investigación multiactivo y cripto; nace **btc_trend** (con rotación a CTA); se retira el *baseline* |
 | 2026-10-27 | Limpieza del repo: pipeline V2 archivado, código muerto y dependencias eliminados |
+| 2026-10-28 | Motor único de tandas para liquidcap (backtest = vivo) + límite de sector; dependencias bloqueadas; puerta anti-fuga automática; publicación común; paquete `app.smallcap` |

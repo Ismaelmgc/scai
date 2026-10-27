@@ -22,69 +22,39 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from app.config import get_settings
-from app.data import supabase_store
-from app.features.tradability import tradable_mask, is_stale
-from app.utils import setup_logging, set_global_seed, get_logger, notify_telegram
+from app.smallcap.data import update_ohlcv  # noqa: E402
+from app.smallcap.features import rebuild_features  # noqa: E402
+from app.smallcap.model import (  # noqa: E402,F401 — re-exported for illiquid_shadow / tests / leak CLI
+    MODEL_PATH,
+    RETRAIN_EVERY_DAYS,
+    V2_EDGAR_FEATURES,
+    V2_FEATURES,
+    V2_TARGET,
+    _days_since_train,
+    train_or_load_models,
+)
+from app.smallcap.signals import (  # noqa: E402,F401
+    conviction_sizes,
+    generate_today_signals,
+    record_signals,
+)
+from app.utils import get_logger, notify_telegram, set_global_seed, setup_logging
 
 log = get_logger(__name__)
 
-# ── Constants ───────────────────────────────────────────────
-RETRAIN_EVERY_DAYS = 7          # Retrain model every N calendar days
 DAILY_LOG_PATH = "data/paper_trading/daily_log.jsonl"
-SIGNAL_HISTORY_PATH = "data/paper_trading/signal_history.parquet"
-# Supabase `signals` key: kept as "baseline" (the retired book's name) so the
-# live-IC monitor keeps one continuous history.
-SIGNALS_KEY = "baseline"
-MODEL_REGISTRY = "data/paper_trading/model_registry.json"
-MODEL_PATH = "data/models/smallcap_v3_lambdarank.pkl"
 
-# V3 model config — Sprint 2 candidate (HP-tuned LambdaRank, 16-fold WF validated)
-V2_TARGET = "fwd_ret_20d_sector_rel"
-V2_RAW_COL = "fwd_ret_20d"
-V2_HOLD_DAYS = 20
-# Same 26 base features as V2 (pruning was tested and discarded — Sprint 2 task b)
-V2_FEATURES = [
-    'max_dd_60d', 'vol_of_vol_60d', 'ret_kurtosis_60d', 'avg_trade_size_20d',
-    'obv', 'obv_vs_sma_60d', 'amihud_60d', 'downside_vol_60d', 'ema_26',
-    'spread_proxy_20d', 'ret_skew_60d', 'ret_252d', 'sma_200', 'sector_ret_60d',
-    'realized_vol_120d', 'macd_hist', 'pct_from_52w_low', 'adv_60d',
-    'ret_vs_sector_60d', 'vol_of_vol_ratio', 'price_roc_smooth_120d',
-    'vwap_dev_avg_20d', 'reversal_20v60', 'vol_regime_change', 'beta_60d',
-    'macd_signal',
-]
-# Number of relevance bins for LambdaRank (per-date qcut)
-V3_N_BINS = 16
-V2_LGB_PARAMS = {
-    "objective": "lambdarank", "metric": "ndcg",
-    "num_leaves": 31, "max_depth": 6,
-    "learning_rate": 0.05, "min_child_samples": 30,
-    "subsample": 0.75, "colsample_bytree": 0.7,
-    "reg_lambda": 5.0,
-    "lambdarank_truncation_level": 8,
-    "label_gain": list(range(V3_N_BINS)),
-    "n_jobs": 1, "seed": 42, "verbose": -1,
-}
-V3_NUM_BOOST_ROUND = 600
-V2_TOP_K = 8
-V2_REBALANCE_FREQ = 5  # days between rebalances
 
-# EDGAR fundamental features (validated IC: dilution_pct=-0.029***, current_ratio=-0.021***)
-V2_EDGAR_FEATURES = [
-    'dilution_pct',
-    'current_ratio',
-]
 
 
 def _already_ran_today() -> bool:
@@ -116,564 +86,34 @@ def _log_daily(entry: dict) -> None:
         f.write(json.dumps(entry, default=str) + "\n")
 
 
-def _should_retrain(force: bool = False) -> bool:
-    """Check if we need to retrain based on the model registry."""
-    if force:
-        return True
-    reg_path = Path(MODEL_REGISTRY)
-    if not reg_path.exists():
-        return True  # No model yet → must train
-    with open(reg_path) as f:
-        registry = json.load(f)
-    last_train = registry.get("last_train_date", "")
-    if not last_train:
-        return True
-    days_since = (date.today() - date.fromisoformat(last_train)).days
-    return days_since >= RETRAIN_EVERY_DAYS
 
 
-def _update_model_registry(metrics: dict) -> None:
-    """Record model training metadata."""
-    reg_path = Path(MODEL_REGISTRY)
-    reg_path.parent.mkdir(parents=True, exist_ok=True)
-    registry = {}
-    if reg_path.exists():
-        with open(reg_path) as f:
-            registry = json.load(f)
-    registry.update({
-        "last_train_date": date.today().isoformat(),
-        "train_count": registry.get("train_count", 0) + 1,
-        "last_metrics": metrics,
-    })
-    with open(reg_path, "w") as f:
-        json.dump(registry, f, indent=2, default=str)
 
 
 # ── Step 1: Incremental data download ─────────────────────
 
-def update_ohlcv(cfg, predict_to: str) -> pd.DataFrame:
-    """Download only the missing OHLCV bars since last update."""
-    from app.data.store.parquet_store import ParquetStore
-    from app.data.massive import MassiveClient, AggregatesAPI
-
-    store = ParquetStore()
-    ohlcv = store.read("ohlcv_smallcap")
-    uni_df = store.read("smallcap_universe")
-    # Only download updates for active tickers (delisted ones won't have new bars)
-    active_mask = uni_df["active"] == True if "active" in uni_df.columns else pd.Series(True, index=uni_df.index)
-    tickers = uni_df[active_mask]["ticker"].tolist()
-
-    ohlcv["date"] = pd.to_datetime(ohlcv["date"])
-    last_date = ohlcv["date"].max().date()
-    predict_to_date = pd.Timestamp(predict_to).date()
-
-    # Check for tickers lagging behind the global max date
-    last_per_ticker = ohlcv.groupby("ticker")["date"].max()
-    stale_tickers = last_per_ticker[last_per_ticker < ohlcv["date"].max() - pd.Timedelta(days=2)]
-    n_stale = len(stale_tickers)
-
-    # Skip the download only if we already hold the target day's bar. Comparing
-    # against (today - 1) meant a run holding yesterday's bar short-circuited and
-    # never fetched today's — the cron captured no data for the day (fixed
-    # 2026-06-12). predict_to already encodes weekend/holiday handling.
-    if last_date >= predict_to_date and n_stale == 0:
-        print(f"  OHLCV already current ({last_date})")
-        return ohlcv
-
-    if n_stale > 0:
-        print(f"  ⚠ {n_stale} tickers desfasados: {', '.join(stale_tickers.index[:10])}")
-
-    print(f"  Updating OHLCV: {last_date} → {predict_to} ({len(tickers)} tickers)")
-
-    # Rate from MASSIVE_CALLS_PER_MINUTE (default 50, paid plan). When the
-    # Polygon plan is downgraded to free, set this env to 5 — no code change
-    # needed; the daily download just paces slower (~12s/ticker, job still
-    # completes within the Actions 6h limit).
-    cpm = int(os.environ.get("MASSIVE_CALLS_PER_MINUTE", "50"))
-    client = MassiveClient(calls_per_minute=cpm)
-    aggs = AggregatesAPI(client)
-
-    # Import the downloaders from the main pipeline
-    from app.data.smallcap_ohlcv import download_ohlcv, download_ohlcv_grouped
-
-    # Per-ticker pull for the small set grouped_daily can't cover from the global
-    # frontier: brand-new tickers (no bars) + individually stale ones (own last bar
-    # behind the rest, e.g. post-halt). Restricted to ACTIVE tickers — the 728
-    # delisted names are perpetually "stale" but must never be re-fetched. Done
-    # first so each one's own gap is filled, then grouped tops up recent sessions.
-    new_tickers = [t for t in tickers if t not in last_per_ticker.index]
-    catch_up = sorted(set(new_tickers) | (set(stale_tickers.index) & set(tickers)))
-    if catch_up:
-        print(f"  per-ticker backfill: {len(catch_up)} new/stale "
-              f"({', '.join(catch_up[:10])}{'…' if len(catch_up) > 10 else ''})")
-        ohlcv = download_ohlcv(
-            aggs, catch_up,
-            train_start=(last_date - timedelta(days=5)).isoformat(),
-            predict_to=predict_to,
-            existing_ohlcv=ohlcv,
-        )
-
-    # Bulk incremental for the WHOLE universe via grouped_daily: ~1 call/session
-    # (whole market, filtered to our tickers) instead of one call per ticker —
-    # ~12s vs ~1h on the free Polygon tier (5/min). See download_ohlcv_grouped.
-    ohlcv = download_ohlcv_grouped(aggs, tickers, ohlcv, predict_to)
-
-    # Also update SPY
-    existing_spy = store.read("smallcap_spy") if store.exists("smallcap_spy") else None
-    spy_from = (last_date + timedelta(days=1)).isoformat()
-    try:
-        spy_bars = aggs.get_custom_bars("SPY", from_date=spy_from,
-                                         to_date=predict_to, adjusted=True)
-    except Exception as e:
-        log.warning("spy_download_failed", error=str(e))
-        spy_bars = []
-    if spy_bars:
-        spy_rows = [{"date": pd.Timestamp(b.trading_date), "ticker": "SPY",
-                     "open": b.open, "high": b.high, "low": b.low,
-                     "close": b.close, "volume": b.volume} for b in spy_bars]
-        spy_new = pd.DataFrame(spy_rows)
-        if existing_spy is not None and not existing_spy.empty:
-            existing_spy["date"] = pd.to_datetime(existing_spy["date"])
-            spy_df = pd.concat([existing_spy, spy_new], ignore_index=True)
-            spy_df = spy_df.drop_duplicates(subset=["date"], keep="last")
-        else:
-            spy_df = spy_new
-        store.write("smallcap_spy", spy_df)
-
-    # Also update IWM (Russell 2000) — the investable benchmark for the small-cap
-    # books on the dashboard chart/alpha (SPY stays as the feature market-proxy).
-    # First run self-backfills the full history to match SPY's span; then incremental.
-    existing_iwm = store.read("smallcap_iwm") if store.exists("smallcap_iwm") else None
-    if existing_iwm is not None and not existing_iwm.empty:
-        existing_iwm["date"] = pd.to_datetime(existing_iwm["date"])
-        iwm_from = (existing_iwm["date"].max() + timedelta(days=1)).date().isoformat()
-    else:
-        iwm_from = "2021-06-09"  # backfill to match smallcap_spy's start
-    try:
-        iwm_bars = aggs.get_custom_bars("IWM", from_date=iwm_from,
-                                        to_date=predict_to, adjusted=True)
-    except Exception as e:
-        log.warning("iwm_download_failed", error=str(e))
-        iwm_bars = []
-    if iwm_bars:
-        iwm_rows = [{"date": pd.Timestamp(b.trading_date), "ticker": "IWM",
-                     "open": b.open, "high": b.high, "low": b.low,
-                     "close": b.close, "volume": b.volume} for b in iwm_bars]
-        iwm_new = pd.DataFrame(iwm_rows)
-        if existing_iwm is not None and not existing_iwm.empty:
-            iwm_df = pd.concat([existing_iwm, iwm_new], ignore_index=True)
-            iwm_df = iwm_df.drop_duplicates(subset=["date"], keep="last")
-        else:
-            iwm_df = iwm_new
-        store.write("smallcap_iwm", iwm_df)
-
-    client.close()
-    store.write("ohlcv_smallcap", ohlcv)
-    print(f"  ✓ OHLCV: {len(ohlcv):,} rows, {ohlcv['date'].max().date()}")
-
-    # Data-gap watch: name ACTIVE tickers chronically behind the panel (missing the
-    # last >=2 sessions). A transient 1-day miss self-heals via the stale catch-up,
-    # so it's NOT flagged; a ticker stuck >=2 sessions is a real gap. The daily
-    # "316/317" count alone can't tell transient noise from a broken ticker — this
-    # surfaces the NAMES + how many sessions each is behind in the log/Telegram.
-    sessions = sorted(pd.to_datetime(ohlcv["date"]).dt.normalize().unique())
-    active_set = set(tickers)
-    if len(sessions) >= 3:
-        cutoff = sessions[-2]  # last bar older than this => missing >=2 sessions
-        last_bar = ohlcv[ohlcv["ticker"].isin(active_set)].groupby("ticker")["date"].max()
-        stale = last_bar[last_bar < cutoff]
-        if len(stale):
-            behind = sorted(((tk, int(sum(s > d for s in sessions))) for tk, d in stale.items()),
-                            key=lambda x: -x[1])
-            names = ", ".join(f"{tk}(-{n})" for tk, n in behind[:15])
-            print(f"  ⚠ {len(stale)}/{len(active_set)} active tickers STALE >=2 sessions "
-                  f"[ticker(-sessions_behind)]: {names}{' ...' if len(stale) > 15 else ''}")
-        else:
-            print(f"  ✓ all {len(active_set)} active tickers current (<=1 session behind)")
-    return ohlcv
 
 
 # ── Step 2: Rebuild features ──────────────────────────────
 
-def rebuild_features(ohlcv: pd.DataFrame, cfg) -> pd.DataFrame:
-    """Rebuild feature matrix with latest data (Yahoo backfill + Massive)."""
-    from app.data.store.parquet_store import ParquetStore
-    from app.features.pipeline import build_feature_matrix
-
-    store = ParquetStore()
-    uni_df = store.read("smallcap_universe")
-    verified_tickers = uni_df.to_dict("records")
-
-    # ── Combine OHLCV: Yahoo backfill (2019-2024) + Massive (2024-present) ──
-    ohlcv_combined = ohlcv.copy()
-    try:
-        if store.exists("ohlcv_smallcap_yahoo"):
-            yahoo_ohlcv = store.read("ohlcv_smallcap_yahoo")
-            if yahoo_ohlcv is not None and not yahoo_ohlcv.empty:
-                yahoo_ohlcv["date"] = pd.to_datetime(yahoo_ohlcv["date"])
-                ohlcv_combined["date"] = pd.to_datetime(ohlcv_combined["date"])
-                # Concat and deduplicate (Massive takes priority in overlap)
-                ohlcv_combined = pd.concat([yahoo_ohlcv, ohlcv_combined], ignore_index=True)
-                ohlcv_combined = ohlcv_combined.drop_duplicates(
-                    subset=["ticker", "date"], keep="last"
-                ).sort_values(["ticker", "date"])
-                print(f"  ✓ Yahoo backfill: {len(yahoo_ohlcv):,} rows added "
-                      f"({yahoo_ohlcv['date'].min().date()} → {yahoo_ohlcv['date'].max().date()})")
-    except Exception as e:
-        log.warning("yahoo_backfill_unavailable", error=str(e))
-
-    # Load auxiliary data
-    fundamentals = None
-    try:
-        from app.features.fundamentals import _pivot_fundamentals, compute_fundamental_features
-        fund_raw = store.read("smallcap_fundamentals")
-        if fund_raw is not None and not fund_raw.empty:
-            fund_pivoted = _pivot_fundamentals(fund_raw)
-            if not fund_pivoted.empty:
-                fundamentals = compute_fundamental_features(fund_pivoted)
-    except Exception as e:
-        log.warning("fundamentals_unavailable", error=str(e))
-
-    market_df = None
-    try:
-        spy_data = store.read("smallcap_spy")
-        if spy_data is not None and not spy_data.empty:
-            market_df = spy_data
-    except Exception as e:
-        log.warning("spy_unavailable", error=str(e))
-
-    features = build_feature_matrix(
-        ohlcv_combined, fundamentals=fundamentals, market_df=market_df,
-        universe=verified_tickers, horizons=[1, 5, 10, 20],
-    )
-
-    # Add lag features
-    from app.features.lags import add_lag_features
-    features = add_lag_features(features)
-
-    # Add EDGAR fundamental features (dilution_pct, current_ratio)
-    features = _merge_edgar_features(features)
-
-    store.write("features_smallcap", features)
-    print(f"  ✓ Features: {len(features):,} rows × {len(features.columns)} cols")
-    return features.copy()  # defragment
 
 
-def _merge_edgar_features(features: pd.DataFrame) -> pd.DataFrame:
-    """Merge EDGAR fundamental features (dilution_pct, current_ratio) into feature matrix.
-
-    Uses point-in-time filing dates to prevent look-ahead bias:
-    for each (ticker, date), we use the most recent filing before that date.
-    """
-    try:
-        edgar_path = Path("data/edgar_facts.parquet")
-        if not edgar_path.exists():
-            return features
-
-        from app.data.free_sources.sec_edgar import compute_edgar_features
-        facts = pd.read_parquet(edgar_path)
-        edgar_feat = compute_edgar_features(facts)
-        if edgar_feat.empty:
-            return features
-
-        # Keep only columns we need
-        keep_cols = ["ticker", "filing_date"] + [
-            c for c in V2_EDGAR_FEATURES if c in edgar_feat.columns
-        ]
-        edgar_feat = edgar_feat[keep_cols].dropna(subset=["filing_date"]).copy()
-        edgar_feat["filing_date"] = pd.to_datetime(edgar_feat["filing_date"])
-
-        # Point-in-time merge: for each (ticker, date), use most recent filing <= date
-        features["date"] = pd.to_datetime(features["date"])
-        edgar_feat = edgar_feat.sort_values("filing_date").reset_index(drop=True)
-
-        # merge_asof requires both sides sorted by the on-key globally
-        features_sorted = features.sort_values("date").reset_index(drop=True)
-
-        merged = pd.merge_asof(
-            features_sorted,
-            edgar_feat,
-            left_on="date",
-            right_on="filing_date",
-            by="ticker",
-            direction="backward",
-        )
-        # Drop the filing_date column
-        merged = merged.drop(columns=["filing_date"], errors="ignore")
-
-        n_filled = merged[V2_EDGAR_FEATURES[0]].notna().sum() if V2_EDGAR_FEATURES[0] in merged.columns else 0
-        print(f"  ✓ EDGAR features added ({n_filled:,} rows with data)")
-        return merged
-
-    except Exception as e:
-        log.warning("edgar_features_failed", error=str(e))
-        return features
 
 
 # ── Step 3: Train or load models ──────────────────────────
 
-def train_or_load_models(features: pd.DataFrame, predict_from: str, cfg,
-                         force_retrain: bool = False):
-    """Train V3 LambdaRank model on sector-relative 20d returns, or load cached.
-
-    Returns (model, predict_data, train_metrics).
-    """
-    import pickle
-    import lightgbm as lgb
-
-    model_path = Path(MODEL_PATH)
-    need_retrain = _should_retrain(force_retrain)
-
-    if not need_retrain and model_path.exists():
-        print("  Loading cached V3 model (retrain not due)...")
-        try:
-            with open(model_path, "rb") as f:
-                model = pickle.load(f)  # noqa: S301
-
-            features["date"] = pd.to_datetime(features["date"])
-            predict_data = features[
-                features["date"] >= pd.Timestamp(predict_from)
-            ].copy()
-
-            print(f"  ✓ V3 model loaded (trained {_days_since_train()} days ago)")
-            return model, predict_data, {}
-        except Exception as e:
-            print(f"  ⚠ Model load failed ({e}), retraining...")
-
-    # Retrain V3 model
-    print("  ═══ V3 LAMBDARANK MODEL RETRAINING ═══")
-    features["date"] = pd.to_datetime(features["date"])
-
-    train_data = features[features["date"] < pd.Timestamp(predict_from)].copy()
-    predict_data = features[features["date"] >= pd.Timestamp(predict_from)].copy()
-
-    # Check required columns exist — base features + EDGAR
-    available_features = [f for f in V2_FEATURES if f in train_data.columns]
-    available_edgar = [f for f in V2_EDGAR_FEATURES if f in train_data.columns]
-    all_train_features = available_features + available_edgar
-    if len(available_features) < 15:
-        print(f"  ⚠ Only {len(available_features)}/{len(V2_FEATURES)} features available")
-    if available_edgar:
-        n_edgar = train_data[available_edgar[0]].notna().sum()
-        print(f"  EDGAR features: {len(available_edgar)} ({n_edgar:,} rows with data)")
-
-    # Clean training data — V3 LambdaRank: relevance bins per date + group structure
-    train_clean = train_data.dropna(subset=[V2_TARGET]).sort_values("date").copy()
-    train_clean["_rel"] = train_clean.groupby("date")[V2_TARGET].transform(
-        lambda s: pd.qcut(s.rank(method="first"), V3_N_BINS,
-                          labels=False, duplicates="drop")
-    )
-    train_clean["_rel"] = train_clean["_rel"].fillna(0).astype(int).clip(0, V3_N_BINS - 1)
-    X_train = train_clean[all_train_features].fillna(0).values
-    y_train = train_clean["_rel"].values
-    group = train_clean.groupby("date").size().values
-
-    print(f"  Training (V3 LambdaRank): {len(train_clean):,} rows, "
-          f"{len(all_train_features)} features, {len(group)} dates (groups)")
-    print(f"  Target: {V2_TARGET} (binned 0..{V3_N_BINS - 1})")
-
-    ds = lgb.Dataset(X_train, y_train, group=group,
-                     feature_name=all_train_features, free_raw_data=True)
-    model = lgb.train(V2_LGB_PARAMS, ds, num_boost_round=V3_NUM_BOOST_ROUND,
-                      callbacks=[lgb.log_evaluation(0)])
-
-    # Save model
-    model_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(model_path, "wb") as f:
-        pickle.dump(model, f)
-
-    metrics = {
-        "n_train": len(train_clean),
-        "n_features": len(all_train_features),
-        "n_edgar_features": len(available_edgar),
-        "target": V2_TARGET,
-        "model_type": "lgb_lambdarank_v3",
-    }
-    _update_model_registry(metrics)
-    print(f"  ✓ V3 LambdaRank model trained ({model.num_trees()} trees)")
-
-    return model, predict_data, metrics
 
 
-def _days_since_train() -> int:
-    """Days since last model training."""
-    reg_path = Path(MODEL_REGISTRY)
-    if not reg_path.exists():
-        return 999
-    with open(reg_path) as f:
-        registry = json.load(f)
-    last = registry.get("last_train_date", "")
-    if not last:
-        return 999
-    return (date.today() - date.fromisoformat(last)).days
 
 
 # ── Step 4: Generate today's signals ──────────────────────
 
-def conviction_sizes(data: pd.DataFrame, top_k: int) -> pd.Series:
-    """Conviction-linear position sizing over the tradable top-K.
-
-    Returns a position_size_pct Series aligned to `data`'s index. `data` must
-    carry `v2_score` and a boolean `_tradable` column, sorted by score desc.
-    Among the top-K tradable names, weight ∝ max(z, 0.1) where z is the
-    cross-sectional z-score of v2_score over the FULL tradable universe (so the
-    tilt reflects each name's standing vs the whole field, not just within the
-    top-K); normalized to sum to 1. Non-BUYs get 0. Degenerate cases (no spread
-    in scores, single name) fall back to equal-weight.
-
-    Replaces the old flat 1/K. The pred carries within-top-8 information (the
-    #1-ranked beats the #8 on average), so tilting capital toward conviction
-    adds return without touching drawdown: +1.6%/fold vs equal-weight, Sharpe
-    1.60->1.74, paired-bootstrap CI[+0.3%,+2.9%]>0, 12/16 folds. Validated in
-    scripts/v3/43_capital_deployment.py on the v4_fs_base28 prediction cache.
-    """
-    sizes = pd.Series(0.0, index=data.index)
-    tradable = data[data["_tradable"]]
-    if tradable.empty:
-        return sizes
-    buys = tradable.head(top_k)
-    sd = float(tradable["v2_score"].std())
-    if not (sd > 0) or len(buys) < 2:
-        sizes.loc[buys.index] = 1.0 / len(buys)
-        return sizes
-    z = (buys["v2_score"] - float(tradable["v2_score"].mean())) / sd
-    conv = z.clip(lower=0.1)
-    sizes.loc[buys.index] = conv / conv.sum()
-    return sizes
 
 
-def generate_today_signals(model, predict_data, ohlcv, today: str) -> pd.DataFrame:
-    """Generate V2 signals: rank stocks by predicted sector-relative return."""
-    today_ts = pd.Timestamp(today)
-    predict_data["date"] = pd.to_datetime(predict_data["date"])
-
-    available_dates = sorted(predict_data["date"].unique())
-    if not available_dates:
-        print("  ⚠ No prediction data available")
-        return pd.DataFrame()
-
-    latest = available_dates[-1]
-    today_data = predict_data[predict_data["date"] == latest].copy()
-
-    if today_data.empty:
-        print(f"  ⚠ No data for {latest.date()}")
-        return pd.DataFrame()
-
-    # Freshness guard: stale features mean the download failed silently —
-    # never generate signals from old data.
-    if is_stale(latest, today_ts):
-        print(f"  ✗ Features are stale (latest={latest.date()}, today={today_ts.date()}) "
-              f"— skipping signal generation")
-        return pd.DataFrame()
-
-    # Tradability gate: delisted/illiquid tickers stay in OHLCV for training
-    # (anti-survivorship) but must never be SELECTED. Live trading bought
-    # sub-penny zombies (SRNE @ $0.0006) before this filter existed.
-    today_data["_tradable"] = tradable_mask(today_data)
-    n_excluded = int((~today_data["_tradable"]).sum())
-    print(f"  ✓ Tradability gate: {today_data['_tradable'].sum()} tradable, "
-          f"{n_excluded} excluded (price/liquidity)")
-
-    # Score all stocks (base + EDGAR features)
-    available_features = [f for f in V2_FEATURES if f in today_data.columns]
-    available_edgar = [f for f in V2_EDGAR_FEATURES if f in today_data.columns]
-    all_features = available_features + available_edgar
-    X = today_data[all_features].fillna(0).values
-    today_data["v2_score"] = model.predict(X)
-
-    # Rank by predicted sector-relative return (higher = better)
-    today_data = today_data.sort_values("v2_score", ascending=False)
-    pos_sizes = conviction_sizes(today_data, V2_TOP_K)
-
-    records = []
-    n_buys = 0
-    for idx, row in today_data.iterrows():
-        ticker = str(row.get("ticker", ""))
-        dt_str = str(latest.date())
-
-        rejection = ""
-        if not bool(row["_tradable"]):
-            recommendation = "HOLD"
-            position_size = 0.0
-            rejection = "untradable: below min price/liquidity"
-        elif n_buys < V2_TOP_K:
-            recommendation = "BUY"
-            position_size = float(pos_sizes.loc[idx])  # conviction-linear weight
-            n_buys += 1
-        else:
-            recommendation = "HOLD"
-            position_size = 0.0
-
-        # ATR-adaptive trailing stop
-        vol = float(row.get("realized_vol_20d", 0.3))
-        atr_pct = float(row.get("atr_pct_20d", vol / np.sqrt(252) * 2))
-        median_atr = today_data.head(V2_TOP_K)["atr_pct_20d"].median() if "atr_pct_20d" in today_data.columns else 0.03
-        if median_atr > 0 and recommendation == "BUY":
-            adaptive_trail = np.clip(0.16 * (atr_pct / median_atr), 0.10, 0.16)
-        else:
-            adaptive_trail = 0.16
-
-        records.append({
-            "ticker": ticker,
-            "date": dt_str,
-            "recommendation": recommendation,
-            "ensemble_score": float(row["v2_score"]),
-            "calibrated_prob": float(row["v2_score"]),  # compatibility
-            "expected_return": float(row["v2_score"]),
-            "position_size_pct": position_size,
-            "trailing_stop_pct": adaptive_trail,
-            "stop_loss_pct": adaptive_trail,
-            "rejection_reasons": rejection,
-        })
-
-    signals = pd.DataFrame(records)
-    buys = signals[signals["recommendation"] == "BUY"]
-    print(f"  ✓ Signals: {len(signals)} total, {len(buys)} BUY")
-    if not buys.empty:
-        for _, b in buys.iterrows():
-            print(f"    BUY {b['ticker']:6s} — score: {b['ensemble_score']:.4f}, "
-                  f"trail: {b['trailing_stop_pct']:.0%}")
-
-    return signals
 
 
 # ── Step 5: Record signals (live-IC monitor) ──────────
 
-def record_signals(signals: pd.DataFrame, ohlcv: pd.DataFrame, today: str,
-                   dry_run: bool) -> None:
-    """Track the model's daily signals: local SignalTracker history (20d outcomes
-    backfilled as they mature) + Supabase `signals` rows for the live-IC monitor."""
-    from app.signal_tracker import SignalTracker
-
-    tracker = SignalTracker(path=SIGNAL_HISTORY_PATH)
-    if not signals.empty:
-        tracker.record_signals(signals, set(), {}, today)
-    n_filled = tracker.backfill_outcomes(ohlcv, horizon_days=V2_HOLD_DAYS)
-    if n_filled:
-        print(f"  ✓ Outcomes backfilled: {n_filled} signals")
-    stats = tracker.summary_stats()
-    if "score_return_correlation" in stats:
-        print(f"  ✓ Signal history: {stats['total_signals']} signals, "
-              f"{stats['outcomes_available']} with outcomes, "
-              f"score↔return corr {stats['score_return_correlation']:.3f}")
-    tracker.save()
-
-    if dry_run or signals.empty or not supabase_store.is_configured():
-        return
-    try:
-        supabase_store.upsert_signals(SIGNALS_KEY, [{
-            "signal_date": today,
-            "ticker": r["ticker"],
-            "score": float(r["ensemble_score"]),
-            "recommendation": r["recommendation"],
-            "was_traded": False,
-            "skip_reason": r.get("rejection_reasons") or None,
-            "actual_ret_20d": None,
-        } for _, r in signals.iterrows()])
-        print(f"  ✓ Supabase: {len(signals)} signals")
-    except Exception as e:  # best-effort: the monitor tolerates a missing day
-        log.warning("supabase_signals_failed", error=str(e))
-        print(f"  ⚠ Supabase signals write failed: {e}")
 
 
 # ── Main ──────────────────────────────────────────────────
