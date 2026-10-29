@@ -1,6 +1,6 @@
 {
   "initial_capital": 1000.0,
-  "cash": 134.78213438538,
+  "cash": 2.264150127880015,
   "positions": [
     {
       "side": "LONG",
@@ -78,7 +78,7 @@
       "ticker": "BBCP",
       "low_price": 9.334,
       "entry_date": "2026-10-14",
-      "high_price": 9.73,
+      "high_price": 9.95,
       "entry_price": 9.334,
       "entry_day_idx": 134,
       "stop_loss_price": 7.8405,
@@ -99,6 +99,20 @@
       "position_size_pct": 0.125,
       "trailing_stop_pct": 0.16,
       "holding_period_days": 20
+    },
+    {
+      "ticker": "PLTK",
+      "side": "LONG",
+      "shares": 64.5461,
+      "entry_price": 2.0531,
+      "entry_date": "2026-10-28",
+      "entry_day_idx": 144,
+      "trailing_stop_pct": 0.16,
+      "holding_period_days": 20,
+      "high_price": 2.0531,
+      "low_price": 2.0531,
+      "stop_loss_price": 1.7246,
+      "position_size_pct": 0.125
     }
   ],
   "closed_trades": [
@@ -415,30 +429,22 @@
       "exit_reason": "trailing_stop"
     },
     {
-      "ticker": "EXFY",
       "side": "LONG",
       "shares": 55.3218,
-      "entry_price": 2.1332,
-      "entry_date": "2026-09-29",
-      "exit_price": 2.4363,
-      "exit_date": "2026-10-27",
-      "exit_reason": "expiry",
+      "ticker": "EXFY",
       "pnl_pct": 0.1421,
       "pnl_usd": 16.77,
-      "days_held": 20
+      "days_held": 20,
+      "exit_date": "2026-10-27",
+      "entry_date": "2026-09-29",
+      "exit_price": 2.4363,
+      "entry_price": 2.1332,
+      "exit_reason": "expiry"
     }
   ],
-  "current_day_idx": 144,
-  "last_update": "2026-10-27",
-  "pending_signals": [
-    {
-      "ticker": "PLTK",
-      "signal_date": "2026-10-27",
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.16,
-      "stop_loss_pct": 0.16
-    }
-  ],
+  "current_day_idx": 145,
+  "last_update": "2026-10-28",
+  "pending_signals": [],
   "cooldown_until": {
     "BHR": 135,
     "FPH": 138,
