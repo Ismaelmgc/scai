@@ -78,7 +78,7 @@
       "ticker": "BBCP",
       "low_price": 9.334,
       "entry_date": "2026-10-14",
-      "high_price": 9.95,
+      "high_price": 10.18,
       "entry_price": 9.334,
       "entry_day_idx": 134,
       "stop_loss_price": 7.8405,
@@ -101,18 +101,18 @@
       "holding_period_days": 20
     },
     {
-      "ticker": "PLTK",
       "side": "LONG",
       "shares": 64.5461,
-      "entry_price": 2.0531,
-      "entry_date": "2026-10-28",
-      "entry_day_idx": 144,
-      "trailing_stop_pct": 0.16,
-      "holding_period_days": 20,
-      "high_price": 2.0531,
+      "ticker": "PLTK",
       "low_price": 2.0531,
+      "entry_date": "2026-10-28",
+      "high_price": 2.0531,
+      "entry_price": 2.0531,
+      "entry_day_idx": 144,
       "stop_loss_price": 1.7246,
-      "position_size_pct": 0.125
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "holding_period_days": 20
     }
   ],
   "closed_trades": [
@@ -442,8 +442,8 @@
       "exit_reason": "expiry"
     }
   ],
-  "current_day_idx": 145,
-  "last_update": "2026-10-28",
+  "current_day_idx": 146,
+  "last_update": "2026-10-29",
   "pending_signals": [],
   "cooldown_until": {
     "BHR": 135,
