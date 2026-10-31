@@ -1,6 +1,6 @@
 {
   "initial_capital": 1000.0,
-  "cash": 2.264150127880015,
+  "cash": 136.31369874038003,
   "positions": [
     {
       "side": "LONG",
@@ -12,20 +12,6 @@
       "entry_price": 19.25,
       "entry_day_idx": 100,
       "stop_loss_price": 16.17,
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.16,
-      "holding_period_days": 20
-    },
-    {
-      "side": "LONG",
-      "shares": 86.6135,
-      "ticker": "DOUG",
-      "low_price": 1.5523,
-      "entry_date": "2026-10-02",
-      "high_price": 1.61,
-      "entry_price": 1.5523,
-      "entry_day_idx": 127,
-      "stop_loss_price": 1.304,
       "position_size_pct": 0.125,
       "trailing_stop_pct": 0.16,
       "holding_period_days": 20
@@ -64,7 +50,7 @@
       "ticker": "DAO",
       "low_price": 17.6264,
       "entry_date": "2026-10-13",
-      "high_price": 19.5,
+      "high_price": 20.09,
       "entry_price": 17.6264,
       "entry_day_idx": 133,
       "stop_loss_price": 14.8062,
@@ -78,7 +64,7 @@
       "ticker": "BBCP",
       "low_price": 9.334,
       "entry_date": "2026-10-14",
-      "high_price": 10.18,
+      "high_price": 10.23,
       "entry_price": 9.334,
       "entry_day_idx": 134,
       "stop_loss_price": 7.8405,
@@ -440,11 +426,32 @@
       "exit_price": 2.4363,
       "entry_price": 2.1332,
       "exit_reason": "expiry"
+    },
+    {
+      "ticker": "DOUG",
+      "side": "LONG",
+      "shares": 86.6135,
+      "entry_price": 1.5523,
+      "entry_date": "2026-10-02",
+      "exit_price": 1.5477,
+      "exit_date": "2026-10-30",
+      "exit_reason": "expiry",
+      "pnl_pct": -0.003,
+      "pnl_usd": -0.4,
+      "days_held": 20
     }
   ],
-  "current_day_idx": 146,
-  "last_update": "2026-10-29",
-  "pending_signals": [],
+  "current_day_idx": 147,
+  "last_update": "2026-10-30",
+  "pending_signals": [
+    {
+      "ticker": "ENGN",
+      "signal_date": "2026-10-30",
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "stop_loss_pct": 0.16
+    }
+  ],
   "cooldown_until": {
     "BHR": 135,
     "FPH": 138,
