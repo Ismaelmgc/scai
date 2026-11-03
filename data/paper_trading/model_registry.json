@@ -1,11 +1,10 @@
 {
-  "last_train_date": "2026-10-27",
-  "train_count": 38,
+  "last_train_date": "2026-11-03",
+  "train_count": 39,
   "last_metrics": {
-    "n_train": 840746,
+    "n_train": 842395,
     "n_features": 28,
     "n_edgar_features": 2,
-    "n_meta_features": 0,
     "target": "fwd_ret_20d_sector_rel",
     "model_type": "lgb_lambdarank_v3"
   },
