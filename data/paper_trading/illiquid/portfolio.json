@@ -1,6 +1,6 @@
 {
   "initial_capital": 1000.0,
-  "cash": 2.491486070380006,
+  "cash": 147.14130539037998,
   "positions": [
     {
       "side": "LONG",
@@ -12,20 +12,6 @@
       "entry_price": 19.25,
       "entry_day_idx": 100,
       "stop_loss_price": 16.17,
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.16,
-      "holding_period_days": 20
-    },
-    {
-      "side": "LONG",
-      "shares": 60.3613,
-      "ticker": "POWW",
-      "low_price": 2.1632,
-      "entry_date": "2026-10-07",
-      "high_price": 2.48,
-      "entry_price": 2.1632,
-      "entry_day_idx": 130,
-      "stop_loss_price": 1.8171,
       "position_size_pct": 0.125,
       "trailing_stop_pct": 0.16,
       "holding_period_days": 20
@@ -50,7 +36,7 @@
       "ticker": "DAO",
       "low_price": 17.6264,
       "entry_date": "2026-10-13",
-      "high_price": 20.09,
+      "high_price": 20.69,
       "entry_price": 17.6264,
       "entry_day_idx": 133,
       "stop_loss_price": 14.8062,
@@ -92,7 +78,7 @@
       "ticker": "PLTK",
       "low_price": 2.0531,
       "entry_date": "2026-10-28",
-      "high_price": 2.0531,
+      "high_price": 2.12,
       "entry_price": 2.0531,
       "entry_day_idx": 144,
       "stop_loss_price": 1.7246,
@@ -106,7 +92,7 @@
       "ticker": "ENGN",
       "low_price": 1.5523,
       "entry_date": "2026-11-02",
-      "high_price": 1.62,
+      "high_price": 1.72,
       "entry_price": 1.5523,
       "entry_day_idx": 147,
       "stop_loss_price": 1.304,
@@ -453,11 +439,32 @@
       "exit_price": 1.5477,
       "entry_price": 1.5523,
       "exit_reason": "expiry"
+    },
+    {
+      "ticker": "POWW",
+      "side": "LONG",
+      "shares": 60.3613,
+      "entry_price": 2.1632,
+      "entry_date": "2026-10-07",
+      "exit_price": 2.3964,
+      "exit_date": "2026-11-04",
+      "exit_reason": "expiry",
+      "pnl_pct": 0.1078,
+      "pnl_usd": 14.08,
+      "days_held": 20
     }
   ],
-  "current_day_idx": 149,
-  "last_update": "2026-11-03",
-  "pending_signals": [],
+  "current_day_idx": 150,
+  "last_update": "2026-11-04",
+  "pending_signals": [
+    {
+      "ticker": "EXFY",
+      "signal_date": "2026-11-04",
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "stop_loss_pct": 0.16
+    }
+  ],
   "cooldown_until": {
     "BHR": 135,
     "FPH": 138,
