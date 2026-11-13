@@ -1,6 +1,6 @@
 {
   "initial_capital": 1000.0,
-  "cash": 0.0002738523799195036,
+  "cash": 196.2587718603799,
   "positions": [
     {
       "side": "LONG",
@@ -26,20 +26,6 @@
       "entry_price": 2.0531,
       "entry_day_idx": 144,
       "stop_loss_price": 1.7246,
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.16,
-      "holding_period_days": 20
-    },
-    {
-      "side": "LONG",
-      "shares": 86.2076,
-      "ticker": "ENGN",
-      "low_price": 1.5523,
-      "entry_date": "2026-11-02",
-      "high_price": 1.8,
-      "entry_price": 1.5523,
-      "entry_day_idx": 147,
-      "stop_loss_price": 1.304,
       "position_size_pct": 0.125,
       "trailing_stop_pct": 0.16,
       "holding_period_days": 20
@@ -87,32 +73,32 @@
       "holding_period_days": 20
     },
     {
-      "ticker": "CLAR",
       "side": "LONG",
       "shares": 25.5121,
-      "entry_price": 5.2979,
-      "entry_date": "2026-11-11",
-      "entry_day_idx": 154,
-      "trailing_stop_pct": 0.16,
-      "holding_period_days": 20,
-      "high_price": 5.2979,
+      "ticker": "CLAR",
       "low_price": 5.2979,
+      "entry_date": "2026-11-11",
+      "high_price": 5.2979,
+      "entry_price": 5.2979,
+      "entry_day_idx": 154,
       "stop_loss_price": 4.4503,
-      "position_size_pct": 0.125
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "holding_period_days": 20
     },
     {
-      "ticker": "MPAA",
       "side": "LONG",
       "shares": 15.3568,
-      "entry_price": 7.5113,
-      "entry_date": "2026-11-11",
-      "entry_day_idx": 154,
-      "trailing_stop_pct": 0.16,
-      "holding_period_days": 20,
-      "high_price": 7.62,
+      "ticker": "MPAA",
       "low_price": 7.5113,
+      "entry_date": "2026-11-11",
+      "high_price": 7.71,
+      "entry_price": 7.5113,
+      "entry_day_idx": 154,
       "stop_loss_price": 6.3095,
-      "position_size_pct": 0.125
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "holding_period_days": 20
     }
   ],
   "closed_trades": [
@@ -531,11 +517,32 @@
       "exit_price": 10.5242,
       "entry_price": 11.7476,
       "exit_reason": "expiry"
+    },
+    {
+      "ticker": "ENGN",
+      "side": "LONG",
+      "shares": 86.2076,
+      "entry_price": 1.5523,
+      "entry_date": "2026-11-02",
+      "exit_price": 2.2766,
+      "exit_date": "2026-11-12",
+      "exit_reason": "profit_target",
+      "pnl_pct": 0.4666,
+      "pnl_usd": 62.44,
+      "days_held": 9
     }
   ],
-  "current_day_idx": 155,
-  "last_update": "2026-11-11",
-  "pending_signals": [],
+  "current_day_idx": 156,
+  "last_update": "2026-11-12",
+  "pending_signals": [
+    {
+      "ticker": "ACOG",
+      "signal_date": "2026-11-12",
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "stop_loss_pct": 0.16
+    }
+  ],
   "cooldown_until": {
     "BHR": 135,
     "FPH": 138,
