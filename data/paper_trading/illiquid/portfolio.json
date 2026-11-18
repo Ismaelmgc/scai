@@ -101,18 +101,18 @@
       "holding_period_days": 20
     },
     {
-      "ticker": "VNCE",
       "side": "LONG",
       "shares": 10.1572,
-      "entry_price": 13.4602,
-      "entry_date": "2026-11-16",
-      "entry_day_idx": 157,
-      "trailing_stop_pct": 0.16,
-      "holding_period_days": 20,
-      "high_price": 13.4602,
+      "ticker": "VNCE",
       "low_price": 13.4602,
+      "entry_date": "2026-11-16",
+      "high_price": 13.4602,
+      "entry_price": 13.4602,
+      "entry_day_idx": 157,
       "stop_loss_price": 11.3065,
-      "position_size_pct": 0.125
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "holding_period_days": 20
     }
   ],
   "closed_trades": [
@@ -559,8 +559,8 @@
       "exit_reason": "trailing_stop"
     }
   ],
-  "current_day_idx": 158,
-  "last_update": "2026-11-16",
+  "current_day_idx": 159,
+  "last_update": "2026-11-17",
   "pending_signals": [],
   "cooldown_until": {
     "BHR": 135,
