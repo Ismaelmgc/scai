@@ -1,6 +1,6 @@
 {
   "initial_capital": 1000.0,
-  "cash": 33.80036322237993,
+  "cash": 146.5790051263799,
   "positions": [
     {
       "side": "LONG",
@@ -92,24 +92,10 @@
       "ticker": "ACOG",
       "low_price": 8.5428,
       "entry_date": "2026-11-13",
-      "high_price": 8.5428,
+      "high_price": 8.85,
       "entry_price": 8.5428,
       "entry_day_idx": 156,
       "stop_loss_price": 7.1759,
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.16,
-      "holding_period_days": 20
-    },
-    {
-      "side": "LONG",
-      "shares": 10.1572,
-      "ticker": "VNCE",
-      "low_price": 13.4602,
-      "entry_date": "2026-11-16",
-      "high_price": 13.4602,
-      "entry_price": 13.4602,
-      "entry_day_idx": 157,
-      "stop_loss_price": 11.3065,
       "position_size_pct": 0.125,
       "trailing_stop_pct": 0.16,
       "holding_period_days": 20
@@ -557,11 +543,32 @@
       "exit_price": 5.4119,
       "entry_price": 6.5198,
       "exit_reason": "trailing_stop"
+    },
+    {
+      "ticker": "VNCE",
+      "side": "LONG",
+      "shares": 10.1572,
+      "entry_price": 13.4602,
+      "entry_date": "2026-11-16",
+      "exit_price": 11.1033,
+      "exit_date": "2026-11-19",
+      "exit_reason": "trailing_stop",
+      "pnl_pct": -0.1751,
+      "pnl_usd": -23.94,
+      "days_held": 3
     }
   ],
-  "current_day_idx": 159,
-  "last_update": "2026-11-17",
-  "pending_signals": [],
+  "current_day_idx": 160,
+  "last_update": "2026-11-19",
+  "pending_signals": [
+    {
+      "ticker": "EXFY",
+      "signal_date": "2026-11-19",
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "stop_loss_pct": 0.16
+    }
+  ],
   "cooldown_until": {
     "BHR": 135,
     "FPH": 138,
@@ -572,7 +579,8 @@
     "NRXS": 162,
     "ONEW": 119,
     "RBBN": 121,
-    "THRY": 129
+    "THRY": 129,
+    "VNCE": 165
   },
   "max_positions": 8,
   "holding_period_days": 20,
