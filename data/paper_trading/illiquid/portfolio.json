@@ -1,6 +1,6 @@
 {
   "initial_capital": 1000.0,
-  "cash": 123.07612113287993,
+  "cash": 265.47386960288,
   "positions": [
     {
       "side": "LONG",
@@ -18,20 +18,6 @@
     },
     {
       "side": "LONG",
-      "shares": 64.5461,
-      "ticker": "PLTK",
-      "low_price": 2.0531,
-      "entry_date": "2026-10-28",
-      "high_price": 2.73,
-      "entry_price": 2.0531,
-      "entry_day_idx": 144,
-      "stop_loss_price": 1.7246,
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.16,
-      "holding_period_days": 20
-    },
-    {
-      "side": "LONG",
       "shares": 21.4085,
       "ticker": "LFCR",
       "low_price": 6.3796,
@@ -42,20 +28,6 @@
       "stop_loss_price": 5.7416,
       "position_size_pct": 0.125,
       "trailing_stop_pct": 0.1,
-      "holding_period_days": 20
-    },
-    {
-      "side": "LONG",
-      "shares": 25.5121,
-      "ticker": "CLAR",
-      "low_price": 5.2979,
-      "entry_date": "2026-11-11",
-      "high_price": 5.2979,
-      "entry_price": 5.2979,
-      "entry_day_idx": 154,
-      "stop_loss_price": 4.4503,
-      "position_size_pct": 0.125,
-      "trailing_stop_pct": 0.16,
       "holding_period_days": 20
     },
     {
@@ -78,7 +50,7 @@
       "ticker": "ACOG",
       "low_price": 8.5428,
       "entry_date": "2026-11-13",
-      "high_price": 9.44,
+      "high_price": 9.47,
       "entry_price": 8.5428,
       "entry_day_idx": 156,
       "stop_loss_price": 7.1759,
@@ -99,6 +71,20 @@
       "position_size_pct": 0.125,
       "trailing_stop_pct": 0.16,
       "holding_period_days": 20
+    },
+    {
+      "ticker": "MNSB",
+      "side": "LONG",
+      "shares": 6.1354,
+      "entry_price": 20.06,
+      "entry_date": "2026-11-25",
+      "entry_day_idx": 163,
+      "trailing_stop_pct": 0.16,
+      "holding_period_days": 20,
+      "high_price": 20.06,
+      "low_price": 20.06,
+      "stop_loss_price": 16.8504,
+      "position_size_pct": 0.125
     }
   ],
   "closed_trades": [
@@ -558,25 +544,58 @@
       "exit_reason": "trailing_stop"
     },
     {
-      "ticker": "HCAT",
       "side": "LONG",
       "shares": 84.8829,
-      "entry_price": 1.5123,
-      "entry_date": "2026-11-10",
-      "exit_price": 1.2681,
-      "exit_date": "2026-11-24",
-      "exit_reason": "trailing_stop",
+      "ticker": "HCAT",
       "pnl_pct": -0.1615,
       "pnl_usd": -20.73,
+      "days_held": 10,
+      "exit_date": "2026-11-24",
+      "entry_date": "2026-11-10",
+      "exit_price": 1.2681,
+      "entry_price": 1.5123,
+      "exit_reason": "trailing_stop"
+    },
+    {
+      "ticker": "PLTK",
+      "side": "LONG",
+      "shares": 64.5461,
+      "entry_price": 2.0531,
+      "entry_date": "2026-10-28",
+      "exit_price": 2.3764,
+      "exit_date": "2026-11-25",
+      "exit_reason": "expiry",
+      "pnl_pct": 0.1575,
+      "pnl_usd": 20.87,
+      "days_held": 20
+    },
+    {
+      "ticker": "CLAR",
+      "side": "LONG",
+      "shares": 25.5121,
+      "entry_price": 5.2979,
+      "entry_date": "2026-11-11",
+      "exit_price": 4.3934,
+      "exit_date": "2026-11-25",
+      "exit_reason": "trailing_stop",
+      "pnl_pct": -0.1707,
+      "pnl_usd": -23.08,
       "days_held": 10
     }
   ],
-  "current_day_idx": 163,
-  "last_update": "2026-11-24",
+  "current_day_idx": 164,
+  "last_update": "2026-11-25",
   "pending_signals": [
     {
-      "ticker": "MNSB",
-      "signal_date": "2026-11-24",
+      "ticker": "INVE",
+      "signal_date": "2026-11-25",
+      "position_size_pct": 0.125,
+      "trailing_stop_pct": 0.16,
+      "stop_loss_pct": 0.16
+    },
+    {
+      "ticker": "RLGT",
+      "signal_date": "2026-11-25",
       "position_size_pct": 0.125,
       "trailing_stop_pct": 0.16,
       "stop_loss_pct": 0.16
@@ -588,13 +607,14 @@
     "ONL": 138,
     "ENGN": 139,
     "EXFY": 158,
+    "HCAT": 168,
     "KULR": 111,
     "NRXS": 162,
     "ONEW": 119,
     "RBBN": 121,
     "THRY": 129,
     "VNCE": 165,
-    "HCAT": 168
+    "CLAR": 169
   },
   "max_positions": 8,
   "holding_period_days": 20,
